@@ -43,12 +43,12 @@ Generating raypaths produces a value for each facet which acts as the percentage
 3. The angle between the facet surface and the forced ray from the surface to the target is computed.
 4. The difference in angle between the refracted ray and the forced ray (ray to target) is computed.  
 *Difference in angle between the forced ray and the refracted ray*  
-![ForcedRefractedDiff](images/DTh-Forced-Refracted.png)
+![ForcedRefractedDiff](images/DTh-Forced-Refracted.png)  
 5. The difference in angle is combined with the reradiation pattern from the facet to result in the returned energy from each facet.  
 *2D reradiation pattern for a single facet*  
-![facetrad](images/ReradiationFacet.png)
+![facetrad](images/ReradiationFacet.png)  
 ***Reradiation amount for the entire footprint***  
-![reradiated](images/reradiation.png)
+![reradiated](images/reradiation.png)  
 #### Timeseries generation
 Timeseries generation is performed by the `gen_timeseries` function which generates the returned signal from the source &rarr; facet &rarr; target &rarr; facet &rarr; source raypaths. **This is the final simulated signal**. It is created by the following steps:
 1. Antenna gain is defined.
