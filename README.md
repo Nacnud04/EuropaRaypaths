@@ -3,9 +3,9 @@
 ---
 
 ## Index
-1. [Source](README.md##Source)
-2. [Surface](README.md##Surface)
-3. [Model](README.md##Model)
+1. [Source](README.md#Source)
+2. [Surface](README.md#Surface)
+3. [Model](README.md#Model)
 
 ---
 
