@@ -135,7 +135,7 @@ class Model():
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
     # received by the radar
-    def gen_timeseries(self, n=250):
+    def gen_timeseries(self):
         
         gain = 49.5 # gain in dB
         gval = 10**(gain / 20)
