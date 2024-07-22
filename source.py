@@ -71,11 +71,11 @@ class Source():
 
         fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'), row=1, col=2)
 
-        fig.update_layout(title="Time Domain and Frequency Spectrum", showlegend=False, template="plotly_white")
+        fig.update_layout(title="Source wavelet", showlegend=False, template="plotly_white")
         
         fig.update_xaxes(title_text='Time (s)', row=1, col=1)
         fig.update_yaxes(title_text='Signal', row=1, col=1)
-        fig.update_xaxes(range=[0, self.f0*5], title_text='Frequency (Hz)', type='linear', row=1, col=2)
+        fig.update_xaxes(title_text='Frequency (Hz)', type='log', row=1, col=2)
         fig.update_yaxes(title_text='Amplitude', row=1, col=2)
 
         fig.show()
