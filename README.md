@@ -39,14 +39,13 @@ The model is the class which actually simulates the propagation of the wavefront
 #### Generating raypaths
 Generating raypaths produces a value for each facet which acts as the percentage of energy returned back to the source after reflecting off the target and passing through the facet twice. To do this the following steps occur:
 1. Raypath instances are created. Raypaths start at the source and go to the facet. Then they are forced to go through the facet and towards the point target. Is is important to note that this is not the direction of the naturally refracted raypath.
-2. The angle between the facet surface and the naturally refracted raypath is computed.
-3. The angle between the facet surface and the forced ray from the surface to the target is computed.
-4. The difference in angle between the refracted ray and the forced ray (ray to target) is computed.  
+2. The $\Delta\theta$ and $\Delta\phi$ between the refracted ray and the forced ray (facet to target) are computed. This difference is used to find the fraction of the radiation making it to the target from the source.  
 *Difference in angle between the forced ray and the refracted ray*  
 ![ForcedRefractedDiff](images/DTh-Forced-Refracted.png)  
-5. The difference in angle is combined with the reradiation pattern from the facet to result in the returned energy from each facet.  
-*2D reradiation pattern for a single facet*  
+*3D reradiation pattern for a single facet*  
 ![facetrad](images/ReradiationFacet.png)  
+3. Step 2 is repeated by for the refracted ray coming out of the subsurface, and the fraction of radiation which makes it from the target to the source is multiplied by that of the source to the target.
+4. The radar equation is multiplied by the reradiation fraction resulting in a value of the amount of energy which goes through each facet and returns back to the source.
 ***Reradiation amount for the entire footprint***  
 ![reradiated](images/reradiation.png)  
 #### Timeseries generation
