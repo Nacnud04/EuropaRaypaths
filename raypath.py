@@ -1,6 +1,8 @@
 import numpy as np
 import plotly.graph_objects as go
 
+from util import *
+
 class RayPaths():
 
     def __init__(self, source, facetloc, target):
@@ -67,13 +69,42 @@ class RayPaths():
         # compute path time for whole raypath
         self.path_time = self.mags[0]/ vel1 + self.mags[1] / vel2
         
-        # now compute refracted angle
-        th = RayPaths.vec_dif_angle(self.norms[0], self.fnorm)
-        k = (vel1 / vel2) * np.sin(th)
+        # compute the spherical coordinate for the facet normal and inbound ray
+        fspher = cart_to_sp(self.fnorm)
+        inbound = cart_to_sp(self.norms[0])
+        
+        # compute a new coordinate for inbound ray, relative to facet normal as origin
+        inbound -= fspher
+        
+        # snells law to find the new phi value (inclincation relative to facet)
+        k = (vel1 / vel2) * np.sin(inbound[2])
         
         if abs(k) < 1:
-            th1 = np.arcsin(k)
-            return th1
+            phi = np.arcsin(k) + np.pi
+            
+            return np.array((inbound[0], inbound[1], phi))
+        
+        return None
+    
+    # compute the reverse refracted ray angle
+    # NOTE: this is NOT the forced ray (facet to source), this is
+    # the ray which follows the path of greatest radiation
+    def comp_rev_refracted(self, vel1, vel2):
+        
+        # compute the spherical coordinate for the facet normal and inbound ray
+        fspher = cart_to_sp(self.fnorm*-1)
+        inbound = cart_to_sp(self.norms[1]*-1)
+        
+        # compute a new coordinate for inbound ray, relative to facet normal as origin
+        inbound -= fspher
+        
+        # snells law to find the new phi value (inclincation relative to facet)
+        k = (vel1 / vel2) * np.sin(inbound[2])
+        
+        if abs(k) < 1:
+            phi = np.arcsin(k) + np.pi
+            
+            return np.array((inbound[0], inbound[1], phi))
         
         return None
 
