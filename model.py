@@ -289,7 +289,7 @@ class Model():
                     angles_1st_index[i, j] = None
 
         # Create subplots
-        fig = make_subplots(rows=1, cols=2, subplot_titles=("dPh", "dTh"))
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("$\Delta\phi$", "$\Delta\\theta$"))
 
         # Add the first heatmap
         heatmap_2nd_index = go.Heatmap(z=angles_2nd_index, coloraxis='coloraxis1', colorscale='Aggrnyl')
@@ -303,8 +303,8 @@ class Model():
         fig.update_layout(
             title='Angle Differences',
             template="plotly_white",
-            coloraxis1=dict(colorscale='Aggrnyl', showscale=False),
-            coloraxis2=dict(colorscale='Phase', showscale=False),
+            coloraxis1=dict(colorscale='Aggrnyl', colorbar=dict(x=0.35, len=0.9, title="rad")),
+            coloraxis2=dict(colorscale='Phase', colorbar=dict(x=1.00, len=0.9, title="rad")),
         )
 
         # Update x and y axis titles for each subplot
