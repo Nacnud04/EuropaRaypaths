@@ -6,7 +6,7 @@ from scipy.fft import fft, fftfreq
 class Source():
 
     # define source
-    def __init__(self, dt, dur, coord, power=11.75):
+    def __init__(self, dt, dur, coord):
 
         self.dt = dt
         self.sr = 1/dt # sampling rate
@@ -15,8 +15,6 @@ class Source():
 
         self.x, self.y, self.z = coord
         self.coord = coord
-        
-        self.power = power
 
     # generate a gaussian sin function source
     def gauss_sin(self, f0, offset=0):
