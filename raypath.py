@@ -99,7 +99,7 @@ class RayPaths():
         inbound -= fspher
         
         # snells law to find the new phi value (inclincation relative to facet)
-        k = (vel1 / vel2) * np.sin(inbound[2])
+        k = (vel2 / vel1) * np.sin(inbound[2])
         
         if abs(k) < 1:
             phi = np.arcsin(k) + np.pi
