@@ -222,7 +222,7 @@ class Model():
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
     # received by the radar
-    def gen_timeseries(self):
+    def gen_timeseries(self, show=True):
         
         times = [rp.path_time for rp in self.raypaths]
         
@@ -254,23 +254,25 @@ class Model():
         
         self.ts = ts
         self.data = output
+        
+        if show:
                     
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=ts, y=output, mode='lines'))
-        fig.update_layout(title="Final Signal", xaxis_title='Time (s)', yaxis_title='Signal', template="plotly_white")
-        fig.show()
-        
-        N = len(output)
-        T = ts[1] - ts[0]
-        yf = fft(output)
-        xf = fftfreq(N, T)[:N//2]
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'))
-        fig.update_layout(title="Output Spectrum", template="plotly_white")
-        fig.update_xaxes(title_text='Frequency (Hz)', type='log')
-        fig.update_yaxes(title_text="Amplitude")
-        fig.show()
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ts, y=output, mode='lines'))
+            fig.update_layout(title="Final Signal", xaxis_title='Time (s)', yaxis_title='Signal', template="plotly_white")
+            fig.show()
+
+            N = len(output)
+            T = ts[1] - ts[0]
+            yf = fft(output)
+            xf = fftfreq(N, T)[:N//2]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'))
+            fig.update_layout(title="Output Spectrum", template="plotly_white")
+            fig.update_xaxes(title_text='Frequency (Hz)', type='log')
+            fig.update_yaxes(title_text="Amplitude")
+            fig.show()
     
     # plot angle difference between refracted ray
     # and forced ray to target
