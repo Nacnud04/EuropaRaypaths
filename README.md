@@ -61,18 +61,14 @@ The model is the class which actually simulates the propagation of the wavefront
 Generating raypaths produces a value for each facet which acts as the percentage of energy returned back to the source after reflecting off the target and passing through the facet twice. To do this the following steps occur:
 1. Raypath instances are created. Raypaths start at the source and go to the facet. Then they are forced to go through the facet and towards the point target. Is is important to note that this is not the direction of the naturally refracted raypath.
 2. The naturally refracted raypath is calculated in spherical coordinates, relative to the facet normal as a datum. This gives a $\phi_1$ angle relative to the normal of the facet, while staying in a 3D coordinate system. As this is entirely relative to the facet normal we need to add $\pi$. This entire calculation is done via the following formula which is a modified form of Snell's Law:  
-$$\theta_{refr} = \theta_{i} \tag{3.1} $$
-$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_2}}{\sqrt{\epsilon_1}}\sin\left(\phi_{i}-\phi_{facet}\right)\right) + \pi \tag{3.2} $$
+$$\theta_{refr} = \theta_{i} \tag{3.1}$$  
+$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_2}}{\sqrt{\epsilon_1}}\sin\left(\phi_{i}-\phi_{facet}\right)\right) + \pi \tag{3.2}$$  
 3. The $\Delta\theta$ and $\Delta\phi$ between the refracted ray and the forced ray (facet to target) are computed. This difference is used to find the fraction of the radiation making it to the target from the source.  
 ***The below figure shows difference in angle between the forced ray and the refracted ray.*** Note how $\Delta\theta$ is constantly $\pi$. This is because the refracted ray is always pointing away from the source, but the forced raypaths point back towards the source as the target is directly below the source. So they point in opposite directions for the $\theta$ axis but not necessarily the $\phi$ axis. 
 ![ForcedRefractedDiff](images/DTh-Forced-Refracted.png)  
 4. The direction of the refracting ray exiting the subsurface is computed. This is done similar to in step 2 but requires reversing the direction of the rays. Computationally this is done by multiplying by $-1$ while in cartesian coordinates, but is equivalent to the following:  
-
-
-$$\theta_{refr} = \pi - \theta_{i} \tag{3.3} $$
-$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_1}}{\sqrt{\epsilon_2}}\sin\left(\phi_{i}-\phi_{facet}\right)\right) + \pi \tag{3.4} $$
-
-
+$$\theta_{refr} = \pi - \theta_{i} \tag{3.3}$$  
+$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_1}}{\sqrt{\epsilon_2}}\sin\left(\phi_{i}-\phi_{facet}\right)\right) + \pi \tag{3.4}$$  
 5. Step 3 is repeated for the refracted ray coming out of the subsurface, and the fraction of radiation which makes it from the target to the source (defined by $2.1$) is multiplied by that of the source to the target.
 6. The radar equation is multiplied by the reradiation fraction resulting in a value of the amount of energy which goes through each facet and returns back to the source.  
 
