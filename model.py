@@ -310,7 +310,7 @@ class Model():
         output /= np.max(output)
             
         ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
-        ts += min(times)
+        ts += mintimes
         
         self.ts = ts
         self.data = output
@@ -407,6 +407,46 @@ class Model():
                 colorscale='Phase', 
                 colorbar=dict(x=1.00, len=0.9, title="rad"),
                 cmin=-np.pi, cmax=np.pi
+            )
+        )
+
+        # Update x and y axis titles for each subplot
+        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+
+        fig.show()
+
+        
+    def show_travel_time(self):
+        
+        # --- SHOW FACET TRAVEL TIME IF DESIRED
+        refl = np.reshape([rp.refl_time for rp in self.raypaths], self.surface.zs.shape)
+        refr = np.reshape([rp.path_time for rp in self.raypaths], self.surface.zs.shape)
+        
+        print(f"Minimum time for reflected raypath: {np.min(refl)*1e6}us")
+        
+        # Create subplots
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Reflected", "Refracted"))
+
+        # Add the first heatmap
+        hm2 = go.Heatmap(z=refl, coloraxis='coloraxis1')
+        fig.add_trace(hm2, row=1, col=1)
+
+        # Add the second heatmap
+        hm1 = go.Heatmap(z=refr, coloraxis='coloraxis2')
+        fig.add_trace(hm1, row=1, col=2)
+
+        # Update layout
+        fig.update_layout(
+            title='Two way travel time',
+            template="plotly_white",
+            coloraxis1=dict(
+                colorbar=dict(x=0.35, len=0.9, title="rad"),
+            ),
+            coloraxis2=dict( 
+                colorbar=dict(x=1.00, len=0.9, title="rad"),
             )
         )
 
