@@ -24,19 +24,35 @@ class Model():
         
         # material dielectrics
         self.eps1 = 1
-        self.eps2 = 5
+        self.eps2 = 3.15
         
         # turn dielectrics into velocities
         self.c1 = self.c / sqrt(self.eps1)
         self.c2 = self.c / sqrt(self.eps2)
         
+        self.nu0 = 376.7 # intrinsic impedance of free space
+        
+        self.nu1 = self.nu0 / sqrt(self.eps1)
+        self.nu2 = self.nu0 / sqrt(self.eps2)
+        
+        # reflection and transmission coeffs
+        self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
+        self.tau = (2 * self.nu2) / (self.nu2 + self.nu1)        # transmission coeff
+        
         self.power = power
+        
+        # gain for subsurface
         self.db = 80
         self.gain = db_to_mag(self.db)
-
+        
+        # gain for surface
+        surf_db = 64
+        self.surf_gain = db_to_mag(surf_db)
+        
     # set target location
     def set_target(self, coord):
         self.tx, self.ty, self.tz = coord
+        
         
     # find angle between two 3D vectors
     @staticmethod
@@ -52,6 +68,7 @@ class Model():
         angle = np.arccos(np.clip(cos_theta, -1.0, 1.0))  
 
         return angle
+    
     
     # find angle of a vector relative to a plane
     @staticmethod
@@ -74,11 +91,13 @@ class Model():
 
         return theta_degrees
     
+    
     # beam pattern for square facets
     @staticmethod
     def beam_pattern(theta, lam, r):
         p = (np.sin((np.pi*r/lam)*np.sin(theta)) / ((np.pi*r/lam)*np.sin(theta)))**2
         return p
+    
     
     # 3d beam pattern for square facets
     @staticmethod
@@ -89,12 +108,14 @@ class Model():
         p *= np.sinc(((r) / lam) * np.sin(ph) * np.sin(th))
         return p
     
+    
     # limit angles to being from -90 to 90
     @staticmethod
     def ang_lim(a):
         if a > np.pi / 2: a = a - np.pi
         if a < -np.pi / 2: a = a + np.pi
         return a
+    
     
     # plot beam pattern
     def show_beam_pattern(self, dim=3):
@@ -162,6 +183,7 @@ class Model():
             fig.update_layout(title="Reradiation Pattern", template="plotly_white")
             fig.show()
 
+            
     # create rays from source to target. 
     # calculate frac of transmit power.
     def gen_raypaths(self):
@@ -181,7 +203,29 @@ class Model():
                              [x, y, self.surface.zs[i, j]],
                              [self.tx, self.ty, self.tz])
                 
-                # compute refracted ray angle'
+                # --- START REFLECTION CALCS ---
+                
+                rp.re = self.rho * -1
+                
+                # find reflected raypath
+                inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
+                dph = inbound[2] * 2
+                rp.refl_dph = dph
+                rp.refl_dth = np.pi
+                
+                # find energy reflecting back to source
+                rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
+                
+                # use radar equation
+                rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
+                
+                # --- END REFLECTION CALCS ---
+                
+                # --- START REFRACTION CALCS ---
+                
+                rp.tr = self.tau
+                
+                # compute refracted ray angle
                 rp.set_source(self.source)
                 rp.set_facet(fnorm, self.surface.fs)
                 rp.refracted = rp.comp_refracted(self.c1, self.c2)
@@ -216,8 +260,11 @@ class Model():
                     
                 else:
                     rp.tr = 0
+                    
+                # --- END REFRACTION CALCS ---
                         
                 self.raypaths.append(rp)
+                
                 
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
@@ -227,25 +274,38 @@ class Model():
         times = [rp.path_time for rp in self.raypaths]
         
         # compute index offsets
-        rel_times = np.array(times) - min(times)
+        mintimes = min(times + [rp.refl_time for rp in self.raypaths])
+        rel_times = np.array(times) - mintimes
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
         
         # create an empty output array
         output = np.zeros(np.max(idx_offsets) + len(self.source.signal))
         
-        # iterate through raypaths
-        i = 0
+        # --- ADD REFRACTED RAYPATHS ---
         for rp, offset in zip(self.raypaths, idx_offsets):
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), self.source.signal))
+            tmp = np.concatenate((np.zeros(offset), self.source.signal * rp.tr))
             # add 0 padding to the back, to make it the same length as the output array
             tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
             # sum the new output signal with the output. Taking into account the amount
             # of energy transferred in that direction, as well as r^2
-            output += rp.tr * tmp
-            i += 1
+            output += tmp
             
+        # --- ADD REFLECTED RAYPATHS
+        rel_times = np.array([rp.refl_time for rp in self.raypaths]) - mintimes
+        idx_offsets = np.round(rel_times / self.source.dt).astype(int)
+        
+        for rp, offset in zip(self.raypaths, idx_offsets):
+            # add 0 padding to account for different ray arrival time to front
+            # of the signal matrix
+            tmp = np.concatenate((np.zeros(offset), self.source.signal * rp.re))
+            # add 0 padding to the back, to make it the same length as the output array
+            tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
+            # sum the new output signal with the output. Taking into account the amount
+            # of energy transferred in that direction, as well as r^2
+            output += tmp
+        
         # normalize to one
         output /= np.max(output)
             
@@ -274,39 +334,40 @@ class Model():
             fig.update_yaxes(title_text="Amplitude")
             fig.show()
     
+    
     # plot angle difference between refracted ray
     # and forced ray to target
     def plot_s2f_angle(self):
+
+        # --- CREATION OF PLOT FOR REFRACTED ---
         
-        angles_2nd_index = np.zeros(self.surface.zs.shape)
-        angles_1st_index = np.zeros(self.surface.zs.shape)
-        for i, x in enumerate(self.surface.x):
-            for j, y in enumerate(self.surface.y):
-                rp = self.raypaths[i*len(self.surface.x)+j]
-                if rp.refracted is not None:
-                    angles_2nd_index[i, j] = rp.forced[2] - rp.refracted[2]
-                    angles_1st_index[i, j] = rp.forced[1] - rp.refracted[1]  # Difference of the 1st indices
-                else:
-                    angles_2nd_index[i, j] = None
-                    angles_1st_index[i, j] = None
+        dphs = np.reshape([rp.forced[2] - rp.refracted[2] if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
+        dths = np.reshape([rp.forced[1] - rp.refracted[1] if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
 
         # Create subplots
-        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("$\Delta\phi$", "$\Delta\\theta$"))
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Δφ", "Δθ"))
 
         # Add the first heatmap
-        heatmap_2nd_index = go.Heatmap(z=angles_2nd_index, coloraxis='coloraxis1', colorscale='Aggrnyl')
+        heatmap_2nd_index = go.Heatmap(z=dphs, coloraxis='coloraxis1')
         fig.add_trace(heatmap_2nd_index, row=1, col=1)
 
         # Add the second heatmap
-        heatmap_1st_index = go.Heatmap(z=angles_1st_index, coloraxis='coloraxis2', colorscale='Phase')
+        heatmap_1st_index = go.Heatmap(z=dths, coloraxis='coloraxis2', colorscale='Phase')
         fig.add_trace(heatmap_1st_index, row=1, col=2)
 
         # Update layout
         fig.update_layout(
-            title='Angle Differences',
+            title='Angle Differences (Refracted)',
             template="plotly_white",
-            coloraxis1=dict(colorscale='Aggrnyl', colorbar=dict(x=0.35, len=0.9, title="rad")),
-            coloraxis2=dict(colorscale='Phase', colorbar=dict(x=1.00, len=0.9, title="rad")),
+            coloraxis1=dict(
+                colorbar=dict(x=0.35, len=0.9, title="rad"),
+                cmin=-np.pi/2, cmax=0
+            ),
+            coloraxis2=dict(
+                colorscale='Phase', 
+                colorbar=dict(x=1.00, len=0.9, title="rad"),
+                cmin=-np.pi, cmax=np.pi
+            )
         )
 
         # Update x and y axis titles for each subplot
@@ -317,26 +378,78 @@ class Model():
 
         fig.show()
         
+        
+        # --- NOW CREATE PLOT FOR REFLECTED ---
+        
+        dphs = np.reshape([rp.refl_dph for rp in self.raypaths], self.surface.zs.shape)
+        dths = np.reshape([rp.refl_dth for rp in self.raypaths], self.surface.zs.shape)
+        
+        # Create subplots
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Δφ", "Δθ"))
+
+        # Add the first heatmap
+        hm2 = go.Heatmap(z=dphs, coloraxis='coloraxis1')
+        fig.add_trace(hm2, row=1, col=1)
+
+        # Add the second heatmap
+        hm1 = go.Heatmap(z=dths, coloraxis='coloraxis2', colorscale='Phase')
+        fig.add_trace(hm1, row=1, col=2)
+
+        # Update layout
+        fig.update_layout(
+            title='Angle Differences (Reflected)',
+            template="plotly_white",
+            coloraxis1=dict(
+                colorbar=dict(x=0.35, len=0.9, title="rad"),
+                cmin=-np.pi/2, cmax=0
+            ),
+            coloraxis2=dict(
+                colorscale='Phase', 
+                colorbar=dict(x=1.00, len=0.9, title="rad"),
+                cmin=-np.pi, cmax=np.pi
+            )
+        )
+
+        # Update x and y axis titles for each subplot
+        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+
+        fig.show()
+        
+        
     # plot fraction of radiated power which returns to
     # source after reflecting off target by facet
-    def plot_s2f_tr(self):
+    def plot_s2f_rad(self):
         
-        angles = np.zeros(self.surface.zs.shape)
-        for i, x in enumerate(self.surface.x):
-            for j, y in enumerate(self.surface.y):
-                rp = self.raypaths[i*len(self.surface.x)+j]
-                angles[i, j] = rp.tr
+        tr = np.reshape([rp.tr for rp in self.raypaths], self.surface.zs.shape)
+        re = np.reshape([rp.re for rp in self.raypaths], self.surface.zs.shape)
+        
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Reflected", "Refracted"))
                 
-        fig = go.Figure(data=go.Heatmap(z=angles))
+        refl = go.Heatmap(z=re, coloraxis='coloraxis1')
+        fig.add_trace(refl, row=1, col=1)
+        
+        refr = go.Heatmap(z=tr, coloraxis='coloraxis2')
+        fig.add_trace(refr, row=1, col=2)
 
         fig.update_layout(
-            title='Reradiation',
-            xaxis_title='Facet X #',
-            yaxis_title='Facet Y #', template="plotly_white"
+            title='Reradiation by Facet',
+            template="plotly_white",
+            coloraxis1=dict(colorbar=dict(x=0.35, len=0.9, title="W")),
+            coloraxis2=dict(colorbar=dict(x=1.00, len=0.9, title="W"))
         )
+
+        # Update x and y axis titles for each subplot
+        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
 
         fig.show()
 
+        
     # plot 3d model showing everything
     def plot(self):
 

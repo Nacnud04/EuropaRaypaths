@@ -25,7 +25,8 @@ class RayPaths():
         self.norms = (vec1/self.mags[0], vec2/self.mags[1])
         
         # angles, transmission coefficient and whatnot
-        self.tr = 1 # how much energy makes it through the raypath??
+        self.tr = None # how much energy makes it through the raypath??
+        self.re = None # how much energy reflects off the surface?
         self.th1, self.th2 = None, None
         self.dth = None
         
@@ -67,7 +68,8 @@ class RayPaths():
     def comp_refracted(self, vel1, vel2):
         
         # compute path time for whole raypath
-        self.path_time = self.mags[0]/ vel1 + self.mags[1] / vel2
+        self.refl_time = (self.mags[0] / vel1) * 2
+        self.path_time = (self.mags[0] / vel1 + self.mags[1] / vel2) * 2
         
         # compute the spherical coordinate for the facet normal and inbound ray
         fspher = cart_to_sp(self.fnorm)
