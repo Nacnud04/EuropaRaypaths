@@ -14,6 +14,9 @@ class Model():
     def __init__(self, surface, source, power=11.75):
         
         self.c = 299792458 # speed of light
+        self.nu0 = 376.7 # intrinsic impedance of free space
+        self.mu0 = (4 * np.pi) * 1e-7 # magnetic permeability of free space
+        self.eps0 = 8.85e-12 # permittivity of free space
 
         # set surface and source objects
         self.surface = surface
@@ -22,23 +25,52 @@ class Model():
         # define vars for target location
         self.tx, self.ty, self.tz = None, None, None
         
-        # material dielectrics
+        # --- MATERIAL PARAMETERS ---
+        
+        # material relative dielectric
         self.eps1 = 1
         self.eps2 = 3.15
         
-        # turn dielectrics into velocities
+        # material magnetic permability
+        self.mu1 = self.mu0
+        self.mu2 = self.mu1
+        
+        # material conductivity
+        self.sig1 = 0
+        self.sig2 = 1e-6
+        
+        # --- VELOCITIES ---
+        
         self.c1 = self.c / sqrt(self.eps1)
         self.c2 = self.c / sqrt(self.eps2)
         
-        self.nu0 = 376.7 # intrinsic impedance of free space
+        # --- IMPEDANCES ---
         
         self.nu1 = self.nu0 / sqrt(self.eps1)
         self.nu2 = self.nu0 / sqrt(self.eps2)
         
-        # reflection and transmission coeffs
+        # --- REFLECTION AND TRANSMISSION COEFFS --- 
+        
         self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
         self.tau = (2 * self.nu2) / (self.nu2 + self.nu1)        # transmission coeff
         
+        # --- ATTENUATION CONSTANTS ---
+        
+        # calc for above surface
+        eps_pp = self.sig1 / (2 * np.pi * source.f0 * self.eps0)
+        alpha1 = sqrt(1 + (eps_pp/self.eps1)**2) - 1
+        alpha1 = sqrt(0.5 * self.eps1 * alpha1)
+        self.alpha1 = (alpha1 * 2 * np.pi) / source.lam
+        
+        # calc for below surface
+        eps_pp = self.sig2 / (2 * np.pi * source.f0 * self.eps0)
+        alpha2 = sqrt(1 + (eps_pp/self.eps2)**2) - 1
+        alpha2 = sqrt(0.5 * self.eps2 * alpha2)
+        self.alpha2 = (alpha2 * 2 * np.pi) / source.lam
+        
+        # --- ANTENNA POWER & GAIN ---
+        
+        # antenna power
         self.power = power
         
         # gain for subsurface
@@ -48,6 +80,7 @@ class Model():
         # gain for surface
         surf_db = 64
         self.surf_gain = db_to_mag(surf_db)
+        
         
     # set target location
     def set_target(self, coord):
@@ -219,6 +252,9 @@ class Model():
                 # use radar equation
                 rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
                 
+                # attenuation
+                rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+                
                 # --- END REFLECTION CALCS ---
                 
                 # --- START REFRACTION CALCS ---
@@ -254,6 +290,12 @@ class Model():
 
                         # radar eq
                         rp.tr *= radar_eq(self.power, self.gain, 1, self.lam, sum(rp.mags))
+                        
+                        # attenuation (source -> surf)
+                        rp.tr *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+                        
+                        # attenuation (surf -> target)
+                        rp.tr *= np.exp(-1 * self.alpha2 * 2 * rp.mags[1])
                         
                     else:
                         rp.tr = 0
@@ -489,6 +531,23 @@ class Model():
 
         fig.show()
 
+        
+    def attenuation_plot(self, st=0, en=10000, n=150):
+        
+        z = np.linspace(st, en, n)
+        y = np.exp(-1 * self.alpha2 * z) * 100
+        
+        fig = go.Figure(data=go.Scatter(x=z, y=y, mode='lines'))
+
+        fig.update_layout(
+            title='Attenuation over Distance',
+            xaxis_title='Total Distance (m)',
+            yaxis_title='Signal retention (%)',
+            template='plotly_white'
+        )
+
+        fig.show()
+        
         
     # plot 3d model showing everything
     def plot(self):

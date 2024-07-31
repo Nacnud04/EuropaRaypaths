@@ -12,6 +12,8 @@ class Source():
         self.sr = 1/dt # sampling rate
         self.n = int(dur/dt) # num of samples
         self.dur = dur
+        
+        self.c = 299792458 # speed of light
 
         self.x, self.y, self.z = coord
         self.coord = coord
@@ -24,6 +26,7 @@ class Source():
 
         self.t = t
         self.f0 = f0
+        self.lam = self.c / f0
 
         return self.t, self.signal
 
@@ -37,6 +40,7 @@ class Source():
 
         self.t = t
         self.f0 = f0
+        self.lam = self.c / f0
 
         return self.t, self.signal
 
