@@ -49,6 +49,11 @@ class Model():
         self.nu1 = self.nu0 / sqrt(self.eps1)
         self.nu2 = self.nu0 / sqrt(self.eps2)
         
+        # --- INDEX OF REFRACTION ---
+        
+        self.n1 = sqrt(self.eps1)
+        self.n2 = sqrt(self.eps2)
+        
         # --- REFLECTION AND TRANSMISSION COEFFS --- 
         
         self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
@@ -305,8 +310,43 @@ class Model():
                     
                 # --- END REFRACTION CALCS ---
                         
-                self.raypaths.append(rp)
+                self.raypaths.append(rp)        
                 
+                
+    @staticmethod
+    def comp_dop(u, R, lam):
+        
+        f_d = -1 * (2 * np.dot(u, R)) / (lam * np.linalg.norm(R))
+        return f_d
+                
+                
+    # compute doppler shift due to instrument velocity        
+    def comp_dopplers(self):
+        
+        u = self.source.u
+        sloc = self.source.coord
+        
+        Rs = np.array([rp.coord - sloc for rp in self.raypaths])
+        f_ds = np.array([Model.comp_dop(u, R, self.source.lam) for R in Rs])
+        
+        f_ds_shaped = np.reshape(f_ds, self.surface.zs.shape)
+        
+        fig = go.Figure(data=go.Contour(
+            z=f_ds_shaped,
+            colorscale='Viridis',
+            contours=dict(
+                showlabels=True
+            )
+        ))
+
+        fig.update_layout(
+            title='Contour Plot of Doppler Values',
+            xaxis_title='Facet Y#',
+            yaxis_title='Facet X#',
+        )
+
+        fig.show()
+    
                 
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
@@ -377,6 +417,32 @@ class Model():
             fig.show()
     
     
+    def theta_funct(self):
+        
+        # for the theta function we need the raypath distance for the
+        # portion in the air and in the ice. specifically for that of
+        # the highest amplitude return (the dominant raypath)
+        
+        imax = int(len(self.raypaths)/2) #np.array([rp.tr for rp in self.raypaths]).argmax()
+        rp = self.raypaths[imax]
+        theta = (2 * (rp.mags[0] + self.n2 * rp.mags[1])) / self.c
+        return theta
+    
+    
+    def ref_funct(self, x, t):
+        
+        b = 1 # complex correction factor
+        r2m = b * np.exp(-1j * 2 * np.pi * self.source.f0 * self.theta_funct())
+        return r2m
+    
+    
+    def ref_funct_conj(self, x, t):
+        
+        r2m = self.ref_funct(x, t)
+        r2m_conj = r2m.real - 1j*r2m.imag
+        return r2m_conj
+    
+    
     # plot angle difference between refracted ray
     # and forced ray to target
     def plot_s2f_angle(self):
@@ -413,10 +479,10 @@ class Model():
         )
 
         # Update x and y axis titles for each subplot
-        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
-        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=2)
 
         fig.show()
         
@@ -453,10 +519,10 @@ class Model():
         )
 
         # Update x and y axis titles for each subplot
-        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
-        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=2)
 
         fig.show()
 
@@ -493,10 +559,10 @@ class Model():
         )
 
         # Update x and y axis titles for each subplot
-        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
-        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=2)
 
         fig.show()
         
@@ -524,10 +590,10 @@ class Model():
         )
 
         # Update x and y axis titles for each subplot
-        fig.update_xaxes(title_text='Facet X #', row=1, col=1)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=1)
-        fig.update_xaxes(title_text='Facet X #', row=1, col=2)
-        fig.update_yaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=1)
+        fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
+        fig.update_yaxes(title_text='Facet X #', row=1, col=2)
 
         fig.show()
 
