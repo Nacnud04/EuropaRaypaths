@@ -16,6 +16,7 @@ class RayPaths():
         # facet location
         fx, fy, fz = facetloc
         self.fx, self.fy, self.fz = fx, fy, fz
+        self.coord = np.array((fx, fy, fz))
 
         # comp raypaths
         vec1 = np.array([fx - source[0], fy - source[1], fz - source[2]])

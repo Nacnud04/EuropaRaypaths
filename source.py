@@ -1,7 +1,8 @@
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy.fft import fft, fftfreq
+from scipy.fft import fft, fftfreq, ifft
+from scipy.signal import chirp
 
 class Source():
 
@@ -15,8 +16,12 @@ class Source():
         
         self.c = 299792458 # speed of light
 
-        self.x, self.y, self.z = coord
-        self.coord = coord
+        self.x, self.y, self.z = coord # location of source
+        
+        self.speed = 1500 # speed of instrument in m/s
+        self.u = np.array((1, 0, 0)) * self.speed # velocity vector
+        
+        self.coord = np.array(coord)
 
     # generate a gaussian sin function source
     def gauss_sin(self, f0, offset=0):
@@ -43,6 +48,37 @@ class Source():
         self.lam = self.c / f0
 
         return self.t, self.signal
+    
+    # generate a chirp
+    def chirp(self, freq, bandwidth):
+        
+        SIZE_RANGE_FFT = 4096
+        range_weighting_window_original = np.kaiser(SIZE_RANGE_FFT/2., 2)
+        
+        t = np.linspace(0, self.dur, int(self.sr * self.dur))
+        self.range_weighting_window = np.concatenate((range_weighting_window_original, np.zeros(int(SIZE_RANGE_FFT/2))), 0)
+        
+        f0 = freq + bandwidth/2.
+        t1 = self.dur
+        f1 = freq - bandwidth/2.
+        chirp2_real = chirp(t, f0, t1, f1)
+        
+        self.t = t
+        self.signal = chirp2_real
+        self.f0 = freq
+        self.lam = self.c / freq
+        
+        return self.t, self.signal
+    
+    
+    def conjugate(self):
+        
+        chirp_fft = (np.fft.fft(self.signal, 4096)) / np.sqrt(4096)
+        chirp_fft = chirp_fft*self.range_weighting_window
+        chirp_fft_conj = np.conj(chirp_fft).T
+        
+        return chirp_fft_conj
+        
 
     # add the source location to a 3d plot of the model
     def add_to_axis(self, fig, surf):
