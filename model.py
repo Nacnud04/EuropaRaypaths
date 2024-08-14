@@ -310,7 +310,13 @@ class Model():
                     
                 # --- END REFRACTION CALCS ---
                         
-                self.raypaths.append(rp)        
+                self.raypaths.append(rp)   
+
+
+    @staticmethod
+    def freq_shift(t, signal, f_shift):
+
+        return signal * np.exp(1j * 2 * np.pi * f_shift * t)
                 
                 
     @staticmethod
@@ -321,31 +327,50 @@ class Model():
                 
                 
     # compute doppler shift due to instrument velocity        
-    def comp_dopplers(self):
+    def comp_dopplers(self, plot=False):
         
         u = self.source.u
         sloc = self.source.coord
         
         Rs = np.array([rp.coord - sloc for rp in self.raypaths])
         f_ds = np.array([Model.comp_dop(u, R, self.source.lam) for R in Rs])
+
+        # source object to modify
+        source = Source(1e-9, 1.0e-6, (1050, 5050, 25000))
+
+        for f, rp in zip(f_ds, self.raypaths):
+            # frequency shift the source wavelet
+            #rp.wavelet = Model.freq_shift(self.source.t, self.source.signal, f)
+            # instead of frequency shifting the source we can just generate a new source centered
+            # around a different frequency
+            source.chirp(9e6+f, 1e6, 0.5e-6)
+            rp.wavelet = source.signal
+
+        if plot:
         
-        f_ds_shaped = np.reshape(f_ds, self.surface.zs.shape)
-        
-        fig = go.Figure(data=go.Contour(
-            z=f_ds_shaped,
-            colorscale='Viridis',
-            contours=dict(
-                showlabels=True
+            f_ds_shaped = np.reshape(f_ds, self.surface.zs.shape)
+            
+            fig = go.Figure(data=go.Contour(
+                z=f_ds_shaped,
+                colorscale='Viridis',
+                contours=dict(
+                    showlabels=True
+                )
+            ))
+    
+            fig.update_layout(
+                title='Contour Plot of Doppler Values',
+                xaxis_title='Facet Y#',
+                yaxis_title='Facet X#',
+                xaxis=dict(
+                    scaleanchor="y",  # This makes the x-axis scale the same as the y-axis
+                ),
+                yaxis=dict(
+                    scaleratio=1  # Ensures the ratio of the x and y axes are 1:1
+                )
             )
-        ))
-
-        fig.update_layout(
-            title='Contour Plot of Doppler Values',
-            xaxis_title='Facet Y#',
-            yaxis_title='Facet X#',
-        )
-
-        fig.show()
+    
+            fig.show()
     
                 
     # use raypaths to generate a timeseries
@@ -353,25 +378,30 @@ class Model():
     # received by the radar
     def gen_timeseries(self, show=True):
         
-        times = [rp.path_time for rp in self.raypaths]
+        times = np.array([rp.path_time for rp in self.raypaths])
         
         # compute index offsets
-        mintimes = min(times + [rp.refl_time for rp in self.raypaths])
-        rel_times = np.array(times) - mintimes
+        mintimes = np.min(list(times) + [rp.refl_time for rp in self.raypaths])
+        rel_times = times - mintimes
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
         
         # create an empty output array
         output = np.zeros(np.max(idx_offsets) + len(self.source.signal))
+
+        # time axis
+        ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
+        ts += mintimes
         
         # --- ADD REFRACTED RAYPATHS ---
         for rp, offset in zip(self.raypaths, idx_offsets):
+            
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), self.source.signal * rp.tr))
+            tmp = np.concatenate((np.zeros(offset), rp.wavelet * rp.tr))
             # add 0 padding to the back, to make it the same length as the output array
             tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
-            # sum the new output signal with the output. Taking into account the amount
-            # of energy transferred in that direction, as well as r^2
+            
+            # sum the new output signal with the output.
             output += tmp
             
         # --- ADD REFLECTED RAYPATHS
@@ -379,20 +409,18 @@ class Model():
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
         
         for rp, offset in zip(self.raypaths, idx_offsets):
+            
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), self.source.signal * rp.re))
+            tmp = np.concatenate((np.zeros(offset), rp.wavelet * rp.re))
             # add 0 padding to the back, to make it the same length as the output array
             tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
-            # sum the new output signal with the output. Taking into account the amount
-            # of energy transferred in that direction, as well as r^2
+            
+            # sum the new output signal with the output
             output += tmp
         
         # normalize to one
         output /= np.max(output)
-            
-        ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
-        ts += mintimes
         
         self.ts = ts
         self.data = output

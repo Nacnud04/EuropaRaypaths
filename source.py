@@ -50,21 +50,13 @@ class Source():
         return self.t, self.signal
     
     # generate a chirp
-    def chirp(self, freq, bandwidth):
-        
-        SIZE_RANGE_FFT = 4096
-        range_weighting_window_original = np.kaiser(SIZE_RANGE_FFT/2., 2)
-        
+    def chirp(self, freq, bandwidth, toff):
+
         t = np.linspace(0, self.dur, int(self.sr * self.dur))
-        self.range_weighting_window = np.concatenate((range_weighting_window_original, np.zeros(int(SIZE_RANGE_FFT/2))), 0)
-        
-        f0 = freq + bandwidth/2.
-        t1 = self.dur
-        f1 = freq - bandwidth/2.
-        chirp2_real = chirp(t, f0, t1, f1)
-        
+        signal = np.cos(2 * np.pi * freq * (t - toff)) * np.exp(-2 * np.pi**2 * (bandwidth/4)**2 * (t - toff)**2)
+              
         self.t = t
-        self.signal = chirp2_real
+        self.signal = signal
         self.f0 = freq
         self.lam = self.c / freq
         
