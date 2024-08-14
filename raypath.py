@@ -1,6 +1,10 @@
 import numpy as np
 import plotly.graph_objects as go
 
+from scipy.fft import fft, fftfreq, ifft
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 from util import *
 
 class RayPaths():
@@ -110,4 +114,30 @@ class RayPaths():
             return np.array((inbound[0], inbound[1], phi))
         
         return None
+
+
+    def plot_wavelet(self, t):
+        
+        # plot the doppler shifted wavelet and its magnitude spectra
+
+        N = len(self.wavelet)
+        T = t[1] - t[0]
+        yf = fft(self.wavelet)
+        xf = fftfreq(N, T)[:N//2]
+
+        fig = make_subplots(rows=1, cols=2, subplot_titles=("Time Domain", "Frequency Spectrum"), horizontal_spacing=0.15)
+
+        fig.add_trace(go.Scatter(x=t, y=np.real(self.wavelet), mode='lines', name='Real'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=t, y=np.imag(self.wavelet), mode='lines', name='Imag'), row=1, col=1)
+
+        fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'), row=1, col=2)
+
+        fig.update_layout(title="Source wavelet", showlegend=False, template="plotly_white")
+        
+        fig.update_xaxes(title_text='Time (s)', row=1, col=1)
+        fig.update_yaxes(title_text='Signal', row=1, col=1)
+        fig.update_xaxes(title_text='Frequency (Hz)', type='log', row=1, col=2)
+        fig.update_yaxes(title_text='Amplitude', row=1, col=2)
+
+        fig.show()
 
