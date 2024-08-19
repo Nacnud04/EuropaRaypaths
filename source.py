@@ -50,10 +50,10 @@ class Source():
         return self.t, self.signal
     
     # generate a chirp
-    def chirp(self, freq, bandwidth, toff):
+    def chirp(self, freq, bandwidth):
 
         t = np.linspace(0, self.dur, int(self.sr * self.dur))
-        signal = np.cos(2 * np.pi * freq * (t - toff)) * np.exp(-2 * np.pi**2 * (bandwidth/4)**2 * (t - toff)**2)
+        signal = np.exp(1j * 2 * np.pi * (freq * t + (bandwidth / (2 * self.dur)) * t**2))
               
         self.t = t
         self.signal = signal
@@ -97,7 +97,8 @@ class Source():
 
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Time Domain", "Frequency Spectrum"), horizontal_spacing=0.15)
 
-        fig.add_trace(go.Scatter(x=self.t, y=self.signal, mode='lines', name='Signal'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=self.t, y=np.real(self.signal), mode='lines', name='Real'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=self.t, y=np.imag(self.signal), mode='lines', name='Imaginary'), row=1, col=1)
 
         fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'), row=1, col=2)
 

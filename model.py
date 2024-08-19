@@ -336,14 +336,14 @@ class Model():
         f_ds = np.array([Model.comp_dop(u, R, self.source.lam) for R in Rs])
 
         # source object to modify
-        source = Source(1e-9, 1.0e-6, (1050, 5050, 25000))
+        source = Source(1e-9, 0.5e-6, (1050, 5050, 25000))
 
         for f, rp in zip(f_ds, self.raypaths):
             # frequency shift the source wavelet
             #rp.wavelet = Model.freq_shift(self.source.t, self.source.signal, f)
             # instead of frequency shifting the source we can just generate a new source centered
             # around a different frequency
-            source.chirp(9e6+f, 1e6, 0.5e-6)
+            source.chirp(9e6+f, 1e6)
             rp.wavelet = source.signal
 
         if plot:
@@ -386,7 +386,7 @@ class Model():
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
         
         # create an empty output array
-        output = np.zeros(np.max(idx_offsets) + len(self.source.signal))
+        output = np.zeros(np.max(idx_offsets) + len(self.source.signal)).astype(np.complex128)
 
         # time axis
         ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
@@ -428,7 +428,8 @@ class Model():
         if show:
                     
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=ts, y=output, mode='lines'))
+            fig.add_trace(go.Scatter(x=ts, y=np.real(output), mode='lines', name='real'))
+            fig.add_trace(go.Scatter(x=ts, y=np.imag(output), mode='lines', name='imag'))
             fig.update_layout(title="Final Signal", xaxis_title='Time (s)', yaxis_title='Signal', template="plotly_white")
             fig.show()
 
