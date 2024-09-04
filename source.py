@@ -18,7 +18,7 @@ class Source():
 
         self.x, self.y, self.z = coord # location of source
         
-        self.speed = 1500 # speed of instrument in m/s
+        self.speed = 3500 # speed of instrument in m/s
         self.u = np.array((1, 0, 0)) * self.speed # velocity vector
         
         self.coord = np.array(coord)

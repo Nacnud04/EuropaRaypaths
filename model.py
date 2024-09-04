@@ -320,9 +320,11 @@ class Model():
                 
                 
     @staticmethod
-    def comp_dop(u, R, lam):
-        
-        f_d = -1 * (2 * np.dot(u, R)) / (lam * np.linalg.norm(R))
+    def comp_dop(u, R, f0):
+
+        R_hat = R / np.linalg.norm(R)
+        f_d = 2 * (np.dot(u, R_hat) / 299792458) * f0
+
         return f_d
                 
                 
@@ -333,7 +335,10 @@ class Model():
         sloc = self.source.coord
         
         Rs = np.array([rp.coord - sloc for rp in self.raypaths])
-        f_ds = np.array([Model.comp_dop(u, R, self.source.lam) for R in Rs])
+        f_ds = np.array([Model.comp_dop(u, R, self.source.f0) for R in Rs])
+
+        self.relvels = [np.dot(u, R/np.linalg.norm(R)) for R in Rs]
+        self.dopplers = f_ds
 
         # source object to modify
         source = Source(1e-9, 0.5e-6, (1050, 5050, 25000))
