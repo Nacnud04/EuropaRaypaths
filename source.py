@@ -58,6 +58,7 @@ class Source():
         self.t = t
         self.signal = signal
         self.f0 = freq
+        self.wc = freq * 2 * np.pi
         self.lam = self.c / freq
         
         return self.t, self.signal
