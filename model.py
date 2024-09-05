@@ -72,6 +72,11 @@ class Model():
         alpha2 = sqrt(1 + (eps_pp/self.eps2)**2) - 1
         alpha2 = sqrt(0.5 * self.eps2 * alpha2)
         self.alpha2 = (alpha2 * 2 * np.pi) / source.lam
+
+        # --- FACTOR APPLIED TO WAVENUMBER ---
+        
+        self.k_fac1 = np.sqrt(self.mu0*self.eps1*self.eps0)
+        self.k_fac2 = np.sqrt(self.mu0*self.eps2*self.eps0)
         
         # --- ANTENNA POWER & GAIN ---
         
@@ -349,6 +354,7 @@ class Model():
             # instead of frequency shifting the source we can just generate a new source centered
             # around a different frequency
             source.chirp(9e6+f, 1e6)
+            rp.wc = source.f0 * 2 * np.pi
             rp.wavelet = source.signal
 
         if plot:
@@ -396,9 +402,19 @@ class Model():
         # time axis
         ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
         ts += mintimes
+
+        # length of wavelet sample
+        wavlen = len(self.source.signal)
+        dt = self.source.dt
         
         # --- ADD REFRACTED RAYPATHS ---
         for rp, offset in zip(self.raypaths, idx_offsets):
+
+            # compute a time axis
+            t = (np.arange(wavlen) + offset) * dt
+            
+            # compute imaginary factor for real component of wavelet
+            imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * sum(rp.mags)))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
@@ -414,6 +430,12 @@ class Model():
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
         
         for rp, offset in zip(self.raypaths, idx_offsets):
+
+            # compute a time axis
+            t = (np.arange(wavlen) + offset) * dt
+            
+            # compute imaginary factor for real component of wavelet
+            imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * rp.mags[0]))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
