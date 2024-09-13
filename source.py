@@ -49,14 +49,15 @@ class Source():
 
         return self.t, self.signal
     
-    # generate a chirp
+    # generate a chirp (which is range compressed)
     def chirp(self, freq, bandwidth):
 
         t = np.linspace(0, self.dur, int(self.sr * self.dur))
         signal = np.exp(1j * 2 * np.pi * (freq * t + (bandwidth / (2 * self.dur)) * t**2))
               
-        self.t = t
-        self.signal = signal
+        self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
+        zeros = np.zeros(len(signal))
+        self.signal = np.correlate(np.hstack((zeros, signal, zeros)), signal, mode="same")
         self.f0 = freq
         self.wc = freq * 2 * np.pi
         self.lam = self.c / freq

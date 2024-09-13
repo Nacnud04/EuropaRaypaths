@@ -414,7 +414,7 @@ class Model():
             t = (np.arange(wavlen) + offset) * dt
             
             # compute imaginary factor for real component of wavelet
-            imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * sum(rp.mags)))
+            #imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * sum(rp.mags)))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
@@ -435,7 +435,7 @@ class Model():
             t = (np.arange(wavlen) + offset) * dt
             
             # compute imaginary factor for real component of wavelet
-            imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * rp.mags[0]))
+            #imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * rp.mags[0]))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
