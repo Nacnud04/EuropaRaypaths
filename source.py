@@ -3,6 +3,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.fft import fft, fftfreq, ifft
 from scipy.signal import chirp
+import matplotlib.pyplot as plt
+
+def sinc(x):
+    return np.sin(np.pi * x)/(np.pi*x)
 
 class Source():
 
@@ -15,6 +19,8 @@ class Source():
         self.dur = dur
         
         self.c = 299792458 # speed of light
+
+        self.rr = self.dt * self.c # range resolution
 
         self.x, self.y, self.z = coord # location of source
         
@@ -50,19 +56,32 @@ class Source():
         return self.t, self.signal
     
     # generate a chirp (which is range compressed)
-    def chirp(self, freq, bandwidth):
+    def chirp(self, freq, bandwidth, correlate=False):
 
-        t = np.linspace(0, self.dur, int(self.sr * self.dur))
-        signal = np.exp(1j * 2 * np.pi * (freq * t + (bandwidth / (2 * self.dur)) * t**2))
-              
-        self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
-        zeros = np.zeros(len(signal))
-        self.signal = np.correlate(np.hstack((zeros, signal, zeros)), signal, mode="same")
         self.f0 = freq
         self.wc = freq * 2 * np.pi
         self.lam = self.c / freq
+        rho_0 = 0
+        self.k = (2 * np.pi * rho_0) / self.lam
         
-        return self.t, self.signal
+        if correlate:
+            
+            t = np.linspace(0, self.dur, int(self.sr * self.dur))
+            signal = np.exp(1j * 2 * np.pi * (freq * t + (bandwidth / (2 * self.dur)) * t**2))
+                  
+            self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
+            zeros = np.zeros(len(signal))
+            self.signal = np.correlate(np.hstack((zeros, signal, zeros)), signal, mode="same")
+
+        else:
+            # time axis
+            self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
+
+            # space axis
+            rax = self.t * self.c
+            self.signal = sinc((self.f0 * (1/self.c)) * (rax-rho_0)/self.rr) * np.exp(2j * self.k * rho_0)
+        
+        return self.t, (self.signal, self.k)
     
     
     def conjugate(self):
@@ -90,25 +109,42 @@ class Source():
         return fig
 
     # plot the source and its magnitude spectra
-    def plot(self):
+    def plot(self, plotly=False):
 
         N = len(self.signal)
         T = self.t[1] - self.t[0]
-        yf = fft(self.signal)
+        yf = fft(self.signal)[:N//2]
         xf = fftfreq(N, T)[:N//2]
 
-        fig = make_subplots(rows=1, cols=2, subplot_titles=("Time Domain", "Frequency Spectrum"), horizontal_spacing=0.15)
+        if plotly:
+            
+            fig = make_subplots(rows=1, cols=2, subplot_titles=("Time Domain", "Frequency Spectrum"), horizontal_spacing=0.15)
+    
+            fig.add_trace(go.Scatter(x=self.t, y=np.real(self.signal), mode='lines', name='Real'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=self.t, y=np.imag(self.signal), mode='lines', name='Imaginary'), row=1, col=1)
+    
+            fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'), row=1, col=2)
+    
+            fig.update_layout(title="Source wavelet", showlegend=False, template="plotly_white")
+            
+            fig.update_xaxes(title_text='Time (s)', row=1, col=1)
+            fig.update_yaxes(title_text='Signal', row=1, col=1)
+            fig.update_xaxes(title_text='Frequency (Hz)', type='log', row=1, col=2)
+            fig.update_yaxes(title_text='Amplitude', row=1, col=2)
+    
+            fig.show()
 
-        fig.add_trace(go.Scatter(x=self.t, y=np.real(self.signal), mode='lines', name='Real'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=self.t, y=np.imag(self.signal), mode='lines', name='Imaginary'), row=1, col=1)
+        else:
 
-        fig.add_trace(go.Scatter(x=xf, y=2.0/N * np.abs(yf[:N//2]), mode='lines', name='Spectrum'), row=1, col=2)
-
-        fig.update_layout(title="Source wavelet", showlegend=False, template="plotly_white")
-        
-        fig.update_xaxes(title_text='Time (s)', row=1, col=1)
-        fig.update_yaxes(title_text='Signal', row=1, col=1)
-        fig.update_xaxes(title_text='Frequency (Hz)', type='log', row=1, col=2)
-        fig.update_yaxes(title_text='Amplitude', row=1, col=2)
-
-        fig.show()
+            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+            ax[0].plot(self.t, np.real(self.signal), color="blue", label="Real")
+            ax[0].plot(self.t, np.imag(self.signal), color="red", label="Imag")
+            ax[1].plot(xf, np.abs(yf))
+            plt.suptitle("Source wavelet")
+            ax[0].set_xlabel("Time (s)")
+            ax[0].set_ylabel("Signal")
+            ax[1].set_xlabel("Frequency (Hz)")
+            ax[1].set_ylabel("Amplitude")
+            ax[1].set_xscale("log")
+            ax[1].set_yscale("log")
+            plt.show()
