@@ -22,6 +22,10 @@ class Model():
         self.surface = surface
         self.source = source
 
+        self.ADDEXP = False
+        if self.source.k:
+            self.ADDEXP = True
+
         # define vars for target location
         self.tx, self.ty, self.tz = None, None, None
         
@@ -356,6 +360,7 @@ class Model():
             source.chirp(9e6+f, 1e6)
             rp.wc = source.f0 * 2 * np.pi
             rp.wavelet = source.signal
+            rp.k = source.k
 
         if plot:
         
@@ -387,7 +392,7 @@ class Model():
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
     # received by the radar
-    def gen_timeseries(self, show=True):
+    def gen_timeseries(self, show=True, plotly=True):
         
         times = np.array([rp.path_time for rp in self.raypaths])
         
@@ -414,11 +419,12 @@ class Model():
             t = (np.arange(wavlen) + offset) * dt
             
             # compute imaginary factor for real component of wavelet
-            #imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * sum(rp.mags)))
+            k = (2 * np.pi) / self.source.lam
+            exp = np.exp(2j * k * (offset*dt*self.c))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), rp.wavelet * rp.tr))
+            tmp = np.concatenate((np.zeros(offset), rp.wavelet * exp * rp.tr))
             # add 0 padding to the back, to make it the same length as the output array
             tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
             
@@ -435,11 +441,12 @@ class Model():
             t = (np.arange(wavlen) + offset) * dt
             
             # compute imaginary factor for real component of wavelet
-            #imag_comp = np.exp(1j * (rp.wc * t - 2 * self.k_fac1 * rp.wc * rp.mags[0]))
+            k = (2 * np.pi) / self.source.lam
+            exp = np.exp(2j * k * (offset*dt*self.c))
             
             # add 0 padding to account for different ray arrival time to front
             # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), rp.wavelet * rp.re))
+            tmp = np.concatenate((np.zeros(offset), rp.wavelet * exp * rp.re))
             # add 0 padding to the back, to make it the same length as the output array
             tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
             
@@ -452,7 +459,7 @@ class Model():
         self.ts = ts
         self.data = output
         
-        if show:
+        if show and plotly:
                     
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=ts, y=np.real(output), mode='lines', name='real'))
@@ -471,6 +478,29 @@ class Model():
             fig.update_xaxes(title_text='Frequency (Hz)', type='log')
             fig.update_yaxes(title_text="Amplitude")
             fig.show()
+
+        if show and not plotly:
+
+            fig, ax = plt.subplots(2, figsize=(8, 10))
+            ax[0].plot(ts, np.real(output), color="blue", label="Real")
+            ax[0].plot(ts, np.imag(output), color="red", label="Imag")
+            ax[0].set_title("Simulated signal")
+            ax[0].set_xlabel("Time (s)"); ax[0].set_ylabel("Signal")
+            ax[0].set_xlim(0.000168, 0.000175)
+            ax[0].legend()
+
+            N = len(output)
+            T = ts[1] - ts[0]
+            yf = np.abs(fft(output)[:N//2])
+            xf = fftfreq(N, T)[:N//2]
+
+            ax[1].plot(xf, yf, color="blue", label="spectrum")
+            ax[1].set_title("Simulated spectrum")
+            ax[1].set_xlabel("Frequency [Hz]"); ax[0].set_ylabel("Power")
+            ax[1].set_xscale("log")
+
+            plt.show()
+            
     
     
     def theta_funct(self):
