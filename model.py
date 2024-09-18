@@ -233,7 +233,7 @@ class Model():
             
     # create rays from source to target. 
     # calculate frac of transmit power.
-    def gen_raypaths(self):
+    def gen_raypaths(self, fast=False):
 
         self.raypaths = []
         
@@ -280,7 +280,7 @@ class Model():
                 rp.set_facet(fnorm, self.surface.fs)
                 rp.refracted = rp.comp_refracted(self.c1, self.c2)
                 
-                if rp.refracted is not None:
+                if rp.refracted is not None and not fast:
                     
                     # compute forced ray angle
                     rp.forced = cart_to_sp(rp.norms[1]) - spfnorm
