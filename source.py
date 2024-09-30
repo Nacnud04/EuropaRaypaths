@@ -62,26 +62,28 @@ class Source():
         self.wc = freq * 2 * np.pi
         self.lam = self.c / freq
         rho_0 = 0
-        self.k = (2 * np.pi * rho_0) / self.lam
         
         if correlate:
             
-            t = np.linspace(0, self.dur, int(self.sr * self.dur))
+            t = np.arange(0, self.dur, self.dt)
             signal = np.exp(1j * 2 * np.pi * (freq * t + (bandwidth / (2 * self.dur)) * t**2))
                   
-            self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
+            self.t = np.arange(-1.5*self.dur, 1.5*self.dur, self.dt)
             zeros = np.zeros(len(signal))
             self.signal = np.correlate(np.hstack((zeros, signal, zeros)), signal, mode="same")
 
         else:
             # time axis
-            self.t = np.linspace(-1.5*self.dur, 1.5*self.dur, int(self.sr * 3* self.dur))
+            self.t = np.arange(-1.5*self.dur, 1.5*self.dur, self.dt)
 
             # space axis
-            rax = self.t * self.c
-            self.signal = sinc((self.f0 * (1/self.c)) * (rax-rho_0)/self.rr) * np.exp(2j * self.k * rho_0)
+            #rax = self.t * self.c
+            #self.signal = sinc((self.f0 * (1/self.c)) * (rax-rho_0)/self.rr) * np.exp(2j * self.k * rho_0)
+
+            self.signal = sinc(2 * self.f0 * self.t)
+            
         
-        return self.t, (self.signal, self.k)
+        return self.t, self.signal
     
     
     def conjugate(self):
@@ -140,6 +142,7 @@ class Source():
             ax[0].plot(self.t, np.real(self.signal), color="blue", label="Real")
             ax[0].plot(self.t, np.imag(self.signal), color="red", label="Imag")
             ax[1].plot(xf, np.abs(yf))
+            ax[1].axvline(self.f0, color="red", linestyle=":")
             plt.suptitle("Source wavelet")
             ax[0].set_xlabel("Time (s)")
             ax[0].set_ylabel("Signal")

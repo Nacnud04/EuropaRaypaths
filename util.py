@@ -1,7 +1,7 @@
 import math
 import numpy as np
 
-def cart_to_sp(coord):
+def cart_to_sp(coord, vec=False):
     """
     Convert Cartesian coordinates to spherical coordinates.
     
@@ -14,11 +14,18 @@ def cart_to_sp(coord):
         theta is the polar angle (in radians)
         phi is the azimuthal angle (in radians)
     """
-    x, y, z = coord
-    r = math.sqrt(x**2 + y**2 + z**2)
-    phi = math.acos(z / r) if r != 0 else 0
-    theta = math.atan2(y, x)
-    return np.array((r, theta, phi))
+    if vec:
+        r = np.sqrt(coord[:,:,0]**2 + coord[:,:,1]**2 + coord[:,:,2]**2)
+        phi = np.arccos(coord[:,:,2] / r)
+        phi[r == 0] = 0
+        theta = np.arctan2(coord[:,:,1], coord[:,:,0])
+        return np.stack((r, theta, phi), axis=2)
+    else:
+        x, y, z = coord
+        r = math.sqrt(x**2 + y**2 + z**2)
+        phi = math.acos(z / r) if r != 0 else 0
+        theta = math.atan2(y, x)
+        return np.array((r, theta, phi))
 
 def dbi_to_db(dbi):
     return dbi - 2.15
