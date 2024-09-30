@@ -3,11 +3,14 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
 from math import sqrt
+import copy
 
 from source import *
 from surface import *
 from raypath import *
 from util import *
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class Model():
 
@@ -21,10 +24,6 @@ class Model():
         # set surface and source objects
         self.surface = surface
         self.source = source
-
-        self.ADDEXP = False
-        if self.source.k:
-            self.ADDEXP = True
 
         # define vars for target location
         self.tx, self.ty, self.tz = None, None, None
@@ -230,6 +229,77 @@ class Model():
             fig.update_layout(title="Reradiation Pattern", template="plotly_white")
             fig.show()
 
+
+
+    def compute_raypath(self, i, j, fast=False):
+        x = self.surface.x[i]
+        y = self.surface.y[j]
+        fnorm = self.surface.normals[i, j]
+        spfnorm = cart_to_sp(fnorm)
+    
+        # create rays
+        rp = RayPaths(self.source.coord,
+                      [x, y, self.surface.zs[i, j]],
+                      [self.tx, self.ty, self.tz], i, j)
+    
+        # --- START REFLECTION CALCS ---
+        rp.re = self.rho * -1
+        inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
+        dph = inbound[2] * 2
+        rp.refl_dph = dph
+        rp.refl_dth = np.pi
+        rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
+        rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
+        rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+        # --- END REFLECTION CALCS ---
+    
+        # --- START REFRACTION CALCS ---
+        rp.tr = self.tau
+        rp.set_source(self.source)
+        rp.set_facet(fnorm, self.surface.fs)
+        rp.refracted = rp.comp_refracted(self.c1, self.c2)
+    
+        if rp.refracted is not None and not fast:
+            rp.forced = cart_to_sp(rp.norms[1]) - spfnorm
+            _, dth, dph = rp.forced - rp.refracted
+            rp.tr *= np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[1]))
+            refracted_reverse = rp.comp_rev_refracted(self.c1, self.c2)
+    
+            if refracted_reverse is not None:
+                spfnorm_reverse = cart_to_sp(fnorm * -1)
+                forced_reverse = cart_to_sp(rp.norms[0] * -1) - spfnorm_reverse
+                _, dth, dph = forced_reverse - refracted_reverse
+                rp.tr *= np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[0]))
+                rp.tr *= radar_eq(self.power, self.gain, 1, self.lam, sum(rp.mags))
+                rp.tr *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+                rp.tr *= np.exp(-1 * self.alpha2 * 2 * rp.mags[1])
+            else:
+                rp.tr = 0
+        else:
+            rp.tr = 0
+        # --- END REFRACTION CALCS ---
+    
+        return rp
+    
+    def gen_raypaths_threaded(self, fast=False):
+        self.raypaths = []
+        self.lam = self.c / self.source.f0
+        
+        # Use ThreadPoolExecutor to parallelize the computation
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            
+            # Submit tasks for each surface point (i, j)
+            for i in range(len(self.surface.x)):
+                for j in range(len(self.surface.y)):
+                    futures.append(executor.submit(self.compute_raypath, i, j, fast))
+            
+            # Collect the results as they complete
+            for future in as_completed(futures):
+                self.raypaths.append(future.result())
+
+        
+
             
     # create rays from source to target. 
     # calculate frac of transmit power.
@@ -335,6 +405,17 @@ class Model():
         f_d = 2 * (np.dot(u, R_hat) / 299792458) * f0
 
         return f_d
+
+
+    @staticmethod
+    def comp_dop_vectorized(u, Rs, f0):
+        # Normalize R vectors
+        R_hats = Rs / np.linalg.norm(Rs, axis=1)[:, np.newaxis]
+        
+        # Compute Doppler shifts for all ray paths at once
+        f_ds = 2 * (np.dot(R_hats, u) / 299792458) * f0
+    
+        return f_ds
                 
                 
     # compute doppler shift due to instrument velocity        
@@ -343,24 +424,18 @@ class Model():
         u = self.source.u
         sloc = self.source.coord
         
-        Rs = np.array([rp.coord - sloc for rp in self.raypaths])
-        f_ds = np.array([Model.comp_dop(u, R, self.source.f0) for R in Rs])
-
-        self.relvels = [np.dot(u, R/np.linalg.norm(R)) for R in Rs]
+        Rs = np.array([rp.coord for rp in self.raypaths]) - sloc
+        #f_ds = np.array([Model.comp_dop(u, R, self.source.f0) for R in Rs])
+        f_ds = Model.comp_dop_vectorized(u, Rs, self.source.f0)
+        
+        #self.relvels = [np.dot(u, R/np.linalg.norm(R)) for R in Rs]
         self.dopplers = f_ds
 
-        # source object to modify
-        source = Source(1e-9, 0.5e-6, (1050, 5050, 25000))
-
         for f, rp in zip(f_ds, self.raypaths):
-            # frequency shift the source wavelet
-            #rp.wavelet = Model.freq_shift(self.source.t, self.source.signal, f)
             # instead of frequency shifting the source we can just generate a new source centered
             # around a different frequency
-            source.chirp(9e6+f, 1e6)
-            rp.wc = source.f0 * 2 * np.pi
-            rp.wavelet = source.signal
-            rp.k = source.k
+            self.source.chirp(9e6+f, 1e6)
+            rp.wavelet =self.source.signal
 
         if plot:
         
@@ -413,45 +488,25 @@ class Model():
         dt = self.source.dt
         
         # --- ADD REFRACTED RAYPATHS ---
-        for rp, offset in zip(self.raypaths, idx_offsets):
 
-            # compute a time axis
-            t = (np.arange(wavlen) + offset) * dt
+        # compute imaginary factor
+        k = (2 * np.pi) / self.source.lam
+        exp = np.exp(2j * k * (idx_offsets * dt * self.c))
+
+        # add raypaths
+        for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
+            output[offset:offset+wavlen] += rp.wavelet * e * rp.tr 
             
-            # compute imaginary factor for real component of wavelet
-            k = (2 * np.pi) / self.source.lam
-            exp = np.exp(2j * k * (offset*dt*self.c))
-            
-            # add 0 padding to account for different ray arrival time to front
-            # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), rp.wavelet * exp * rp.tr))
-            # add 0 padding to the back, to make it the same length as the output array
-            tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
-            
-            # sum the new output signal with the output.
-            output += tmp
-            
-        # --- ADD REFLECTED RAYPATHS
+        # --- ADD REFLECTED RAYPATHS ---
+        
         rel_times = np.array([rp.refl_time for rp in self.raypaths]) - mintimes
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
-        
-        for rp, offset in zip(self.raypaths, idx_offsets):
 
-            # compute a time axis
-            t = (np.arange(wavlen) + offset) * dt
-            
-            # compute imaginary factor for real component of wavelet
-            k = (2 * np.pi) / self.source.lam
-            exp = np.exp(2j * k * (offset*dt*self.c))
-            
-            # add 0 padding to account for different ray arrival time to front
-            # of the signal matrix
-            tmp = np.concatenate((np.zeros(offset), rp.wavelet * exp * rp.re))
-            # add 0 padding to the back, to make it the same length as the output array
-            tmp = np.concatenate((tmp, np.zeros(len(output) - len(tmp))))
-            
-            # sum the new output signal with the output
-            output += tmp
+        exp = np.exp(2j * k * (idx_offsets * dt * self.c))
+
+        # add raypaths
+        for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
+            output[offset:offset+wavlen] += rp.wavelet * e * rp.re
         
         # normalize to one
         output /= np.max(output)
@@ -527,7 +582,14 @@ class Model():
         r2m = self.ref_funct(x, t)
         r2m_conj = r2m.real - 1j*r2m.imag
         return r2m_conj
-    
+
+    def threaded_unscramble(self):
+
+        zeros = np.empty((len(self.surface.x), len(self.surface.y)), dtype=object)
+        for rp in self.raypaths:
+            zeros[rp.xid, rp.yid] = rp
+
+        return zeros
     
     # plot angle difference between refracted ray
     # and forced ray to target

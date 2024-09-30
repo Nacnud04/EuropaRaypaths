@@ -9,7 +9,7 @@ from util import *
 
 class RayPaths():
 
-    def __init__(self, source, facetloc, target):
+    def __init__(self, source, facetloc, target, xid, yid):
         
         self.c = 299792458 # speed of light
 
@@ -21,6 +21,8 @@ class RayPaths():
         fx, fy, fz = facetloc
         self.fx, self.fy, self.fz = fx, fy, fz
         self.coord = np.array((fx, fy, fz))
+        self.xid = xid
+        self.yid = yid
 
         # comp raypaths
         vec1 = np.array([fx - source[0], fy - source[1], fz - source[2]])
