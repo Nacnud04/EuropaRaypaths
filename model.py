@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class Model():
 
-    def __init__(self, surface, source, power=11.75):
+    def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6):
         
         self.c = 299792458 # speed of light
         self.nu0 = 376.7 # intrinsic impedance of free space
@@ -27,12 +27,15 @@ class Model():
 
         # define vars for target location
         self.tx, self.ty, self.tz = None, None, None
+
+        # do we compute the surface reflection?
+        self.reflect = reflect
         
         # --- MATERIAL PARAMETERS ---
         
         # material relative dielectric
         self.eps1 = 1
-        self.eps2 = 3.15
+        self.eps2 = eps2
         
         # material magnetic permability
         self.mu1 = self.mu0
@@ -40,7 +43,7 @@ class Model():
         
         # material conductivity
         self.sig1 = 0
-        self.sig2 = 1e-6
+        self.sig2 = sig2
         
         # --- VELOCITIES ---
         
@@ -61,6 +64,7 @@ class Model():
         
         self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
         self.tau = (2 * self.nu2) / (self.nu2 + self.nu1)        # transmission coeff
+        self.tau_rev = (2 * self.nu1) / (self.nu2 + self.nu1)    # coeff for the other direction
         
         # --- ATTENUATION CONSTANTS ---
         
@@ -243,14 +247,15 @@ class Model():
                       [self.tx, self.ty, self.tz], i, j)
     
         # --- START REFLECTION CALCS ---
-        rp.re = self.rho * -1
-        inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
-        dph = inbound[2] * 2
-        rp.refl_dph = dph
-        rp.refl_dth = np.pi
-        rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
-        rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
-        rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+        if self.reflect:
+            rp.re = self.rho * -1
+            inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
+            dph = inbound[2] * 2
+            rp.refl_dph = dph
+            rp.refl_dth = np.pi
+            rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
+            rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
+            rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
         # --- END REFLECTION CALCS ---
     
         # --- START REFRACTION CALCS ---
@@ -318,32 +323,35 @@ class Model():
                 # create rays
                 rp = RayPaths(self.source.coord, 
                              [x, y, self.surface.zs[i, j]],
-                             [self.tx, self.ty, self.tz])
+                             [self.tx, self.ty, self.tz], xid=i, yid=j)
                 
                 # --- START REFLECTION CALCS ---
-                
-                rp.re = self.rho * -1
-                
-                # find reflected raypath
-                inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
-                dph = inbound[2] * 2
-                rp.refl_dph = dph
-                rp.refl_dth = np.pi
-                
-                # find energy reflecting back to source
-                rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
-                
-                # use radar equation
-                rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
-                
-                # attenuation
-                rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+
+                if self.reflect:
+                    
+                    rp.re = self.rho * -1
+                    
+                    # find reflected raypath
+                    inbound = (cart_to_sp(rp.norms[0]) - np.pi) - spfnorm
+                    dph = inbound[2] * 2
+                    rp.refl_dph = dph
+                    rp.refl_dth = np.pi
+                    
+                    # find energy reflecting back to source
+                    rp.re *= np.abs(Model.beam_pattern_3D(np.pi, dph, self.lam, self.surface.fs, rp.mags[0]))
+                    
+                    # use radar equation
+                    rp.re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp.mags[0])
+                    
+                    # attenuation
+                    rp.re *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
                 
                 # --- END REFLECTION CALCS ---
                 
                 # --- START REFRACTION CALCS ---
                 
-                rp.tr = self.tau
+                rp.tr = self.tau * self.tau_rev   # energy maintained through double refraction to target and then to surface
+                rp.trt = self.tau                 # energy maintained through single refraction to target
                 
                 # compute refracted ray angle
                 rp.set_source(self.source)
@@ -359,7 +367,9 @@ class Model():
 
                     # compute loss from propagating to the target
                     # compute trasmitted power based on difference in refracted and forced ray angle
-                    rp.tr *= np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[1]))
+                    facet_loss = np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[1]))
+                    rp.tr *= facet_loss
+                    rp.trt *= facet_loss
                     
                     # compute loss from propagating back to the source
                     refracted_reverse = rp.comp_rev_refracted(self.c1, self.c2)
@@ -374,9 +384,12 @@ class Model():
 
                         # radar eq
                         rp.tr *= radar_eq(self.power, self.gain, 1, self.lam, sum(rp.mags))
+                        rp.trt *= radar_eq(self.power, self.gain, 1, self.lam, sum(rp.mags)/2)
                         
                         # attenuation (source -> surf)
-                        rp.tr *= np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+                        atten_loss = np.exp(-1 * self.alpha1 * 2 * rp.mags[0])
+                        rp.tr *= atten_loss
+                        rp.trt *= atten_loss
                         
                         # attenuation (surf -> target)
                         rp.tr *= np.exp(-1 * self.alpha2 * 2 * rp.mags[1])
@@ -386,6 +399,7 @@ class Model():
                     
                 else:
                     rp.tr = 0
+                    rp.trt = 0
                     
                 # --- END REFRACTION CALCS ---
                         
@@ -467,7 +481,7 @@ class Model():
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
     # received by the radar
-    def gen_timeseries(self, show=True, plotly=True):
+    def gen_timeseries(self, show=True, plotly=True, lim=True):
         
         times = np.array([rp.path_time for rp in self.raypaths])
         
@@ -479,6 +493,9 @@ class Model():
         # create an empty output array
         output = np.zeros(np.max(idx_offsets) + len(self.source.signal)).astype(np.complex128)
 
+        # make another for signal at target
+        output_target = np.zeros_like(output)
+
         # time axis
         ts = np.linspace(0, len(output)*self.source.dt, num=len(output))
         ts += mintimes
@@ -486,33 +503,42 @@ class Model():
         # length of wavelet sample
         wavlen = len(self.source.signal)
         dt = self.source.dt
-        
-        # --- ADD REFRACTED RAYPATHS ---
 
         # compute imaginary factor
         k = (2 * np.pi) / self.source.lam
+        
+        # --- ADD REFRACTED RAYPATHS ---
+        
         exp = np.exp(2j * k * (idx_offsets * dt * self.c))
 
         # add raypaths
         for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
             output[offset:offset+wavlen] += rp.wavelet * e * rp.tr 
+            output_target[offset:offset+wavlen] += rp.wavelet * e * rp.trt
             
         # --- ADD REFLECTED RAYPATHS ---
+
+        if self.reflect:
         
-        rel_times = np.array([rp.refl_time for rp in self.raypaths]) - mintimes
-        idx_offsets = np.round(rel_times / self.source.dt).astype(int)
-
-        exp = np.exp(2j * k * (idx_offsets * dt * self.c))
-
-        # add raypaths
-        for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
-            output[offset:offset+wavlen] += rp.wavelet * e * rp.re
+            rel_times = np.array([rp.refl_time for rp in self.raypaths]) - mintimes
+            idx_offsets = np.round(rel_times / self.source.dt).astype(int)
+    
+            exp = np.exp(2j * k * (idx_offsets * dt * self.c))
+    
+            # add raypaths
+            for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
+                output[offset:offset+wavlen] += rp.wavelet * e * rp.re
         
         # normalize to one
         output /= np.max(output)
-        
+
+        # received signal at surface
         self.ts = ts
-        self.data = output
+        self.signal = output
+
+        # received signal at target
+        self.tar_ts = ts / 2
+        self.tar_signal = output_target
         
         if show and plotly:
                     
@@ -541,7 +567,8 @@ class Model():
             ax[0].plot(ts, np.imag(output), color="red", label="Imag")
             ax[0].set_title("Simulated signal")
             ax[0].set_xlabel("Time (s)"); ax[0].set_ylabel("Signal")
-            ax[0].set_xlim(0.000168, 0.000175)
+            if lim:
+                ax[0].set_xlim(0.000168, 0.000175)
             ax[0].legend()
 
             N = len(output)
@@ -761,6 +788,8 @@ class Model():
         )
 
         fig.show()
+
+        return z, y
         
         
     # plot 3d model showing everything
