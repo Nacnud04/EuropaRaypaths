@@ -16,6 +16,12 @@ class Surface():
         self.x = np.linspace(origin[0], origin[0] + dims[0] * self.fs, dims[0])
         self.y = np.linspace(origin[1], origin[1] + dims[1] * self.fs, dims[1])
         self.X, self.Y = np.meshgrid(self.x, self.y)
+
+        # x and y limits
+        self.xmin = origin[0]
+        self.ymin = origin[1]
+        self.xmax = origin[0] + fs * dims[0]
+        self.ymax = origin[1] + fs * dims[1]
         
         
     def gen_normals(self):
