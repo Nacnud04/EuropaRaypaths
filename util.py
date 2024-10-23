@@ -27,6 +27,15 @@ def cart_to_sp(coord, vec=False):
         theta = math.atan2(y, x)
         return np.array((r, theta, phi))
 
+def sp_to_cart(coord):
+    r, th, ph = coord
+    
+    x = r * np.sin(th) * np.cos(ph)
+    y = r * np.sin(th) * np.sin(ph)
+    z = r * np.cos(th)
+
+    return np.array((x, y, z))
+
 def dbi_to_db(dbi):
     return dbi - 2.15
 
