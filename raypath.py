@@ -78,18 +78,22 @@ class RayPaths():
         self.refl_time = (self.mags[0] / vel1) * 2
         self.path_time = (self.mags[0] / vel1 + self.mags[1] / vel2) * 2
         
-        # compute the spherical coordinate for the facet normal and inbound ray
-        fspher = cart_to_sp(self.fnorm)
-        inbound = cart_to_sp(self.norms[0])
-        
-        # compute a new coordinate for inbound ray, relative to facet normal as origin
-        inbound -= fspher
+        # find inbound vector relative to facet direction
+        relative = self.norms[0] - self.fnorm
+
+        # convert to spherical
+        inbound = cart_to_sp(relative)
+
+        inbound[2] = np.abs(inbound[2] - np.pi)
         
         # snells law to find the new phi value (inclincation relative to facet)
-        k = (vel2 / vel1) * np.sin(inbound[2] - np.pi)
+        k = (vel2 / vel1) * np.sin(inbound[2])
         
         if abs(k) < 1:
+            
             phi = np.arcsin(k) + np.pi
+            if phi > np.pi: phi -= 2 * np.pi
+            phi = np.abs(phi)
             
             return np.array((inbound[0], inbound[1], phi))
         
@@ -100,18 +104,22 @@ class RayPaths():
     # the ray which follows the path of greatest radiation
     def comp_rev_refracted(self, vel1, vel2):
         
-        # compute the spherical coordinate for the facet normal and inbound ray
-        fspher = cart_to_sp(self.fnorm*-1)
-        inbound = cart_to_sp(self.norms[1]*-1)
+        # find inbound vector relative to facet direction
+        relative = -1 * self.norms[0] + self.fnorm
         
-        # compute a new coordinate for inbound ray, relative to facet normal as origin
-        inbound -= fspher
+        # convert to spherical
+        inbound = cart_to_sp(relative)
+
+        inbound[2] = np.abs(inbound[2] - np.pi)
         
         # snells law to find the new phi value (inclincation relative to facet)
-        k = (vel1 / vel2) * np.sin(inbound[2] - np.pi)
+        k = (vel2 / vel1) * np.sin(inbound[2])
         
         if abs(k) < 1:
+            
             phi = np.arcsin(k) + np.pi
+            if phi > np.pi: phi -= 2 * np.pi
+            phi = np.abs(phi)
             
             return np.array((inbound[0], inbound[1], phi))
         

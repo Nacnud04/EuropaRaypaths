@@ -360,11 +360,18 @@ class Model():
                 
                 if rp.refracted is not None and not fast:
                     
-                    # compute forced ray angle
-                    rp.forced = cart_to_sp(rp.norms[1]) - spfnorm
-
-                    _, dth, dph = rp.forced - rp.refracted
-
+                    # compute forced ray
+                    rp.forced = rp.norms[1] - rp.fnorm
+                    
+                    # find forced ray relative to refracted angle
+                    # this computation is done entirely when relative to facet normal
+                    spforced = cart_to_sp(rp.forced)
+                    
+                    # compute angle differences
+                    dth, dph = spforced[1] - rp.refracted[1], spforced[2] - rp.refracted[2]
+                    rp.dph = dph
+                    rp.dth = dth
+                    
                     # compute loss from propagating to the target
                     # compute trasmitted power based on difference in refracted and forced ray angle
                     facet_loss = np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[1]))
@@ -375,11 +382,18 @@ class Model():
                     refracted_reverse = rp.comp_rev_refracted(self.c1, self.c2)
                     
                     if refracted_reverse is not None:
-                        spfnorm_reverse = cart_to_sp(fnorm * -1)
-                        forced_reverse = cart_to_sp(rp.norms[0] * -1) - spfnorm_reverse
 
+                        # compute the reverse forced raypath
+                        rp.forced_rev = -1 * rp.norms[1] + rp.fnorm
+
+                        # move into spherical
+                        spforced_rev = cart_to_sp(rp.forced_rev)
+                        
                         # find difference in angle
-                        _, dth, dph = forced_reverse - refracted_reverse
+                        dth = spforced_rev[1] - refracted_reverse[1]
+                        dph = spforced_rev[2] - refracted_reverse[2]
+
+                        # compute transmittance via beam pattern
                         rp.tr *= np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[0]))
 
                         # radar eq
@@ -528,9 +542,6 @@ class Model():
             # add raypaths
             for rp, offset, e in zip(self.raypaths, idx_offsets, exp):
                 output[offset:offset+wavlen] += rp.wavelet * e * rp.re
-        
-        # normalize to one
-        output /= np.max(output)
 
         # received signal at surface
         self.ts = ts
@@ -624,8 +635,8 @@ class Model():
 
         # --- CREATION OF PLOT FOR REFRACTED ---
         
-        dphs = np.reshape([rp.forced[2] - rp.refracted[2] if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
-        dths = np.reshape([rp.forced[1] - rp.refracted[1] if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
+        dphs = np.reshape([(rp.dph) if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
+        dths = np.reshape([(rp.dth) if rp.refracted is not None else None for rp in self.raypaths], self.surface.zs.shape)
 
         # Create subplots
         fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Δφ", "Δθ"))
@@ -663,43 +674,43 @@ class Model():
         
         
         # --- NOW CREATE PLOT FOR REFLECTED ---
-        
-        dphs = np.reshape([rp.refl_dph for rp in self.raypaths], self.surface.zs.shape)
-        dths = np.reshape([rp.refl_dth for rp in self.raypaths], self.surface.zs.shape)
-        
-        # Create subplots
-        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Δφ", "Δθ"))
-
-        # Add the first heatmap
-        hm2 = go.Heatmap(z=dphs, coloraxis='coloraxis1')
-        fig.add_trace(hm2, row=1, col=1)
-
-        # Add the second heatmap
-        hm1 = go.Heatmap(z=dths, coloraxis='coloraxis2', colorscale='Phase')
-        fig.add_trace(hm1, row=1, col=2)
-
-        # Update layout
-        fig.update_layout(
-            title='Angle Differences (Reflected)',
-            template="plotly_white",
-            coloraxis1=dict(
-                colorbar=dict(x=0.35, len=0.9, title="rad"),
-                cmin=-np.pi/2, cmax=0
-            ),
-            coloraxis2=dict(
-                colorscale='Phase', 
-                colorbar=dict(x=1.00, len=0.9, title="rad"),
-                cmin=-np.pi, cmax=np.pi
+        if self.reflect:
+            dphs = np.reshape([rp.refl_dph for rp in self.raypaths], self.surface.zs.shape)
+            dths = np.reshape([rp.refl_dth for rp in self.raypaths], self.surface.zs.shape)
+            
+            # Create subplots
+            fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.3, subplot_titles=("Δφ", "Δθ"))
+    
+            # Add the first heatmap
+            hm2 = go.Heatmap(z=dphs, coloraxis='coloraxis1')
+            fig.add_trace(hm2, row=1, col=1)
+    
+            # Add the second heatmap
+            hm1 = go.Heatmap(z=dths, coloraxis='coloraxis2', colorscale='Phase')
+            fig.add_trace(hm1, row=1, col=2)
+    
+            # Update layout
+            fig.update_layout(
+                title='Angle Differences (Reflected)',
+                template="plotly_white",
+                coloraxis1=dict(
+                    colorbar=dict(x=0.35, len=0.9, title="rad"),
+                    cmin=-np.pi/2, cmax=0
+                ),
+                coloraxis2=dict(
+                    colorscale='Phase', 
+                    colorbar=dict(x=1.00, len=0.9, title="rad"),
+                    cmin=-np.pi, cmax=np.pi
+                )
             )
-        )
-
-        # Update x and y axis titles for each subplot
-        fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
-        fig.update_yaxes(title_text='Facet X #', row=1, col=1)
-        fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
-        fig.update_yaxes(title_text='Facet X #', row=1, col=2)
-
-        fig.show()
+    
+            # Update x and y axis titles for each subplot
+            fig.update_xaxes(title_text='Facet Y #', row=1, col=1)
+            fig.update_yaxes(title_text='Facet X #', row=1, col=1)
+            fig.update_xaxes(title_text='Facet Y #', row=1, col=2)
+            fig.update_yaxes(title_text='Facet X #', row=1, col=2)
+    
+            fig.show()
 
         
     def show_travel_time(self):
