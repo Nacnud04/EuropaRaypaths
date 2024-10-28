@@ -91,9 +91,10 @@ class RayPaths():
         
         if abs(k) < 1:
             
-            phi = np.arcsin(k) + np.pi
-            if phi > np.pi: phi -= 2 * np.pi
-            phi = np.abs(phi)
+            #phi = np.arcsin(k) + np.pi
+            #if phi > np.pi: phi -= 2 * np.pi
+            #phi = np.abs(phi)
+            phi = np.pi - np.arcsin(k)
             
             return np.array((inbound[0], inbound[1], phi))
         
@@ -105,7 +106,7 @@ class RayPaths():
     def comp_rev_refracted(self, vel1, vel2):
         
         # find inbound vector relative to facet direction
-        relative = -1 * self.norms[0] + self.fnorm
+        relative = -1 * self.norms[1] + self.fnorm
         
         # convert to spherical
         inbound = cart_to_sp(relative)
@@ -117,9 +118,11 @@ class RayPaths():
         
         if abs(k) < 1:
             
-            phi = np.arcsin(k) + np.pi
-            if phi > np.pi: phi -= 2 * np.pi
-            phi = np.abs(phi)
+            #phi = np.arcsin(k) + np.pi
+            #if phi > np.pi: phi -= 2 * np.pi
+            #phi = np.abs(phi)
+
+            phi = np.pi - np.arcsin(k)
             
             return np.array((inbound[0], inbound[1], phi))
         
