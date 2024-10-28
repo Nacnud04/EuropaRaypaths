@@ -384,7 +384,7 @@ class Model():
                     if refracted_reverse is not None:
 
                         # compute the reverse forced raypath
-                        rp.forced_rev = -1 * rp.norms[1] + rp.fnorm
+                        rp.forced_rev = -1 * rp.norms[0] + rp.fnorm
 
                         # move into spherical
                         spforced_rev = cart_to_sp(rp.forced_rev)
