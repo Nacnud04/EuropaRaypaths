@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 
 class Surface():
 
-    def __init__(self, fs=10, origin=(0, 0), dims=(10, 10)):
+    def __init__(self, fs=10, origin=(0, 0), dims=(10, 10), overlap=0, verb=False):
 
         self.fs = fs # facet size in m
         self.origin = origin # origin. defined as minx and miny
@@ -12,26 +12,38 @@ class Surface():
         self.zs = np.zeros(self.dims)
         self.normals = np.zeros((dims[0], dims[1], 3))
 
-        # generate x and y spaces for surface mesh
-        self.x = np.linspace(origin[0], origin[0] + dims[0] * self.fs, dims[0])
-        self.y = np.linspace(origin[1], origin[1] + dims[1] * self.fs, dims[1])
-        self.X, self.Y = np.meshgrid(self.x, self.y)
+        # how much is each adjacent facet offset?
+        # if overlap = 0 then the facets do not overlap.
+        # if overlap = 0.5 then the ajacent facet covers half the previous facet
+        self.offset = 1 - overlap
+
+        if verb:
+            print(f"Facet offset: {self.offset}")
 
         # x and y limits
         self.xmin = origin[0]
         self.ymin = origin[1]
-        self.xmax = origin[0] + fs * dims[0]
-        self.ymax = origin[1] + fs * dims[1]
-        
+        self.xmax = origin[0] + fs * dims[0] * self.offset
+        self.ymax = origin[1] + fs * dims[1] * self.offset
+
+        if verb:
+            print(f"X range: {self.xmin}, {self.xmax} \nY range: {self.ymin}, {self.ymax}")
+
+        # generate x and y spaces for surface mesh
+        self.x = np.linspace(origin[0], self.xmax, dims[0])
+        self.y = np.linspace(origin[1], self.ymax, dims[1])
+
+        # turn into mesh
+        self.X, self.Y = np.meshgrid(self.x, self.y)        
         
     def gen_normals(self):
         
         # first find delta z along x axis
-        dz_dx = (np.roll(self.zs, 1, axis=0) - self.zs) / self.fs
+        dz_dx = (np.roll(self.zs, 1, axis=0) - self.zs) / (self.fs * self.offset)
         dz_dx[0,:] = dz_dx[1,:]
         
         # find delta z along y axis
-        dz_dy = (np.roll(self.zs, 1, axis=1) - self.zs) / self.fs
+        dz_dy = (np.roll(self.zs, 1, axis=1) - self.zs) / (self.fs * self.offset)
         dz_dy[:,0] = dz_dy[:,1]
         
         # compute facet normals
