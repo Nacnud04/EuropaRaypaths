@@ -9,8 +9,8 @@ class Surface():
         self.origin = origin # origin. defined as minx and miny
         self.dims = dims # (x, y) dimension in terms of facets
         
-        self.zs = np.zeros(self.dims)
-        self.normals = np.zeros((dims[0], dims[1], 3))
+        self.zs = np.zeros((dims[1], dims[0]))
+        self.normals = np.zeros((dims[1], dims[0], 3))
 
         # how much is each adjacent facet offset?
         # if overlap = 0 then the facets do not overlap.
@@ -18,7 +18,7 @@ class Surface():
         self.offset = 1 - overlap
 
         if verb:
-            print(f"Facet offset: {self.offset}")
+            print(f"Facet offset: {self.offset} m")
 
         # x and y limits
         self.xmin = origin[0]
@@ -27,7 +27,7 @@ class Surface():
         self.ymax = origin[1] + fs * dims[1] * self.offset
 
         if verb:
-            print(f"X range: {self.xmin}, {self.xmax} \nY range: {self.ymin}, {self.ymax}")
+            print(f"X range: {self.xmin} m, {self.xmax} m \nY range: {self.ymin} m, {self.ymax} m")
 
         # generate x and y spaces for surface mesh
         self.x = np.linspace(origin[0], self.xmax, dims[0])
