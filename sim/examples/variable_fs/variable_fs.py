@@ -1,26 +1,25 @@
 import sys
-sys.path.append("../../")
-sys.path.append("../")
+sys.path.append("../../../.")
 
 from surface import *
 from source import *
-from src import *
+from simulator import *
 
 import numpy as np
 from time import time as Time
 
 # tuple with facet sizes
-fss = (20, 10, 5, 3, 2)
+fss = (20, 10, 5, 3, 2, 1)
 
 # do not overlap facets at all
 overlap = 0 # percentage for facets to overlap
 
 # compute dimensions based on facet size
-ftprnt_size = 2000 # footprint width [m]
+ftprnt_size = 1000 # footprint width [m]
 dimss = [(int(ftprnt_size/fs),int(ftprnt_size/fs)) for fs in fss]
 
 # origin
-origin = (4000, 4000)
+origin = (4500, 4500)
 
 # generate a list of surfaces to call
 
@@ -88,17 +87,16 @@ for i, surf in enumerate(surfs):
     # iterate through sources in transit
     for j, s in enumerate(ss):
         print(f"Simulating: {j+1}/{len(ss)} ({round(100*((j+1)/len(ss)), 1)}%)", end="     \r")
-        model = Model(surf, s, reflect=reflect)
+        model = Model(surf, s, reflect=reflect, vec=True)
         model.set_target((tx, ty, tz))
         model.gen_raypaths()
         model.comp_dopplers()
-        model.gen_timeseries(show=False)
+        model.gen_timeseries_vec(show=False)
         rdrgrm[:,j] += np.interp(ts, model.ts, np.real(model.signal))
         rdrgrm[:,j] += 1j * np.interp(ts, model.ts, np.imag(model.signal))
         # center facet index
-        cid = len(model.raypaths) // 2
         # append travel time to pathtimes
-        pathtime.append(model.raypaths[cid].path_time)
+        pathtime.append(model.path_time[model.path_time.shape[0]//2, model.path_time.shape[1]//2])
         
     print(f"\nProcessing time for fs of {fss[i]:03d} m : {round((Time() - st_fs)/60)} minutes and {round((Time() - st_fs) % 60,2)} seconds")
 
@@ -112,3 +110,4 @@ print(f"\n\nTotal processing time: {round((Time() - st)/60)} minutes and {round(
 
 # export the radar data
 np.save("variable_fs", np.array(rdrgrms))
+np.save("pathtime_fs", np.array(pathtimes))
