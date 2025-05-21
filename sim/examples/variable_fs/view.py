@@ -5,7 +5,6 @@ sys.path.append("../../../.")
 from util import *
 
 rdrgrms = np.load("variable_fs.npy")
-pathtms = np.load("pathtime_fs.npy")
 
 fss = (20, 10, 5, 3, 2, 1)
 
@@ -26,8 +25,6 @@ dt  = 1 / (8 * f0)    # time delta to avoid aliasing [s]
 start = 166.8e-6      # [s]
 end   = 177e-6        # [s]
 
-# path times to range bin
-focus_rb = (pathtms - start) // dt
 
 # find travel time at each azumith location
 tt_rb = np.argmax(hr, axis=0)
@@ -37,8 +34,6 @@ tt_rb -= np.min(tt_rb)
 
 # =============================================================================
 # FOCUSING FUNCTIONS
-
-def focus_pix_alt(rdr, t, T, rngbins, k, dt, frb)
 
 def focus_pix(rdr, t, T, rngbins, k, dt):
 

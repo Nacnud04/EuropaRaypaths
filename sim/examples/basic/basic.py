@@ -42,7 +42,7 @@ Ct = (1000, 1250, -300)  # target location (x, y, z) [m]
 
 model = si.Model(surf, source, vec=True)        # init model
 model.set_target(Ct)                  # set target location
-signals = []
+signals = []; compare = []
 for i in range(2):
     if i == 0: print(f"Running fast, vectorized version...")
     else: print(f"Runnig slow nonvectorized version...")
@@ -62,6 +62,7 @@ for i in range(2):
     else: model.gen_timeseries(time=True)
 
     signals.append(model.signal)
+    compare.append(model.comp_val)
 
     model.vec = False
 
@@ -69,6 +70,10 @@ for i in range(2):
 # plot difference in signals
 import matplotlib.pyplot as plt
 import numpy as np
+
+plt.imshow(np.reshape(compare[1], dims).T-compare[0])
+plt.title("idx offsets")
+plt.show()
 
 plt.plot(model.ts, np.real(signals[0]), linewidth=1)
 plt.plot(model.ts, np.real(signals[1]), linewidth=1)
