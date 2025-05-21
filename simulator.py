@@ -341,7 +341,6 @@ class Model():
                                                  self.c1, self.c2)
         # angle delta between the facet to target raypath and the refracted raypath
         # relative to facet normal in spherical coordinates
-        # --- FIXED TO HERE ---
         rp_f2t_CN = normalize_vectors(rp_f2t_C)
         rp_f2t_SD_rF = cart_to_sp(rp_f2t_CN - surf_norms, vec=True) - rp_f2i_S_rF
         # generate array for % energy transmitted
@@ -355,9 +354,9 @@ class Model():
                                                  self.c1, self.c2, rev=True)
         # angle delta between the forced reverse raypath and the reversed refracted raypath
         # relative to reversed facet normal
-        #rp_f2s_SD_rF = cart_to_sp(-1 * normalize_vectors(rp_s2f_C) - surf_norms, vec=True) - rp_f2o_S_rF
-        forced_rev = surf_norms - normalize_vectors(rp_s2f_C)
+        forced_rev = normalize_vectors(rp_s2f_C) + surf_norms
         rp_f2s_SD_rF = cart_to_sp(forced_rev, vec=True) - rp_f2o_S_rF
+        # --- FIXED TO HERE ---
         # account for Nan 
         tr[(rp_f2i_S_rF[0, :, :] * rp_f2o_S_rF[0, :, :]) == None] = 0
         # compute losses from second refraction through aperture
@@ -370,7 +369,9 @@ class Model():
         tr *= np.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
         # vars to save for time series or computation
         self.tr = tr
+        self.comp_val = np.copy(tr)
         self.path_time = (rp_s2f_S[0, :, :] / self.c1 + rp_f2t_S[0, :, :] / self.c2) * 2
+        self.slant_range = rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]
         self.refr_dth  = rp_f2t_SD_rF[1, :, :]
         self.refr_dph  = rp_f2t_SD_rF[2, :, :]
 
@@ -411,6 +412,8 @@ class Model():
             self.lam = self.c / self.source.f0
 
             start_time = time.time()
+
+            self.comp_val = []
             
             for i, x in enumerate(self.surface.x):
 
@@ -484,7 +487,6 @@ class Model():
                         facet_loss = np.abs(Model.beam_pattern_3D(dth, dph, self.lam, self.surface.fs, rp.mags[1]))
                         rp.tr *= facet_loss
                         rp.trt *= facet_loss
-                        
                         # compute loss from propagating back to the source
                         refracted_reverse = rp.comp_rev_refracted(self.c1, self.c2)
                         
@@ -514,6 +516,8 @@ class Model():
                             
                             # attenuation (surf -> target)
                             rp.tr *= np.exp(-1 * self.alpha2 * 2 * rp.mags[1])
+
+                            self.comp_val.append(rp.tr)
                             
                         else:
                             rp.tr = 0
@@ -607,7 +611,7 @@ class Model():
                 plt.tight_layout()
                 plt.show()
 
-    def gen_timeseries_vec(self, refl_mag=1e-4, show=True, tst=None, ten=None, time=False, doppler=False):
+    def gen_timeseries_vec(self, refl_mag=1e-4, show=True, tst=None, ten=None, time=False, doppler=True):
         
         st = Time()
 
@@ -636,38 +640,11 @@ class Model():
         dt = self.source.dt
 
         # compute imaginary factor
-        k = (2 * np.pi) / self.source.lam
-        """
-        # --- ADD REFRACTED RAYPATHS ---
-
-        exp = np.exp(2j * k * (idx_offsets * dt * self.c))
-
-        # flatten and iterate and sum over each raypath
-        for i in range(self.tr.shape[0]):
-            for j in range(self.tr.shape[1]):
-                sig_s[idx_offsets[i, j]:idx_offsets[i, j]+wavlen] += self.source.signal * exp[i, j] * self.tr[i, j]
-                # THIS IS CURRENTLY INCORRECT
-                sig_t[idx_offsets[i, j]:idx_offsets[i, j]+wavlen] += self.source.signal * exp[i, j] * self.tr[i, j]
-
-        # --- ADD REFLECTED RAYPATHS ---
-        if self.reflect:
-
-            rel_times = self.refl_time - mintimes
-            idx_offsets = np.round(rel_times / self.source.dt).astype(int)
-    
-            exp = np.exp(2j * k * (idx_offsets * dt * self.c))
-
-            for i in range(self.tr.shape[0]):
-                for j in range(self.tr.shape[1]):
-
-                    sig_s[idx_offsets[i, j]:idx_offsets[i, j]+wavlen] += refl_mag * self.source.signal * exp[i, j] * self.re[i, j]
-        """
+        k = (2 * np.pi) / self.lam
 
         # --- ADD REFRACTED RAYPATHS ---
 
         if doppler:
-            exp = np.exp(2j * k * (idx_offsets * dt * self.c))  # shape (N, M)
-            scales = exp * self.tr  # shape (N, M)
 
             wavelets = np.sinc(2 * (self.dopplers + self.source.f0)[..., None] * self.source.t[None, None, :])
 
@@ -687,7 +664,7 @@ class Model():
             np.add.at(sig_s, indices, flat_wavelets)
             np.add.at(sig_t, indices, flat_wavelets)  # If this is still needed
         
-        else:
+        else: 
             exp = np.exp(2j * k * (idx_offsets * dt * self.c))  # shape (N, M)
             scales = exp * self.tr  # shape (N, M)
 
@@ -784,7 +761,7 @@ class Model():
         dt = self.source.dt
 
         # compute imaginary factor
-        k = (2 * np.pi) / self.source.lam
+        k = (2 * np.pi) / self.lam
         
         # --- ADD REFRACTED RAYPATHS ---
         

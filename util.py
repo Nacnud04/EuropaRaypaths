@@ -69,7 +69,7 @@ def comp_refracted_vectorized(surf_norms, rp_to_facet, vel1, vel2, rev=False):
     # if computing the reverse refraction reverse the relative vector
     if rev:
         # get inbound raypath relative to facet direction
-        relative = rp_to_facet + surf_norms
+        relative = rp_to_facet - surf_norms
         relative *= -1
     else:
         # get inbound raypath relative to facet direction
