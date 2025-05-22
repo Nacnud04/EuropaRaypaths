@@ -103,6 +103,22 @@ class Model():
         # gain for surface
         surf_db = 64
         self.surf_gain = db_to_mag(surf_db)
+
+        # --- WAVELET CONSTRUCTION ---
+        # assuming HF (9 MHz)
+
+        self.range_resolution = 300        # range resolution [m]
+        self.lam              = 33.3       # wavelength       [m]
+        self.rx_window_m      = 30e3       # rx window        [m]
+        self.rx_window_offset = 20e3       # rx window offset [m]
+        self.sampling         = 48e6       # rx sampling rate [Hz]
+
+        # compute range bin count from that
+        self.rb = int((self.rx_window_m / self.c) / (1 / self.sampling))
+
+        # sampled slant range of echo
+        self.ssl = np.linspace(self.rx_window_offset, self.rx_window_offset + self.rx_window_m, self.rb)
+
         
         
     # set target location
@@ -307,6 +323,8 @@ class Model():
         rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
         # reverse of source to facet
         rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
+
+        self.refl_slant_range = rp_s2f_S[0, :, :]
 
         if self.reflect:
             # --- START REFLECTION CALCS ---
@@ -611,7 +629,7 @@ class Model():
                 plt.tight_layout()
                 plt.show()
 
-    def gen_timeseries_vec(self, refl_mag=1e-4, show=True, tst=None, ten=None, time=False, doppler=True):
+    def gen_timeseries_vec(self, refl_mag=3e-6, show=True, tst=None, ten=None, time=False, doppler=True):
         
         st = Time()
 
@@ -626,7 +644,8 @@ class Model():
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
 
         # create empty output array
-        sig_s = np.zeros(np.max(idx_offsets) + len(self.source.signal)).astype(np.complex128)
+        #sig_s = np.zeros(np.max(idx_offsets) + len(self.source.signal)).astype(np.complex128)
+        sig_s = np.zeros(self.rb).astype(np.complex128)
 
         # make another for signal at target
         sig_t = np.zeros_like(sig_s)
@@ -665,7 +684,21 @@ class Model():
             np.add.at(sig_t, indices, flat_wavelets)  # If this is still needed
         
         else: 
+
+            # THIS USES THE PROPER RANGE COMPRESSED EQUATION!!!!
+            # get the phase history of the highest amplitude return
+            max_idx = np.argmax(self.tr)
+            rb_max, trc_max = np.unravel_index(max_idx, self.tr.shape)
+            # compute the effective slant range - correcting for velocity change in subsurface
+            eff_slant_range = self.refl_slant_range + (self.slant_range - self.refl_slant_range) * (self.c1 / self.c2)
+            refrwav, self.phase_hist = compute_wav(self.tr, eff_slant_range, self.ssl, self.range_resolution, self.lam, rb_max, trc_max)
+            sig_s += refrwav
+            sig_t += sig_s
+            self.slant_range = self.slant_range
+            
+            """
             exp = np.exp(2j * k * (idx_offsets * dt * self.c))  # shape (N, M)
+            
             scales = exp * self.tr  # shape (N, M)
 
             # Flatten and prepare
@@ -681,22 +714,28 @@ class Model():
             # Add to signal array using np.add.at
             np.add.at(sig_s, indices, scaled_wavelets)
             np.add.at(sig_t, indices, scaled_wavelets)  # still "incorrect" as noted in your comment
-
+            """
+        
         # --- ADD REFLECTED RAYPATHS ---
         if self.reflect:
-            rel_times = self.refl_time - mintimes
-            idx_offsets_refl = np.round(rel_times / self.source.dt).astype(int)
+
+            refl_wav = compute_wav(self.re, self.refl_slant_range, self.ssl, self.range_resolution, self.lam, scale=refl_mag)
+            sig_s += refl_wav
+            sig_t += refl_wav
+
+            #rel_times = self.refl_time - mintimes
+            #idx_offsets_refl = np.round(rel_times / self.source.dt).astype(int)
             
-            exp_refl = np.exp(2j * k * (idx_offsets_refl * dt * self.c))
-            scales_refl = refl_mag * exp_refl * self.re
+            #exp_refl = np.exp(2j * k * (idx_offsets_refl * dt * self.c))
+            #scales_refl = refl_mag * exp_refl * self.re
 
-            flat_offsets_refl = idx_offsets_refl.flatten()
-            flat_scales_refl = scales_refl.flatten()
+            #flat_offsets_refl = idx_offsets_refl.flatten()
+            #flat_scales_refl = scales_refl.flatten()
 
-            indices_refl = flat_offsets_refl[:, None] + np.arange(wavlen)
-            scaled_wavelets_refl = flat_scales_refl[:, None] * self.source.signal[None, :]
+            #indices_refl = flat_offsets_refl[:, None] + np.arange(wavlen)
+            #scaled_wavelets_refl = flat_scales_refl[:, None] * self.source.signal[None, :]
 
-            np.add.at(sig_s, indices_refl, scaled_wavelets_refl)
+            #np.add.at(sig_s, indices_refl, scaled_wavelets_refl)
 
         # received signal at surface
         self.ts = ts

@@ -1,5 +1,6 @@
-import math
+import math, copy
 import numpy as np
+import numba as nb # type: ignore
 
 def cart_to_sp(coord, vec=False):
     """
@@ -99,3 +100,27 @@ def fast_dot_product(A, B):
         return np.einsum('ijk,i->jk', A, B)
     else:
         return np.einsum('ijk,ijk->jk', A, B)
+    
+@nb.njit(parallel=True)
+def compute_wav(tr, slant_range, ssl, range_resolution, lam, rb_max, trc_max, scale=1):
+    rows, cols = tr.shape
+    sig_s = np.zeros(len(ssl), dtype=np.complex128)
+    phase_hist_arr = np.full(len(ssl), -1.0, dtype=np.float64)
+    
+    for k in nb.prange(len(ssl)):
+        acc = 0.0 + 0.0j
+        for i in range(rows):
+            for j in range(cols):
+                delta_r = (ssl[k] - slant_range[i, j]) / range_resolution
+                phase = (2 * np.pi / lam) * slant_range[i, j]
+                wav = tr[i, j] * np.sinc(delta_r) * np.exp(2j * phase)
+                acc += wav * scale
+                if i == rb_max and j == trc_max:
+                    phase_hist_arr[k] = phase
+        sig_s[k] = acc
+
+    for ph in phase_hist_arr:
+        if ph != -1.0:
+            return sig_s, ph
+
+    return sig_s, -1.0  # fallback
