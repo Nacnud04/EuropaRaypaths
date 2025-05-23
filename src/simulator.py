@@ -1,5 +1,5 @@
 import numpy as np
-import plotly.graph_objects as go
+import plotly.graph_objects as go # type: ignore
 import matplotlib.pyplot as plt
 
 from math import sqrt
@@ -13,6 +13,52 @@ from util import *
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+
+def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, phase=False):
+    """
+    Run sim over a bunch of sources and construct radargram
+    """
+
+    rdrgrm = np.zeros((4803, len(sources)), np.complex128)
+    sltrng = []
+
+    if doppler:
+        phase=False
+
+    if phase: 
+        phase_hist = []
+
+    for j, s in enumerate(sources):
+
+        if progress:
+            print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%)", end="     \r")
+
+        model = Model(surf, s, reflect=False, vec=True)
+        model.set_target(target)
+
+        model.gen_raypaths()
+
+        if doppler:
+            model.comp_dopplers()
+
+        model.gen_timeseries_vec(show=False, doppler=doppler)
+
+        rdrgrm[:,j] = model.signal
+
+        # get highest amplitude return raypath
+        max_idx = np.argmax(model.tr)
+        y_max, x_max = np.unravel_index(max_idx, model.tr.shape)
+
+        # append travel time to pathtimes
+        sltrng.append(model.slant_range[y_max, x_max])
+        if phase:
+            phase_hist.append(model.phase_hist)
+
+    if phase:
+        return rdrgrm, sltrng, phase_hist
+
+    return rdrgrm, sltrng
+
 
 class Model():
 
@@ -585,7 +631,8 @@ class Model():
         self.dopplers = 2 * (fast_dot_product(rp_s2f_CN, self.source.u) / self.c1) * self.source.f0
 
 
-    # compute doppler shift due to instrument velocity        
+    # compute doppler shift due to instrument velocity
+    @deprecated("Avoid doppler computation if possible.")
     def comp_dopplers(self, plot=False):
         
         if self.vec:
@@ -694,27 +741,7 @@ class Model():
             refrwav, self.phase_hist = compute_wav(self.tr, eff_slant_range, self.ssl, self.range_resolution, self.lam, rb_max, trc_max)
             sig_s += refrwav
             sig_t += sig_s
-            self.slant_range = self.slant_range
-            
-            """
-            exp = np.exp(2j * k * (idx_offsets * dt * self.c))  # shape (N, M)
-            
-            scales = exp * self.tr  # shape (N, M)
-
-            # Flatten and prepare
-            flat_offsets = idx_offsets.flatten()                # shape (N*M,)
-            flat_scales = scales.flatten()                      # shape (N*M,)
-            wavelet = self.source.signal                        # shape (wavlen,)
-
-            # For broadcasting
-            n_paths = flat_offsets.shape[0]
-            indices = flat_offsets[:, None] + np.arange(wavlen)  # shape (N*M, wavlen)
-            scaled_wavelets = flat_scales[:, None] * wavelet[None, :]  # shape (N*M, wavlen)
-
-            # Add to signal array using np.add.at
-            np.add.at(sig_s, indices, scaled_wavelets)
-            np.add.at(sig_t, indices, scaled_wavelets)  # still "incorrect" as noted in your comment
-            """
+            self.slant_range = eff_slant_range
         
         # --- ADD REFLECTED RAYPATHS ---
         if self.reflect:
@@ -722,20 +749,6 @@ class Model():
             refl_wav = compute_wav(self.re, self.refl_slant_range, self.ssl, self.range_resolution, self.lam, scale=refl_mag)
             sig_s += refl_wav
             sig_t += refl_wav
-
-            #rel_times = self.refl_time - mintimes
-            #idx_offsets_refl = np.round(rel_times / self.source.dt).astype(int)
-            
-            #exp_refl = np.exp(2j * k * (idx_offsets_refl * dt * self.c))
-            #scales_refl = refl_mag * exp_refl * self.re
-
-            #flat_offsets_refl = idx_offsets_refl.flatten()
-            #flat_scales_refl = scales_refl.flatten()
-
-            #indices_refl = flat_offsets_refl[:, None] + np.arange(wavlen)
-            #scaled_wavelets_refl = flat_scales_refl[:, None] * self.source.signal[None, :]
-
-            #np.add.at(sig_s, indices_refl, scaled_wavelets_refl)
 
         # received signal at surface
         self.ts = ts
