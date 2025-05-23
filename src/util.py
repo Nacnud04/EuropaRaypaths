@@ -1,6 +1,7 @@
 import math, copy
 import numpy as np
 import numba as nb # type: ignore
+import warnings, functools
 
 def cart_to_sp(coord, vec=False):
     """
@@ -124,3 +125,13 @@ def compute_wav(tr, slant_range, ssl, range_resolution, lam, rb_max, trc_max, sc
             return sig_s, ph
 
     return sig_s, -1.0  # fallback
+
+def deprecated(message):
+    def inner(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(f"{func.__name__} is deprecated. {message}",
+                          category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+        return wrapper
+    return inner
