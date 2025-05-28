@@ -14,7 +14,8 @@ from util import *
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
-def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, phase=False):
+def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
+                     phase=False, polarization=None, rough=True, pt_response=None):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -28,12 +29,20 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
     if phase: 
         phase_hist = []
 
+    start_time = time.time()
+
     for j, s in enumerate(sources):
 
         if progress:
-            print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%)", end="     \r")
+            elapsed = time.time() - start_time
+            avg_time = elapsed / (j + 1)
+            remaining = avg_time * (len(sources) - j - 1)
+            mins, secs = divmod(int(remaining), 60)
+            eta_str = f"{mins:02d}:{secs:02d}"
 
-        model = Model(surf, s, reflect=False, vec=True)
+            print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%) | ETA: {eta_str}", end="     \r")
+
+        model = Model(surf, s, reflect=False, vec=True, polarization=polarization, rough=rough, pt_response=pt_response)
         model.set_target(target)
 
         model.gen_raypaths()
@@ -62,7 +71,8 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 
 class Model():
 
-    def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, vec=False):
+    def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, 
+                       vec=False, polarization=None, rough=True, pt_response=None):
         
         self.c = 299792458 # speed of light
         self.nu0 = 376.7 # intrinsic impedance of free space
@@ -111,12 +121,17 @@ class Model():
         
         self.n1 = sqrt(self.eps1)
         self.n2 = sqrt(self.eps2)
+
+        # --- POLARIZATION ---
+
+        self.polarization = polarization
         
         # --- REFLECTION AND TRANSMISSION COEFFS --- 
         
-        self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
-        self.tau = (2 * self.nu2) / (self.nu2 + self.nu1)        # transmission coeff
-        self.tau_rev = (2 * self.nu1) / (self.nu2 + self.nu1)    # coeff for the other direction
+        if polarization is None:
+            self.rho = (self.nu2 - self.nu1) / (self.nu2 + self.nu1) # reflection coeff
+            self.tau = (2 * self.nu2) / (self.nu2 + self.nu1)        # transmission coeff
+            self.tau_rev = (2 * self.nu1) / (self.nu2 + self.nu1)    # coeff for the other direction
         
         # --- ATTENUATION CONSTANTS ---
         
@@ -159,12 +174,26 @@ class Model():
         self.rx_window_offset = 20e3       # rx window offset [m]
         self.sampling         = 48e6       # rx sampling rate [Hz]
 
+        # angular wavenumber
+        self.k                = (2 * np.pi) / self.lam
+
         # compute range bin count from that
         self.rb = int((self.rx_window_m / self.c) / (1 / self.sampling))
 
         # sampled slant range of echo
         self.ssl = np.linspace(self.rx_window_offset, self.rx_window_offset + self.rx_window_m, self.rb)
 
+        # --- SURFACE ROUGHNESS ---
+        
+        # electromagnetic roughness [.]
+        self.ks = self.k * self.surface.s
+
+        # simulate roughness?
+        self.rough = rough
+
+        # --- POINT TARGET RESPONSE ---
+        
+        self.pt_response = pt_response
         
         
     # set target location
@@ -372,25 +401,9 @@ class Model():
 
         self.refl_slant_range = rp_s2f_S[0, :, :]
 
-        if self.reflect:
-            # --- START REFLECTION CALCS ---
-            rp_s2f_S_rF = rp_s2f_S - surf_norms_S
-            rp_s2f_S_rF[2, :, :] -= np.pi
-            # generate array for % energy reflected
-            re = np.ones_like(self.surface.zs) * self.rho * -1
-            # add influence from beam pattern reflection by facets
-            re *= np.abs(Model.beam_pattern_3D(np.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
-                         self.surface.fs, rp_s2f_S[0, :, :]))
-            # add distance loss
-            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
-            # attenuation
-            re *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
-            # vars to save for time series computation or plotting
-            self.re = re
-            self.refl_time = (rp_s2f_S[0, :, :] / self.c1) * 2
-            self.refl_dth  = np.ones_like(rp_s2f_S_rF[2, :, :])*np.pi
-            self.refl_dph  = rp_s2f_S_rF[2, :, :] * 2
-            # --- END REFLECTION CALCS ---
+        rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+        rp_s2f_S_rF[2, :, :] -= np.pi
+        theta_1 = rp_s2f_S_rF[2, :, :]
 
         # --- START REFRACTION CALCS ---
         # THIS SECTION IS FOR INTO THE SUBSURFACE ONLY
@@ -407,8 +420,33 @@ class Model():
         # relative to facet normal in spherical coordinates
         rp_f2t_CN = normalize_vectors(rp_f2t_C)
         rp_f2t_SD_rF = cart_to_sp(rp_f2t_CN - surf_norms, vec=True) - rp_f2i_S_rF
+        theta_2 = rp_f2t_SD_rF[2, :, :]
+
+        # develop reflection and transmission coefficients
+        if self.polarization == "h":
+            rho_h = (self.nu2 * np.cos(theta_1) - self.nu1 * np.cos(theta_2)) / (self.nu2 * np.cos(theta_1) + self.nu1 * np.cos(theta_2))
+            re = np.sqrt(np.abs(rho_h))
+            tr = 1 - re
+        elif self.polarization == "v":
+            rho_v = (self.nu2 * np.cos(theta_2) - self.nu1 * np.cos(theta_1)) / (self.nu2 * np.cos(theta_2) + self.nu1 * np.cos(theta_1))
+            re = np.sqrt(np.abs(rho_v))
+            tr = 1 - re
+
+        # manipulate coefficients if surface roughness enabled
+        if self.rough == True:
+            psi_1 = self.ks * np.cos(theta_1)
+            re *= np.exp(-4 * psi_1**2)
+            psi_2 = self.ks * np.cos(theta_2)
+            tr *= np.exp(-4 * psi_2**2)
+
         # generate array for % energy transmitted
-        tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
+        if self.polarization is None:
+            tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
+
+        # implement point target response
+        if self.pt_response == "sinusoidal":
+            tr *= target_function_sinusoidal(rp_f2t_SD_rF[2, :, :], rp_f2t_SD_rF[1, :, :], f=100)
+
         # account for aperture losses
         tr *= np.abs(Model.beam_pattern_3D(rp_f2t_SD_rF[1, :, :], rp_f2t_SD_rF[2, :, :], self.lam,
                                            self.surface.fs, rp_f2t_S[0, :, :]))
@@ -438,6 +476,25 @@ class Model():
         self.slant_range = rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]
         self.refr_dth  = rp_f2t_SD_rF[1, :, :]
         self.refr_dph  = rp_f2t_SD_rF[2, :, :]
+        
+        if self.reflect:
+            # --- START REFLECTION CALCS ---
+            if self.polarization is None:
+                # generate array for % energy reflected
+                re = np.ones_like(self.surface.zs) * self.rho * -1
+            # add influence from beam pattern reflection by facets
+            re *= np.abs(Model.beam_pattern_3D(np.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
+                         self.surface.fs, rp_s2f_S[0, :, :]))
+            # add distance loss
+            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
+            # attenuation
+            re *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
+            # vars to save for time series computation or plotting
+            self.re = re
+            self.refl_time = (rp_s2f_S[0, :, :] / self.c1) * 2
+            self.refl_dth  = np.ones_like(rp_s2f_S_rF[2, :, :])*np.pi
+            self.refl_dph  = rp_s2f_S_rF[2, :, :] * 2
+            # --- END REFLECTION CALCS ---
 
 
     

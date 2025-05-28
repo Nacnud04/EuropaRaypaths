@@ -135,3 +135,7 @@ def deprecated(message):
             return func(*args, **kwargs)
         return wrapper
     return inner
+
+def target_function_sinusoidal(phi, theta, f=10):
+
+    return (np.cos(f * phi) + 1) + (np.cos(f * theta) + 1)
