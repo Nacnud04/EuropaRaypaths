@@ -37,32 +37,38 @@ def snell_intersection(xA, zA, xB, zB, v1, v2):
     else:
         raise RuntimeError("Root finding did not converge.")
 
+def est_slant_range(sx, sz, tx, tz, c1, c2):
+    sltrng_ests = []
+    for x in sx:
+        # estimate surface intersections
+        ix = snell_intersection(x, sz, tx, tz, c1, c2)
+        sltrng_ests.append(np.sqrt((x - ix)**2 + sz**2) + np.sqrt((ix - tx)**2 + tz**2) * (c1/c2))
+    sltrng_ests = np.array(sltrng_ests)
+    # now center the estimate to adjust for target azumith offset
+    trc_min = np.argmin(sltrng_ests)
+    if trc_min < len(sltrng_ests) // 2:
+        newsltrng = sltrng_ests[:-2 * int(len(sltrng_ests) // 2 - trc_min)]
+    elif trc_min > len(sltrng_ests) // 2:
+        newsltrng = sltrng_ests[2 * int(trc_min - len(sltrng_ests) // 2):]
+    sltrng_ests = newsltrng
+    return sltrng_ests
+
 @nb.njit
 def focus_pix_jit(rdr, t, T, bins, filter, rb):
 
-    """
-    Focus pixel in radar image based off of matched filter and range bins
-    """
-
-    # t is fast time and T is slow time
-    n_cols = rdr.shape[1]
+    n_cols = len(bins)
     half_cols = n_cols // 2
-    rng = np.empty(n_cols, dtype=np.int32)
-
-    for i in range(n_cols):
-        rng[i] = i - half_cols + T
-
     focused_pix = 0.0 + 0.0j
 
     for i in range(n_cols):
-        trc = rng[i]
-        if trc < 0 or trc >= n_cols:
+        trc = T + i - half_cols  # Corrected: azimuth index relative to T
+        if trc < 0 or trc >= rdr.shape[1]:
             continue
 
         bin_idx = int(bins[i])
-        bin_idx -= np.min(bins)  # This needs to be constant across all calls for JIT
-
+        bin_idx -= np.min(bins)  # Still needed for JIT compile compatibility
         bin_idx += t
+
         if bin_idx <= 0 or bin_idx >= rb:
             continue
 
@@ -71,6 +77,7 @@ def focus_pix_jit(rdr, t, T, bins, filter, rb):
         focused_pix += amp * filt
 
     return focused_pix
+
 
 
 @nb.njit(parallel=True)
