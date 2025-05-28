@@ -1,5 +1,5 @@
 import numpy as np
-import plotly.graph_objects as go
+import plotly.graph_objects as go # type: ignore
 
 class Surface():
 
@@ -34,7 +34,12 @@ class Surface():
         self.y = np.linspace(origin[1], self.ymax, dims[1])
 
         # turn into mesh
-        self.X, self.Y = np.meshgrid(self.x, self.y)        
+        self.X, self.Y = np.meshgrid(self.x, self.y)    
+
+        # surface roughness
+        # derived from Steinbrugge et al:
+        # https://www.sciencedirect.com/science/article/pii/S0019103519301526
+        self.s = 0.4 # rms height [m]
         
     def gen_normals(self):
         
