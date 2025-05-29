@@ -1,6 +1,6 @@
 # system imports
 import sys, os
-sys.path.append("../../../.")
+sys.path.append("../../src")
 
 # custom imports
 import surface   as sf

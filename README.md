@@ -11,25 +11,47 @@
 
 ## Source
 
+### Key Points
+* The source class **only** provides a source location and velocity to the simulator. 
+* The actual function produced and visualized by the source class is purely a visual aid.
+* The source class can generate many different kinds of source functions, but the simulator only uses one kind.
 #### Initializing a source
 Sources are initalized with a **location**, **sampling rate**, **duration** and **power**. The duration of the signal does not need to span the duration for the data being received. It just needs to be long enough to contain the entire wavelet.
 #### Defining a source
-Once initalized sources can be defined through calling `gauss_sin` or `ricker` which generates either a gaussian sin wavelet or a ricker wavelet correspondingly. Each are defined with a center frequency and an optional time offset. The default time offset is 0 s causing only half the wavelet to be realized.
+Once initalized sources can be defined through calling `gauss_sin`, `ricker` or `chirp`. Each are defined with a center frequency and an optional time offset. `chirp` also requires a bandwidth. The default time offset is 0 s causing only half the wavelet to be realized. ***The simulator only uses a range compressed chirp with a 9 MHz center frequency and 1 MHz bandwidth***.
 #### Example
-This shows a rickerwavelet with a center frequency of 9 MHz with a time offset of 250 ns.  
-![RickerWavelet](images/RickerSource.png)
+Below is a range compressed chirp - identical to what is used by the simulator. Note the real component in **blue** and imaginary component in **red**.  
+![RCChirp](images/RangeCompressedChirp.png)
 
 ---
 
 ## Surface
 
-#### Initializing a surface
-The surface is a very simple class just containing a surface mesh composed of xyz locations as well as surface normals for each facet.  It is defined by a **facet size**, **origin** and **dimension**. The facet size is the side length of each facet, defaulting to 10 m, but being set at 100 m in the example notebook. The origin is the minimum x and y coordinate of the surface, and the dimensions are how many facets are there in each direction, defined as (x, y). So, with a facet size of 100 m and dimensions of 50 m by 50 m, the surface is 5 km by 5 km.
-#### Defining a surface
+### Initializing a surface
+The surface is a very simple class just containing a surface mesh composed of xyz locations as well as surface normals for each facet.  It is defined by a **facet size**, **origin** and **dimension**. 
+
+**Facet size:** 
+
+The facet size is the side length of each facet, defaulting to 10 m. For optimal results this should be $\frac{\lambda}{10}$. 
+
+**Origin:**
+
+The origin is the minimum x and y coordinate of the surface, and the dimensions are how many facets are there in each direction, defined as (x, y). So, with a facet size of 3 m and dimensions of 500x500, the surface is 1.5x1.5 km.
+
+**Overlap:**
+
+Overlap is a value from 0 -> 1 specifing the percentage which facets should overlap on each axis. By default this value is 0, giving facets no overlap. If this were to be 0.5, the 500x500 surface previously described would now cover an area of 750x750 m.
+
+### Defining a surface
 Surfaces can be defined with the `gen_flat` function, which generates a surface of a constant elevation (z) and custom normal vectors. By default the normal vectors point upwards, but you can have a flat surface, where all the facets are pointing in a different direction, resulting in discontinuities on the surface.
-#### Visualizing a surface
+
+`gen_sin` is also supported, producing a sinusoidal surface along either the x or y axis.
+
+### Visualizing a surface
+
 `show_surf` will produce a 3D plot of the surface. This does not account for the surface normal directions and instead just uses the Z value. So a "flat" surface with varying normal directions will appear the same, even though the normals are changing.
-#### Reradiation of energy by individual facets
+
+### Reradiation of energy by individual facets
 Each square facet reradiates energy identically to a uniform field passing through an aperature to an observation plane. As the aperture is what our field passes through, it is equivalent to our facet. The observation plane is equivalent to the target location, as this is where we are observing the radiation which passes through the aperature. We can therefore use the following formula to understand how the energy reradiates:
 
 
@@ -53,54 +75,174 @@ To translate this equation from being used for beam patterns of antennas to the 
 
 ---
 
-## Model
+## Simulator
 ***The following example is for a target directly below the source, with a perfectly flat surface in between.***
-#### Initializing a model
-The model is the class which actually simulates the propagation of the wavefront. It is simply defined with a predefined surface and source. Then a point target location is set, right now this is just a simple (x, y, z) tuple which defines the location and nothing else.
-#### Generating raypaths
-Generating raypaths produces a value for each facet which acts as the percentage of energy returned back to the source after reflecting off the target and passing through the facet twice. To do this the following steps occur: 
-1. Raypath instances are created. Raypaths start at the source and go to the facet. Then they are forced to go through the facet and towards the point target. Is is important to note that this is not the direction of the naturally refracted raypath.  
+
+*Note: Previously this was called "model" but there was issues with that naming convention.*
+
+### Initializing a simulation
+
+The model class combines the source, surface and target information to produce an accurate representation of a transmitted chirp. It is defined with a predefined surface and source. Then a point target location is set, defined as a tuple of (x, y, z).
+
+### Model settings
+
+Model initialization comes with the option to alter the following settings:
+* **power:** Power transmit by the antenna, *default = 11.75 W*
+* **reflect:** Enables/disables surface reflection *default = True*
+* **eps2:** Dielectric for the subsurface *default = 3.15*
+* **sig2:** Conductivity of the subsurface *default = 1e-6*
+* **vec:** Vectorized computation of raypaths *default = False* **THIS SHOULD BE ENABLED FOR EFFICIENT  AND PROPER COMPUTATION**
+* **polarization:** Polarization of antenna (options = None, "h", "v") *default = None*
+* **rough:** Enable/disable change in surface specularity *default = True with rms = 0.4 m* 
+* **pt_response:** Change custom point target response function (options = None, "sinusoidal") *default = None*
+
+The following parameters can also be changed once the model is initalized to alter the result, though these are not easily provided in `__init__`:
+
+* *eps1:* Dielectric of space
+* *mu1:* Magnetic permeability of space
+* *mu2:* Magnetic permeability of subsurface
+* *sig1:* Conductivity of space
+* *gain:* Antenna gain for subsurface reflections
+* *gain_surf:* Antenna gain for surface reflections
+* *range_resolution:* Range resolution of radar
+* *lam:* Wavelength of chirp
+* *rx_window_m:* How many meters is the Rx window open for (defined based off of c in free space)
+* *rx_window_offset:* At how many meters does the Rx window open?
+* *sampling:* Sampling rate of receiver
+
+**By default the above parameters are set to that of the HF antenna on Europa Clipper.**
 
 
-**Reflected energy:**  
+### Generating raypaths
 
+Raypath generation produces the constants applied to each raypath. This is done as follows:
 
-2. Reflection ($\rho$) and transmission ($\tau$) coefficients are calculated via the following formulas:
-$$\rho = \frac{\eta_2-\eta_1}{\eta_2+\eta_1} \tag{3.1}$$
-$$\tau = \frac{2\eta_2}{\eta_2+\eta_1} \tag{3.2}$$
+### Reflected ray modeling
+
+This section models the path from source to a surface facet and back via **specular reflection**, assuming Snell’s Law for perfect reflection across the facet normal.
+
+**Compute Surface Normals**
+
+Let $\vec{n}_{f} \in \mathbb{R}^3$ be the unit normal vector to each facet. The normals are expressed in both:
+- **Cartesian**: $\vec{n}_f$
+- **Spherical**: $(r=1, \theta_n, \phi_n)$
+
+The negative normals are also computed as:
+$$\vec{n}_{f}^{\text{rev}} = -\vec{n}_f$$
+
+**Ray from Source to Facet**
+
+Let the source be at $\vec{s} = (x_s, y_s, z_s)$, and the facet center at $\vec{f} = (X_f, Y_f, Z_f)$.
+
+The vector from source to facet is:
+$$\vec{r}_{s \to f} = \vec{f} - \vec{s}$$
+
+Then compute:
+- **Spherical direction**: $(\rho_1, \theta_1, \phi_1)$
+- **Reverse direction**: $-\vec{r}_{s \to f}$
+
+The **slant range** is:
+$$\text{Slant range} = \|\vec{r}_{s \to f}\| = \rho_1$$
+
+**Relative Incident Angles**
+
+The angle of incidence relative to the surface normal is calculated as:
+
+$$\Delta \theta = \theta_{\text{ray}} - \theta_{\text{normal}}$$
+
+$$\theta_1 = \Delta \theta - \pi$$
+
+This represents the deviation from normal incidence in spherical coordinates (note the $-\pi$ to align downward z).
+
+**Fresnel Reflection Coefficients**
+
+For **horizontal** and **vertical** polarizations:
+
+- Horizontal ($h$) polarization:
+
+$$\rho_h = \frac{\nu_2 \cos(\theta_1) - \nu_1 \cos(\theta_2)}{\nu_2 \cos(\theta_1) + \nu_1 \cos(\theta_2)}, \quad \Gamma_h = |\rho_h|^2, \quad T_h = 1 - |\rho_h|^2$$
+
+- Vertical ($v$) polarization:
+
+$$\rho_v = \frac{\nu_2 \cos(\theta_2) - \nu_1 \cos(\theta_1)}{\nu_2 \cos(\theta_2) + \nu_1 \cos(\theta_1)}, \quad \Gamma_v = |\rho_v|^2, \quad T_v = 1 - |\rho_v|^2$$
+
 Where:
-$$\eta_x = \frac{\eta_0}{\sqrt{\epsilon_x}}, \eta_0 = 376.7 \Omega \tag{3.3}$$
-3. We then find difference in inclination angle between the incident and reflected rays.
-$$\Delta\phi = 2\cdot(\phi_i-\phi_{facet}) \tag{3.4}$$
-4. We use this angle difference, combined with $\Delta\theta=\pi$ to find the reradiation from the facet which is reflected back to the source.
-5. Apply the radar equation
-$$P_e = \frac{P_sG^2\sigma\lambda^2}{(4\pi)^3R^4} \tag{3.5}$$
-6. Combine to get returned power
-$$P_e = -\rho \cdot \frac{G^2\sigma\lambda^2}{(4\pi)^3R^4} \cdot E(R,\pi,\Delta\phi) \tag{3.6}$$
+- $\nu_i$ is wave impedance (or velocity in acoustic models) of medium \( i \)
+- $\theta_1$, $\theta_2$ are the incidence and transmission angles
 
+**Electromagnetic Roughness**
 
-**Refracted energy:**
+If surface roughness is modeled, apply an exponential attenuation:
+$$\psi = k_s \cos(\theta), \quad \text{attenuation factor} = \exp(-4 \psi^2)$$
+This attenuates both reflected and transmitted energy.
 
+**Aperture and Target Effects**
 
-2. The naturally refracted raypath is calculated in spherical coordinates, relative to the facet normal as a datum. This gives a $\phi_1$ angle relative to the normal of the facet, while staying in a 3D coordinate system. As this is entirely relative to the facet normal we need to add $\pi$. This entire calculation is done via the following formula which is a modified form of Snell's Law:  
-$$\theta_{refr} = \theta_{i} \tag{3.7}$$  
-$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_2}}{\sqrt{\epsilon_1}}\sin\left(\phi_{i}-\phi_{facet}-\pi\right)\right) + \pi \tag{3.8}$$  
-3. The $\Delta\theta$ and $\Delta\phi$ between the refracted ray and the forced ray (facet to target) are computed. This difference is used to find the fraction of the radiation making it to the target from the source.  
-***The below figure shows difference in angle between the forced ray and the refracted ray.*** Note how $\Delta\theta$ is constantly $\pi$. This is because the refracted ray is always pointing away from the source, but the forced raypaths point back towards the source as the target is directly below the source. So they point in opposite directions for the $\theta$ axis but not necessarily the $\phi$ axis. 
-![ForcedRefractedDiff](images/DTh-Forced-Refracted.png)  
-4. The direction of the refracting ray exiting the subsurface is computed. This is done similar to in step 2 but requires reversing the direction of the rays. Computationally this is done by multiplying by $-1$ while in cartesian coordinates, but is equivalent to the following:  
-$$\theta_{refr} = \pi - \theta_{i} \tag{3.9}$$  
-$$\phi_{refr} = \arcsin\left(\frac{\sqrt{\epsilon_1}}{\sqrt{\epsilon_2}}\sin\left(\phi_{i}-\phi_{facet}-\pi\right)\right) + \pi \tag{3.10}$$  
-5. Step 3 is repeated for the refracted ray coming out of the subsurface, and the fraction of radiation which makes it from the target to the source (defined by $2.1$) is multiplied by that of the source to the target.
-6. The radar equation is multiplied by the reradiation fraction resulting in a value of the amount of energy which goes through each facet and returns back to the source.  
+- **Target Response**: If enabled, multiply by a sinusoidal pattern:
+$$\text{Amplitude} \propto \sin(f \phi) \quad \text{or} \quad \sin(f \theta)$$
 
-***Reradiation amount for the entire footprint***  
-![reradiated](images/reradiation.png)  
-#### Timeseries generation
-Timeseries generation is performed by the `gen_timeseries` function which generates the returned signal from the source &rarr; facet &rarr; target &rarr; facet &rarr; source raypaths. **This is the final simulated signal**. It is created by the following steps:
-1. Using the travel time for each raypath an offset is created in terms of indicies based off of the `dt` value defined by the source.
-2. The source wavelet is multiplied by the trasmitted energy value defined as the returned energy from each facet created when generating raypaths.
-3. The source wavelet is 0-padded so the predefined source timeseries starts at the index defined previously.
-4. All modified and padded source wavelets are stacked to get the final timeseries.   
-***This is an example timeseries and spectrum for a flat surface***
-![FinalTimeseries](images/FinalTimeseries.png)
+- **Beam Pattern Correction**: Correct for antenna directivity:
+$$B(\theta, \phi) = \texttt{beam\_pattern\_3D}(\theta, \phi, \lambda, f_s, r)$$
+
+**Radar Equation**
+
+The radar equation computes received power $P_r$ from:
+$$P_r = \frac{P_t G^2 \sigma \lambda^2}{(4\pi)^3 R^4}$$
+
+**Attenuation in Medium**
+
+Apply exponential decay for two-way path:
+$$\text{Loss} = \exp(-2\alpha_1 \rho_1)$$
+
+**Final reflection coefficient**
+
+$$R_{total} = \Gamma_p \cdot B(\theta, \phi) \cdot \text{RadarEq} \cdot \exp(-2\alpha_1 \rho_1) \cdot \exp(-4 \psi_1^2)$$
+
+### Refracted Ray Modeling
+
+This section models the **refracted** wave passing through the surface into a subsurface medium.
+
+**Compute Facet-to-Target Ray**
+
+Given the target point $\vec{t} = (x_t, y_t, z_t)$, define:
+$$\vec{r}_{f \to t} = \vec{t} - \vec{f}$$
+Normalize and convert to spherical coordinates.
+
+**Compute Refracted Vector**
+
+Using `comp_refracted_vectorized`, compute the refracted ray direction $\vec{v}_{\text{refr}}$ from Snell’s Law:
+
+Given:
+$$
+n_1 \sin(\theta_1) = n_2 \sin(\theta_2)
+\Rightarrow \theta_2 = \arcsin\left(\frac{v_2}{v_1} \sin(\theta_1)\right)
+$$
+
+- The direction is adjusted in spherical space
+- If $\sin(\theta_2) > 1$, total internal reflection occurs and the ray is blocked
+
+**Angular Mismatch (Refracted Path vs Target Vector)**
+
+Compute:
+$$
+\Delta\theta_2 = \theta_{\text{target}} - \theta_{\text{refr}}
+$$
+$$
+\Delta\phi_2 = \phi_{\text{target}} - \phi_{\text{refr}}
+$$
+
+These differences represent the mismatch between the refracted direction and the actual direction to the target.
+
+**Reverse Refracted Path**
+
+To simulate energy **exiting the subsurface**, compute the **reverse refracted ray** using:
+
+```python
+comp_refracted_vectorized(..., rev=True)
+```
+
+**Final refraction coefficient**
+
+$$
+T_{total} = \Gamma_{p,in} \cdot \Gamma_{p,out} \cdot B_{in} \cdot B_{out} \cdot \text{RadarEq} \cdot \text{exp}(-2\alpha_1r_1) \cdot \text{exp}(-2\alpha_2r_2) \cdot \exp(-4 \psi_2^2)
+$$
