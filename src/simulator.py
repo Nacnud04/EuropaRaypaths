@@ -425,11 +425,11 @@ class Model():
         # develop reflection and transmission coefficients
         if self.polarization == "h":
             rho_h = (self.nu2 * np.cos(theta_1) - self.nu1 * np.cos(theta_2)) / (self.nu2 * np.cos(theta_1) + self.nu1 * np.cos(theta_2))
-            re = np.sqrt(np.abs(rho_h))
+            re = np.abs(rho_h)**2
             tr = 1 - re
         elif self.polarization == "v":
             rho_v = (self.nu2 * np.cos(theta_2) - self.nu1 * np.cos(theta_1)) / (self.nu2 * np.cos(theta_2) + self.nu1 * np.cos(theta_1))
-            re = np.sqrt(np.abs(rho_v))
+            re = np.abs(rho_v)**2
             tr = 1 - re
 
         # manipulate coefficients if surface roughness enabled
