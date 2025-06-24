@@ -123,18 +123,26 @@ This section models the path from source to a surface facet and back via **specu
 
 **Compute Surface Normals**
 
-Let $\vec{n}_{f} \in \mathbb{R}^3$ be the unit normal vector to each facet. The normals are expressed in both:
+Let $\vec{n}_{f}$ be the unit normal vector to each facet. The normals are expressed in both:
 - **Cartesian**: $\vec{n}_f$
 - **Spherical**: $(r=1, \theta_n, \phi_n)$
 
 The negative normals are also computed as:
+
 $$\vec{n}_{f}^{\text{rev}} = -\vec{n}_f$$
 
 **Ray from Source to Facet**
 
-Let the source be at $\vec{s} = (x_s, y_s, z_s)$, and the facet center at $\vec{f} = (X_f, Y_f, Z_f)$.
+Let the source be at: 
+
+$$\vec{s}=(x_s, y_s, z_s)$$
+
+And the facet center at:
+
+$$\vec{f} = (X_f, Y_f, Z_f)$$
 
 The vector from source to facet is:
+
 $$\vec{r}_{s \to f} = \vec{f} - \vec{s}$$
 
 Then compute:
@@ -142,6 +150,7 @@ Then compute:
 - **Reverse direction**: $-\vec{r}_{s \to f}$
 
 The **slant range** is:
+
 $$\text{Slant range} = \|\vec{r}_{s \to f}\| = \rho_1$$
 
 **Relative Incident Angles**
@@ -173,25 +182,31 @@ Where:
 **Electromagnetic Roughness**
 
 If surface roughness is modeled, apply an exponential attenuation:
+
 $$\psi = k_s \cos(\theta), \quad \text{attenuation factor} = \exp(-4 \psi^2)$$
+
 This attenuates both reflected and transmitted energy.
 
 **Aperture and Target Effects**
 
 - **Target Response**: If enabled, multiply by a sinusoidal pattern:
+  
 $$\text{Amplitude} \propto \sin(f \phi) \quad \text{or} \quad \sin(f \theta)$$
 
 - **Beam Pattern Correction**: Correct for antenna directivity:
-$$B(\theta, \phi) = \texttt{beam\_pattern\_3D}(\theta, \phi, \lambda, f_s, r)$$
+  
+$$B(\theta, \phi) = \text{BeamPattern3D}(\theta, \phi, \lambda, f_s, r)$$
 
 **Radar Equation**
 
 The radar equation computes received power $P_r$ from:
+
 $$P_r = \frac{P_t G^2 \sigma \lambda^2}{(4\pi)^3 R^4}$$
 
 **Attenuation in Medium**
 
 Apply exponential decay for two-way path:
+
 $$\text{Loss} = \exp(-2\alpha_1 \rho_1)$$
 
 **Final reflection coefficient**
@@ -204,8 +219,14 @@ This section models the **refracted** wave passing through the surface into a su
 
 **Compute Facet-to-Target Ray**
 
-Given the target point $\vec{t} = (x_t, y_t, z_t)$, define:
+Given the target point:
+
+$$\vec{t} = (x_t, y_t, z_t)$$
+
+Define:
+
 $$\vec{r}_{f \to t} = \vec{t} - \vec{f}$$
+
 Normalize and convert to spherical coordinates.
 
 **Compute Refracted Vector**
@@ -213,6 +234,7 @@ Normalize and convert to spherical coordinates.
 Using `comp_refracted_vectorized`, compute the refracted ray direction $\vec{v}_{\text{refr}}$ from Snell’s Law:
 
 Given:
+
 $$
 n_1 \sin(\theta_1) = n_2 \sin(\theta_2)
 \Rightarrow \theta_2 = \arcsin\left(\frac{v_2}{v_1} \sin(\theta_1)\right)
@@ -224,9 +246,11 @@ $$
 **Angular Mismatch (Refracted Path vs Target Vector)**
 
 Compute:
+
 $$
 \Delta\theta_2 = \theta_{\text{target}} - \theta_{\text{refr}}
 $$
+
 $$
 \Delta\phi_2 = \phi_{\text{target}} - \phi_{\text{refr}}
 $$
