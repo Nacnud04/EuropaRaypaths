@@ -15,7 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
-                     phase=False, polarization=None, rough=True, pt_response=None):
+                     phase=False, polarization=None, rough=True, pt_response=None,
+                     sltrng=True):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -42,7 +43,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 
             print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%) | ETA: {eta_str}", end="     \r")
 
-        model = Model(surf, s, reflect=False, vec=True, polarization=polarization, rough=rough, pt_response=pt_response)
+        model = Model(surf, s, reflect=reflect, vec=True, polarization=polarization, rough=rough, pt_response=pt_response)
         model.set_target(target)
 
         model.gen_raypaths()
@@ -66,7 +67,11 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
     if phase:
         return rdrgrm, sltrng, phase_hist
 
-    return rdrgrm, sltrng
+    if sltrng:
+        return rdrgrm, sltrng
+
+    else:
+        return rdrgrm, model.ts
 
 
 class Model():
@@ -162,7 +167,7 @@ class Model():
         self.gain = db_to_mag(self.db)
         
         # gain for surface
-        surf_db = 64
+        surf_db = 90#64
         self.surf_gain = db_to_mag(surf_db)
 
         # --- WAVELET CONSTRUCTION ---
@@ -803,7 +808,7 @@ class Model():
         # --- ADD REFLECTED RAYPATHS ---
         if self.reflect:
 
-            refl_wav = compute_wav(self.re, self.refl_slant_range, self.ssl, self.range_resolution, self.lam, scale=refl_mag)
+            refl_wav, _ = compute_wav(self.re, self.refl_slant_range, self.ssl, self.range_resolution, self.lam, rb_max, trc_max, scale=refl_mag)
             sig_s += refl_wav
             sig_t += refl_wav
 
