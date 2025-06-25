@@ -388,7 +388,7 @@ class Model():
     
         return rp
     
-    def compute_raypaths_vectorized(self):
+    def compute_raypaths_vectorized(self, pt_debug=False):
 
         # get facet normal vectors in cartesian and spherical
         surf_norms    = np.rollaxis(self.surface.normals, -1, 0)
@@ -448,9 +448,29 @@ class Model():
         if self.polarization is None:
             tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
 
+        facet_incident = cart_to_sp(rp_f2t_CN, vec=True)
+
         # implement point target response
         if self.pt_response == "sinusoidal":
-            tr *= target_function_sinusoidal(rp_f2t_SD_rF[2, :, :], rp_f2t_SD_rF[1, :, :], f=100)
+            tr *= target_function_sinusoidal(facet_incident[2, :, :], facet_incident[1, :, :], f=100)
+            
+        elif self.pt_response == "gaussian":
+            
+            gauss_transmit = target_function_gaussian(facet_incident[2, :, :], 0, phi0=180)
+            
+            if pt_debug == True:
+                data = [phi_deg, tr, gauss_transmit]
+                fig, ax = plt.subplots(1, 3)
+                for i in range(3):
+                    im = ax[i].imshow(data[i])
+                    plt.colorbar(im, ax=ax[i], shrink=0.33)
+                    ax[i].set_xticks([])
+                    ax[i].set_yticks([])
+                plt.show()
+                
+            tr *= gauss_transmit
+
+        del facet_incident
 
         # account for aperture losses
         tr *= np.abs(Model.beam_pattern_3D(rp_f2t_SD_rF[1, :, :], rp_f2t_SD_rF[2, :, :], self.lam,
