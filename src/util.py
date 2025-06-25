@@ -126,6 +126,7 @@ def compute_wav(tr, slant_range, ssl, range_resolution, lam, rb_max, trc_max, sc
 
     return sig_s, -1.0  # fallback
 
+
 def deprecated(message):
     def inner(func):
         @functools.wraps(func)
@@ -136,6 +137,20 @@ def deprecated(message):
         return wrapper
     return inner
 
+
 def target_function_sinusoidal(phi, theta, f=10):
 
     return (np.cos(f * phi) + 1) + (np.cos(f * theta) + 1)
+
+
+def target_function_gaussian(phi, theta, phi0=0, sigma=3, scale=1, verb=False):
+
+    phi_deg = phi * (180 / np.pi)
+    phi_deg = (phi_deg + 180) % 360 - 180
+
+    if verb:
+        print(phi_deg)
+    
+    exponent = -((phi_deg - phi0)**2) / (2 * sigma**2)
+    
+    return scale * np.exp(exponent)
