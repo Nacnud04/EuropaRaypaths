@@ -16,7 +16,7 @@ import time
 
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
-                     sltrng=True):
+                     sltrng=True, plot=True, xmin=-10, xmax=20):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -64,10 +64,20 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         if phase:
             phase_hist.append(model.phase_hist)
 
-    if phase:
+    if plot:
+        extent = (xmin, xmax, np.max(model.ts) / 1e-6, np.min(model.ts) / 1e-6)
+        fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
+        ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
+        ax.set_xlabel("Azumith [km]", fontsize=8)
+        ax.set_ylabel("Range [us]", fontsize=8)
+        ax.tick_params(labelsize=8)
+        ax.set_title("Specular Point Target in Subsurface")
+        plt.show()
+
+    if phase == True:
         return rdrgrm, sltrng, phase_hist
 
-    if sltrng:
+    if sltrng == True:
         return rdrgrm, sltrng
 
     else:
