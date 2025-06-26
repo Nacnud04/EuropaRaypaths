@@ -8,6 +8,40 @@ import matplotlib.pyplot as plt
 def sinc(x):
     return np.sin(np.pi * x)/(np.pi*x)
 
+def source_linspace(axis, axmin, axmax, cval, alt, N, f0, B, dt=None, dur=0.5e-6):
+    
+    """
+    Generate a linspace of sources. Uses a chirp. 
+
+    axis: axis to linspace over (x or y)
+    axmin: start of linspace
+    axmax: end of linspace
+    cval: constant value for coordinate of other axis (x or y)
+    alt: spacecraft altitude
+    N: how many sources in linspace?
+    f0: center frequency of chirp
+    B: bandwidth of chirp
+    dt: time discretization, defaults to 1/8 of wavelength
+    dur: duration of sample chirp (unused for actual radar image construction). defaults to 500 ns
+    """
+
+    if dt == None:
+        dt = 1 / (8 * f0)
+
+    ss = []
+    for c in np.linspace(axmin, axmax, N):
+        if axis == 'x':
+            coord = (c, cval, alt)
+        elif axis == 'y':
+            coord = (cval, c, alt)
+        else:
+            raise TypeError(f"Only axis x and y are supported. Received axis: {axis}")
+        source = Source(dt, dur, coord)
+        source.chirp(f0, B)
+        ss.append(source)
+
+    return ss
+
 class Source():
 
     # define source
