@@ -1,7 +1,12 @@
-import math, copy
+import math, copy, os
 import numpy as np
 import numba as nb # type: ignore
 import warnings, functools
+
+nGPU = int(os.getenv("nGPU"))
+
+if nGPU > 0:
+    import cupy as cp
 
 def cart_to_sp(coord, vec=False):
     """
@@ -126,6 +131,34 @@ def compute_wav(tr, slant_range, ssl, range_resolution, lam, rb_max, trc_max, sc
 
     return sig_s, -1.0  # fallback
 
+
+def compute_wav_gpu(tr, slant_range, ssl, range_resolution, lam, rb_max, trc_max, scale=1):
+    rows, cols = tr.shape
+    n_ssl = len(ssl)
+
+    # expand dimensions for broadcasting: (n_ssl, rows, cols)
+    ssl_grid = ssl[:, None, None]
+
+    # compute delta_r for all k, i, j
+    delta_r = (ssl_grid - slant_range[None, :, :]) / range_resolution  # (n_ssl, rows, cols)
+
+    # phase grid (same for all k, only depends on slant_range)
+    phase = (2 * cp.pi / lam) * slant_range  # (rows, cols)
+
+    # precompute sinc + exp terms
+    sinc_term = cp.sinc(delta_r)                          # (n_ssl, rows, cols)
+    exp_term = cp.exp(2j * phase)[None, :, :]             # (1, rows, cols)
+
+    # compute wave contribution: broadcast tr, scale
+    wav = tr[None, :, :] * sinc_term * exp_term * scale   # (n_ssl, rows, cols)
+
+    # sum over rows/cols → final signal for each k
+    sig_s = cp.sum(wav, axis=(1, 2))                      # (n_ssl,)
+
+    # phase history: just grab phase at (rb_max, trc_max)
+    phase_hist_arr = phase[rb_max, trc_max] * cp.ones(n_ssl)
+
+    return sig_s, phase_hist_arr[0].item()
 
 def deprecated(message):
     def inner(func):

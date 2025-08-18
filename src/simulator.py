@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from math import sqrt
 from time import time as Time
-import copy
+import copy, os
 
 from source import *
 from surface import *
@@ -14,6 +14,12 @@ from util import *
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
+nGPU = int(os.getenv("nGPU"))
+
+if nGPU > 0:
+    print(f"GPU's detected. Enabling CUDA compute")
+    import cupy as cp
+
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
                      sltrng=True, plot=True, xmin=-10, xmax=20):
@@ -22,6 +28,10 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
     """
 
     rdrgrm = np.zeros((4803, len(sources)), np.complex128)
+
+    if nGPU > 0:
+        rdrgrm = cp.asarray(rdrgrm)
+    
     sltrng = []
 
     if doppler:
@@ -51,21 +61,37 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         if doppler:
             model.comp_dopplers()
 
-        model.gen_timeseries_vec(show=False, doppler=doppler)
+        if nGPU == 0:
+            model.gen_timeseries_vec(show=False, doppler=doppler)
+        else:
+            model.gen_timeseries_gpu(show=False, doppler=doppler)
 
         rdrgrm[:,j] = model.signal
 
         # get highest amplitude return raypath
-        max_idx = np.argmax(model.tr)
+        if nGPU > 0:
+            max_idx = np.argmax(cp.asnumpy(model.tr))
+        else:
+            max_idx = np.argmax(model.tr)
+            
         y_max, x_max = np.unravel_index(max_idx, model.tr.shape)
 
         # append travel time to pathtimes
-        sltrng.append(model.slant_range[y_max, x_max])
+        if nGPU > 0:
+            sltrng.append(cp.asnumpy(model.slant_range)[y_max, x_max])
+        else:
+            sltrng.append(model.slant_range[y_max, x_max])
         if phase:
             phase_hist.append(model.phase_hist)
 
+    if nGPU > 0:
+        rdrgrm = cp.asnumpy(rdrgrm)
+        ts = cp.asnumpy(model.ts)
+    else:
+        ts = model.ts
+    
     if plot:
-        extent = (xmin, xmax, np.max(model.ts) / 1e-6, np.min(model.ts) / 1e-6)
+        extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
         fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
         ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
         ax.set_xlabel("Azumith [km]", fontsize=8)
@@ -531,7 +557,120 @@ class Model():
             self.refl_dph  = rp_s2f_S_rF[2, :, :] * 2
             # --- END REFLECTION CALCS ---
 
+    def gen_raypaths_gpu(self):
 
+        # convert surface and source/target arrays from numpy → cupy
+        surf_norms    = cp.rollaxis(cp.asarray(self.surface.normals), -1, 0)
+        surf_norms_S  = cart_to_sp(surf_norms, vec=True)
+        # reverse of facet normal for reverse refracted raypath computation
+        surf_norms_SR = cart_to_sp(surf_norms * -1, vec=True)
+
+        # first we need the raypath from source to facet
+        rp_s2f_C = cp.stack((cp.asarray(self.source.x) - cp.asarray(self.surface.X), 
+                             cp.asarray(self.source.y) - cp.asarray(self.surface.Y),
+                             cp.asarray(self.source.z) - cp.asarray(self.surface.zs)))
+        rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
+        # reverse of source to facet
+        rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
+
+        self.refl_slant_range = rp_s2f_S[0, :, :]
+
+        rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+        rp_s2f_S_rF[2, :, :] -= cp.pi
+        theta_1 = rp_s2f_S_rF[2, :, :]
+
+        # --- START REFRACTION CALCS ---
+        # THIS SECTION IS FOR INTO THE SUBSURFACE ONLY
+        rp_f2t_C = cp.stack((cp.asarray(self.tx) - cp.asarray(self.surface.X), 
+                             cp.asarray(self.ty) - cp.asarray(self.surface.Y),
+                             cp.asarray(self.tz) - cp.asarray(self.surface.zs)))
+        rp_f2t_S = cart_to_sp(rp_f2t_C, vec=True)
+
+        # refracted vector from the facet in spherical coordinates
+        rp_f2i_S_rF = comp_refracted_vectorized(surf_norms, normalize_vectors(rp_s2f_C),
+                                                 self.c1, self.c2)
+
+        rp_f2t_CN = normalize_vectors(rp_f2t_C)
+        rp_f2t_SD_rF = cart_to_sp(rp_f2t_CN - surf_norms, vec=True) - rp_f2i_S_rF
+        theta_2 = rp_f2t_SD_rF[2, :, :]
+
+        # develop reflection and transmission coefficients
+        if self.polarization == "h":
+            rho_h = (self.nu2 * cp.cos(theta_1) - self.nu1 * cp.cos(theta_2)) / (self.nu2 * cp.cos(theta_1) + self.nu1 * cp.cos(theta_2))
+            re = cp.abs(rho_h)**2
+            tr = 1 - re
+        elif self.polarization == "v":
+            rho_v = (self.nu2 * cp.cos(theta_2) - self.nu1 * cp.cos(theta_1)) / (self.nu2 * cp.cos(theta_2) + self.nu1 * cp.cos(theta_1))
+            re = cp.abs(rho_v)**2
+            tr = 1 - re
+
+        # surface roughness
+        if self.rough:
+            psi_1 = self.ks * cp.cos(theta_1)
+            re *= cp.exp(-4 * psi_1**2)
+            psi_2 = self.ks * cp.cos(theta_2)
+            tr *= cp.exp(-4 * psi_2**2)
+
+        # default transmission coefficient
+        if self.polarization is None:
+            tr = cp.ones_like(cp.asarray(self.surface.zs)) * self.tau * self.tau_rev
+
+        facet_incident = cart_to_sp(rp_f2t_CN, vec=True)
+
+        if self.pt_response == "sinusoidal":
+            tr *= target_function_sinusoidal(facet_incident[2, :, :], facet_incident[1, :, :], f=100)
+            
+        elif self.pt_response == "gaussian":
+            gauss_transmit = target_function_gaussian(facet_incident[2, :, :], 0, phi0=180)          
+            tr *= gauss_transmit
+
+        del facet_incident
+
+        # account for aperture losses
+        tr *= cp.abs(Model.beam_pattern_3D(rp_f2t_SD_rF[1, :, :], rp_f2t_SD_rF[2, :, :], self.lam,
+                                           self.surface.fs, rp_f2t_S[0, :, :]))
+        # exiting subsurface
+        rp_f2o_S_rF = comp_refracted_vectorized(surf_norms, normalize_vectors(rp_f2t_C),
+                                                 self.c1, self.c2, rev=True)
+
+        forced_rev = normalize_vectors(rp_s2f_C) + surf_norms
+        rp_f2s_SD_rF = cart_to_sp(forced_rev, vec=True) - rp_f2o_S_rF
+
+        # clean NaNs
+        tr[cp.isnan(rp_f2i_S_rF[0, :, :] * rp_f2o_S_rF[0, :, :])] = 0
+
+        # second refraction losses
+        tr *= cp.abs(Model.beam_pattern_3D(rp_f2s_SD_rF[1, :, :], rp_f2s_SD_rF[2, :, :], self.lam,
+                                           self.surface.fs, rp_s2f_S[0, :, :]))
+
+        # radar equation
+        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :])
+
+        # attenuation
+        tr *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
+        tr *= cp.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
+
+        # save vars
+        self.tr = tr
+        self.comp_val = cp.asnumpy(cp.copy(tr))
+        self.path_time = cp.asnumpy((rp_s2f_S[0, :, :] / self.c1 + rp_f2t_S[0, :, :] / self.c2) * 2)
+        self.slant_range = rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]
+        self.refr_dth  = cp.asnumpy(rp_f2t_SD_rF[1, :, :])
+        self.refr_dph  = cp.asnumpy(rp_f2t_SD_rF[2, :, :])
+        
+        if self.reflect:
+            if self.polarization is None:
+                re = cp.ones_like(cp.asarray(self.surface.zs)) * self.rho * -1
+
+            re *= cp.abs(Model.beam_pattern_3D(cp.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
+                         self.surface.fs, rp_s2f_S[0, :, :]))
+            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
+            re *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
+
+            self.re = re
+            self.refl_time = cp.asnumpy((rp_s2f_S[0, :, :] / self.c1) * 2)
+            self.refl_dth  = cp.asnumpy(cp.ones_like(rp_s2f_S_rF[2, :, :]) * cp.pi)
+            self.refl_dph  = cp.asnumpy(rp_s2f_S_rF[2, :, :] * 2)
     
     def gen_raypaths_threaded(self, fast=False):
         self.raypaths = []
@@ -557,7 +696,11 @@ class Model():
     # calculate frac of transmit power.
     def gen_raypaths(self, fast=False, progress_bar=False):
 
-        if self.vec:
+        if nGPU > 0:
+
+            self.gen_raypaths_gpu()
+        
+        elif self.vec:
 
             self.compute_raypaths_vectorized()
         
@@ -875,6 +1018,87 @@ class Model():
             ax[1].set_xscale("log")
 
             plt.show()
+
+    def gen_timeseries_gpu(self, refl_mag=3e-6, show=True, tst=None, ten=None, time=False, doppler=True):
+        
+        st = Time()
+
+        # turn times into index offsets
+        if self.reflect:
+            mintimes = cp.min(cp.stack((cp.asarray(self.path_time), cp.asarray(self.refl_time))))
+        else:
+            mintimes = cp.min(cp.asarray(self.path_time))
+
+        # compute relative times
+        rel_times = cp.asarray(self.path_time) - mintimes
+        # turn into range bin indices
+        idx_offsets = cp.round(rel_times / self.source.dt).astype(cp.int32)
+
+        # output arrays
+        sig_s = cp.zeros(self.rb, dtype=cp.complex128)
+        sig_t = cp.zeros_like(sig_s)
+
+        # time axis
+        ts = cp.arange(len(sig_s)) * self.source.dt
+        ts += mintimes
+
+        # wavelet properties
+        wavlen = len(self.source.signal)
+        dt = self.source.dt
+
+        # compute wavenumber
+        k = (2 * cp.pi) / self.lam
+
+        # --- ADD REFRACTED RAYPATHS ---
+        if doppler:
+
+            # wavelets: sinc of doppler shift
+            wavelets = cp.sinc(2 * (cp.asarray(self.dopplers) + self.source.f0)[..., None] * cp.asarray(self.source.t)[None, None, :])
+
+            # Get phase term and scaling
+            exp = cp.exp(2j * k * (idx_offsets * dt * self.c))     # shape (N, M)
+            scales = exp * cp.asarray(self.tr)                     # shape (N, M)
+
+            # Broadcast scales to wavelet shape: (N, M, 1) * (N, M, wavlen)
+            scaled_wavelets = scales[..., None] * wavelets         # shape (N, M, wavlen)
+
+            # Flatten everything for accumulation
+            flat_offsets = idx_offsets.ravel()                     # (N*M,)
+            flat_wavelets = scaled_wavelets.reshape(-1, wavelets.shape[-1])  # (N*M, wavlen)
+
+            indices = flat_offsets[:, None] + cp.arange(self.source.t.size)[None, :]  # (N*M, wavlen)
+
+            # scatter add into GPU arrays
+            sig_s = cp.scatter_add(sig_s, indices.ravel(), flat_wavelets.ravel())
+            sig_t = cp.scatter_add(sig_t, indices.ravel(), flat_wavelets.ravel())
+
+        else: 
+            # proper range compressed equation
+            max_idx = cp.argmax(self.tr)
+            rb_max, trc_max = cp.unravel_index(max_idx, self.tr.shape)
+
+            eff_slant_range = self.refl_slant_range + (self.slant_range - self.refl_slant_range) * (self.c1 / self.c2)
+
+            refrwav, self.phase_hist = compute_wav_gpu(self.tr, eff_slant_range, cp.asarray(self.ssl),
+                                                   self.range_resolution, self.lam, rb_max, trc_max)
+            sig_s += refrwav
+            sig_t += sig_s
+            self.slant_range = eff_slant_range
+        
+        # --- ADD REFLECTED RAYPATHS ---
+        if self.reflect:
+            refl_wav, _ = compute_wav_gpu(self.re, self.refl_slant_range, cp.asarray(self.ssl),
+                                      self.range_resolution, self.lam, rb_max, trc_max, scale=refl_mag)
+            sig_s += refl_wav
+            sig_t += refl_wav
+
+        # received signal at surface
+        self.ts = ts
+        self.signal = sig_s
+
+        # received signal at target
+        self.tar_ts = ts / 2
+        self.tar_signal = sig_t
 
     # use raypaths to generate a timeseries
     # show output timeseries as well as frequecy spec
