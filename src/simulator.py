@@ -22,7 +22,7 @@ if nGPU > 0:
 
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
-                     sltrng=True, plot=True, xmin=-10, xmax=20):
+                     sltrng=True, plot=True, xmin=-10, xmax=20, refl_center=False):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -56,7 +56,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         model = Model(surf, s, reflect=reflect, vec=True, polarization=polarization, rough=rough, pt_response=pt_response)
         model.set_target(target)
 
-        model.gen_raypaths()
+        model.gen_raypaths(refl_center=refl_center)
 
         if doppler:
             model.comp_dopplers()
@@ -423,8 +423,19 @@ class Model():
         # --- END REFRACTION CALCS ---
     
         return rp
+
+    def gen_s2f_cpu(self, offsetx=0, offsety=0):
+
+        rp_s2f_C = np.stack(((self.source.x - self.surface.X) + offsetx, 
+                             (self.source.y - self.surface.Y) + offsety,
+                             (self.source.z - self.surface.zs)))
+        rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
+        # reverse of source to facet
+        rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
+
+        return rp_s2f_C, rp_s2f_S
     
-    def compute_raypaths_vectorized(self, pt_debug=False):
+    def compute_raypaths_vectorized(self, pt_debug=False, refl_center=True):
 
         # get facet normal vectors in cartesian and spherical
         surf_norms    = np.rollaxis(self.surface.normals, -1, 0)
@@ -433,14 +444,7 @@ class Model():
         surf_norms_SR = cart_to_sp(surf_norms * -1, vec=True)
 
         # first we need the raypath from source to facet
-        rp_s2f_C = np.stack((self.source.x - self.surface.X, 
-                            self.source.y - self.surface.Y,
-                            self.source.z - self.surface.zs))
-        rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
-        # reverse of source to facet
-        rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
-
-        self.refl_slant_range = rp_s2f_S[0, :, :]
+        rp_s2f_C, rp_s2f_S = self.gen_s2f_cpu()
 
         rp_s2f_S_rF = rp_s2f_S - surf_norms_S
         rp_s2f_S_rF[2, :, :] -= np.pi
@@ -540,9 +544,22 @@ class Model():
         
         if self.reflect:
             # --- START REFLECTION CALCS ---
+
+            # center the facets under the source for full surface sim
+            if refl_center == True:
+                
+                rp_s2f_C, rp_s2f_S = self.gen_s2f_cpu(
+                    offsetx=self.surface.xcenter-self.source.x,
+                    offsety=self.surface.ycenter-self.source.y
+                )
+
+                rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+                rp_s2f_S_rF[2, :, :] -= cp.pi
+            
             if self.polarization is None:
                 # generate array for % energy reflected
                 re = np.ones_like(self.surface.zs) * self.rho * -1
+                
             # add influence from beam pattern reflection by facets
             re *= np.abs(Model.beam_pattern_3D(np.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
                          self.surface.fs, rp_s2f_S[0, :, :]))
@@ -550,6 +567,7 @@ class Model():
             re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
             # attenuation
             re *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
+            
             # vars to save for time series computation or plotting
             self.re = re
             self.refl_time = (rp_s2f_S[0, :, :] / self.c1) * 2
@@ -557,7 +575,20 @@ class Model():
             self.refl_dph  = rp_s2f_S_rF[2, :, :] * 2
             # --- END REFLECTION CALCS ---
 
-    def gen_raypaths_gpu(self):
+        self.refl_slant_range = rp_s2f_S[0, :, :]
+
+    def gen_s2f_gpu(self, offsetx=0, offsety=0):
+
+        rp_s2f_C = cp.stack(((cp.asarray(self.source.x) - cp.asarray(self.surface.X)) + offsetx, 
+                             (cp.asarray(self.source.y) - cp.asarray(self.surface.Y)) + offsety,
+                             (cp.asarray(self.source.z) - cp.asarray(self.surface.zs))))
+        rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
+        # reverse of source to facet
+        rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
+
+        return rp_s2f_C, rp_s2f_S
+
+    def gen_raypaths_gpu(self, refl_center=True):
 
         # convert surface and source/target arrays from numpy → cupy
         surf_norms    = cp.rollaxis(cp.asarray(self.surface.normals), -1, 0)
@@ -566,14 +597,7 @@ class Model():
         surf_norms_SR = cart_to_sp(surf_norms * -1, vec=True)
 
         # first we need the raypath from source to facet
-        rp_s2f_C = cp.stack((cp.asarray(self.source.x) - cp.asarray(self.surface.X), 
-                             cp.asarray(self.source.y) - cp.asarray(self.surface.Y),
-                             cp.asarray(self.source.z) - cp.asarray(self.surface.zs)))
-        rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
-        # reverse of source to facet
-        rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
-
-        self.refl_slant_range = rp_s2f_S[0, :, :]
+        rp_s2f_C, rp_s2f_S = self.gen_s2f_gpu()
 
         rp_s2f_S_rF = rp_s2f_S - surf_norms_S
         rp_s2f_S_rF[2, :, :] -= cp.pi
@@ -659,6 +683,18 @@ class Model():
         self.refr_dph  = cp.asnumpy(rp_f2t_SD_rF[2, :, :])
         
         if self.reflect:
+
+            # center the facets under the source for full surface sim
+            if refl_center == True:
+                
+                rp_s2f_C, rp_s2f_S = self.gen_s2f_gpu(
+                    offsetx=self.surface.xcenter-self.source.x,
+                    offsety=self.surface.ycenter-self.source.y
+                )
+
+                rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+                rp_s2f_S_rF[2, :, :] -= cp.pi
+
             if self.polarization is None:
                 re = cp.ones_like(cp.asarray(self.surface.zs)) * self.rho * -1
 
@@ -671,6 +707,8 @@ class Model():
             self.refl_time = cp.asnumpy((rp_s2f_S[0, :, :] / self.c1) * 2)
             self.refl_dth  = cp.asnumpy(cp.ones_like(rp_s2f_S_rF[2, :, :]) * cp.pi)
             self.refl_dph  = cp.asnumpy(rp_s2f_S_rF[2, :, :] * 2)
+        
+        self.refl_slant_range = rp_s2f_S[0, :, :]
     
     def gen_raypaths_threaded(self, fast=False):
         self.raypaths = []
@@ -694,15 +732,15 @@ class Model():
             
     # create rays from source to target. 
     # calculate frac of transmit power.
-    def gen_raypaths(self, fast=False, progress_bar=False):
+    def gen_raypaths(self, fast=False, progress_bar=False, refl_center=False):
 
         if nGPU > 0:
 
-            self.gen_raypaths_gpu()
+            self.gen_raypaths_gpu(refl_center=refl_center)
         
         elif self.vec:
 
-            self.compute_raypaths_vectorized()
+            self.compute_raypaths_vectorized(refl_center=refl_center)
         
         else:
 
