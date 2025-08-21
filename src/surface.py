@@ -25,6 +25,8 @@ class Surface():
         self.ymin = origin[1]
         self.xmax = origin[0] + fs * dims[0] * self.offset
         self.ymax = origin[1] + fs * dims[1] * self.offset
+        self.xcenter = (self.xmax + self.xmin) / 2
+        self.ycenter = (self.ymax + self.ymin) / 2
 
         if verb:
             print(f"X range: {self.xmin} m, {self.xmax} m \nY range: {self.ymin} m, {self.ymax} m")
