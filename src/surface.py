@@ -1,5 +1,6 @@
 import numpy as np
-import plotly.graph_objects as go # type: ignore
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 class Surface():
 
@@ -46,12 +47,12 @@ class Surface():
     def gen_normals(self):
         
         # first find delta z along x axis
-        dz_dx = (np.roll(self.zs, 1, axis=0) - self.zs) / (self.fs * self.offset)
-        dz_dx[0,:] = dz_dx[1,:]
+        dz_dy = (np.roll(self.zs, 1, axis=0) - self.zs) / (self.fs * self.offset)
+        dz_dy[0,:] = dz_dy[1,:]
         
         # find delta z along y axis
-        dz_dy = (np.roll(self.zs, 1, axis=1) - self.zs) / (self.fs * self.offset)
-        dz_dy[:,0] = dz_dy[:,1]
+        dz_dx = (np.roll(self.zs, 1, axis=1) - self.zs) / (self.fs * self.offset)
+        dz_dx[:,0] = dz_dx[:,1]
         
         # compute facet normals
         gradient_x = np.array([np.ones_like(dz_dx), np.zeros_like(dz_dx), dz_dx])
@@ -81,26 +82,124 @@ class Surface():
             
         self.gen_normals()
         
+    def arr_along_axis(self, arr, axis=0):
+
+        if axis==0:
+            for i in range(self.zs.shape[0]):
+                self.zs[:, i] = arr
+        elif axis == 1:
+            for i in range(self.zs.shape[1]):
+                self.zs[i, :] = arr
+
+        self.gen_normals()
 
     # add surface to 3D plot of model axis
-    def add_to_axis(self, fig):
-        surface = go.Surface(x=self.X, y=self.Y, z=self.zs, colorscale='Viridis')
-        fig.add_trace(surface)
-        fig.update_layout(scene=dict(
-            xaxis_title='X',
-            yaxis_title='Y',
-            zaxis_title='Z'
-        ))
-        return fig
+    #def add_to_axis(self, fig):
+    #    surface = go.Surface(x=self.X, y=self.Y, z=self.zs, colorscale='Viridis')
+    #    fig.add_trace(surface)
+    #    fig.update_layout(scene=dict(
+    #        xaxis_title='X',
+    #        yaxis_title='Y',
+    #        zaxis_title='Z'
+    #    ))
+    #    return fig
     
     # make 3D plot of surface
     def show_surf(self):
-        fig = go.Figure(data=[go.Surface(x=self.X, y=self.Y, z=self.zs, colorscale='Viridis')])
-        fig.update_layout(scene=dict(
-            xaxis_title='X',
-            yaxis_title='Y',
-            zaxis_title='Z'
-        ))
-        fig.show()
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
 
+        surf = ax.plot_surface(self.X, self.Y, self.zs, cmap='viridis')
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+
+        plt.show()
+
+
+    def show_2d_heatmap(self, ss=None, t=None, savefig=None, show=True):
+
+        fig, ax = plt.subplots(figsize=(12, 4))
+
+        c = ax.pcolormesh(self.X, self.Y, self.zs, cmap='viridis', shading='auto')
+        fig.colorbar(c, ax=ax, label='Z', shrink=0.4)
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+
+        if t is not None:
+            plt.scatter(t[0], t[1], marker="+", color="black", s=5)
+
+        if ss is not None:
+            sxs = [s.coord[0] for s in ss]
+            sys = [s.coord[1] for s in ss]
+            plt.plot(sxs, sys, linestyle=":", color="red")
+
+        plt.gca().set_aspect('equal')
+
+        if savefig:
+            plt.savefig(savefig)
+
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+
+    def show_normals(self, ss=None, t=None, show=True):
+        if not hasattr(self, "normals"):
+            raise AttributeError("Run gen_normals() first to compute self.normals")
+
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+        components = ["X-component", "Y-component", "Z-component"]
+        for i, ax in enumerate(axes):
+            im = ax.imshow(self.normals[:, :, i], cmap="coolwarm", origin="lower")
+            ax.set_title(components[i])
+            fig.colorbar(im, ax=ax, shrink=0.7)
         
+        if t is not None:
+            plt.scatter(t[0], t[1], marker="+", color="black", s=5)
+
+        if ss is not None:
+            sxs = [s.coord[0] for s in ss]
+            sys = [s.coord[1] for s in ss]
+            plt.plot(sxs, sys, linestyle=":", color="red")
+
+        plt.suptitle("Normal Vector Components")
+        plt.tight_layout()
+        plt.gca().set_aspect('equal')
+
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+    def get_profile(self, axis=0, offset=0, save=None, show=True):
+
+        if axis == 0:
+
+            i = np.argmin(np.abs(self.y - offset))
+            profile = self.zs[:, i]
+            axis = self.y
+
+        elif axis == 1:
+
+            i = np.argmin(np.abs(self.x - offset))
+            profile = self.zs[i, :]
+            axis = self.x
+
+        plt.plot(axis, profile, color="black", linewidth=1)
+        plt.xlabel("Profile distance [m]")
+        plt.ylabel("Height [m]")
+
+        if save:
+            plt.savefig(save)
+
+        if show:
+            plt.show()
+        else:
+            plt.close()

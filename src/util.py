@@ -3,9 +3,12 @@ import numpy as np
 import numba as nb # type: ignore
 import warnings, functools
 
+from math import ceil
+
 nGPU = int(os.getenv("nGPU"))
 
 if nGPU > 0:
+    print(f"GPU's detected. Enabling CUDA compute")
     import cupy as cp
 
 def cart_to_sp(coord, vec=False):
@@ -187,3 +190,39 @@ def target_function_gaussian(phi, theta, phi0=0, sigma=3, scale=1, verb=False):
     exponent = -((phi_deg - phi0)**2) / (2 * sigma**2)
     
     return scale * np.exp(exponent)
+
+
+def simple_gaussian(x, H, sig, xcen=0):
+
+    return H * np.exp(-1*((x-xcen)**2/(2*sig**2)))
+
+
+def repeating_gaussian(xs, H, sig, gap, xoffset=0):
+
+    domain = np.max(xs) - np.min(xs)
+    count = int(ceil(domain / (2 * gap)))
+
+    gaussians = [simple_gaussian(xs, H, sig, (i * 2 * gap) + gap + xoffset) for i in range(count)]
+
+    return np.sum(gaussians, axis=0)
+
+
+def slant_gaussian(x, H, sig1, sig2, xcen=0):
+
+    g1 = H * np.exp(-1*((x-xcen)**2/(2*sig1**2)))
+    g2 = H * np.exp(-1*((x-xcen)**2/(2*sig2**2)))
+
+    g1mask = x < xcen
+    g2mask = np.logical_not(g1mask)
+
+    return g1 * g1mask + g2 * g2mask
+
+
+def repeating_slant_gaussian(xs, H, sig1, sig2, gap, xoffset=0):
+
+    domain = np.max(xs) - np.min(xs)
+    count = int(ceil(domain / (2 * gap)))
+
+    gaussians = [slant_gaussian(xs, H, sig1, sig2, (i * 2 * gap) + gap + xoffset) for i in range(count)]
+
+    return np.sum(gaussians, axis=0)
