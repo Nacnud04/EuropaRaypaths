@@ -15,17 +15,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 nGPU = int(os.getenv("nGPU"))
-
 if nGPU > 0:
-    print(f"GPU's detected. Enabling CUDA compute")
-    import cupy as cp
+    import cupy as cp # type: ignore
 
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
-                     sltrng=True, plot=True, xmin=-10, xmax=20, refl_center=False):
+                     sltrng=True, plot=True, xmin=-10, xmax=20, refl_center=False,
+                     gpu=True, savefig=None, par={}):
     """
     Run sim over a bunch of sources and construct radargram
     """
+
+    global nGPU
+
+    # manual enable/disable gpu functionality:
+    if gpu == False:
+        nGPU = 0
 
     rdrgrm = np.zeros((4803, len(sources)), np.complex128)
 
@@ -53,7 +58,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 
             print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%) | ETA: {eta_str}", end="     \r")
 
-        model = Model(surf, s, reflect=reflect, vec=True, polarization=polarization, rough=rough, pt_response=pt_response)
+        model = Model(surf, s, reflect=reflect, vec=True, polarization=polarization, rough=rough, pt_response=pt_response, par=par)
         model.set_target(target)
 
         model.gen_raypaths(refl_center=refl_center)
@@ -98,6 +103,9 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         ax.set_ylabel("Range [us]", fontsize=8)
         ax.tick_params(labelsize=8)
         ax.set_title("Specular Point Target in Subsurface")
+        plt.tight_layout()
+        if savefig:
+            plt.savefig(savefig)
         plt.show()
 
     if phase == True:
@@ -113,7 +121,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 class Model():
 
     def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, 
-                       vec=False, polarization=None, rough=True, pt_response=None):
+                       vec=False, polarization=None, rough=True, pt_response=None, par={}):
         
         self.c = 299792458 # speed of light
         self.nu0 = 376.7 # intrinsic impedance of free space
@@ -214,6 +222,9 @@ class Model():
         self.rx_window_m      = 30e3       # rx window        [m]
         self.rx_window_offset = 20e3       # rx window offset [m]
         self.sampling         = 48e6       # rx sampling rate [Hz]
+
+        if "rx_window_offset" in par:
+            self.rx_window_offset = par['rx_window_offset']
 
         # angular wavenumber
         self.k                = (2 * np.pi) / self.lam
@@ -734,7 +745,7 @@ class Model():
     # calculate frac of transmit power.
     def gen_raypaths(self, fast=False, progress_bar=False, refl_center=False):
 
-        if nGPU > 0:
+        if nGPU != 0:
 
             self.gen_raypaths_gpu(refl_center=refl_center)
         
