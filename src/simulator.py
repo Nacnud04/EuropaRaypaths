@@ -21,7 +21,7 @@ if nGPU > 0:
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
                      sltrng=True, plot=True, xmin=-10, xmax=20, refl_center=False,
-                     gpu=True, savefig=None, par={}):
+                     gpu=True, savefig=None, par={}, show=False):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -98,15 +98,18 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
     if plot:
         extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
         fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
-        ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
+        im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
         ax.set_xlabel("Azumith [km]", fontsize=8)
         ax.set_ylabel("Range [us]", fontsize=8)
         ax.tick_params(labelsize=8)
-        ax.set_title("Specular Point Target in Subsurface")
-        plt.tight_layout()
+        cb = fig.colorbar(im, ax=ax, label="Power returned [W]")
+        cb.ax.tick_params(labelsize=8)
         if savefig:
             plt.savefig(savefig)
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            plt.close()
 
     if phase == True:
         return rdrgrm, sltrng, phase_hist
@@ -116,12 +119,132 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 
     else:
         return rdrgrm, model.ts
+    
+
+def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True, doppler=False, 
+                     phase=False, polarization=None, rough=True, pt_response=None,
+                     sltrng=False, plot=True, xmin=-10, xmax=20, refl_center=False,
+                     gpu=True, savefig=None, par={}, show=False, refl_dist=False):
+    """
+    Run sim over a bunch of sources and construct radargram
+    """
+
+    global nGPU
+
+    # manual enable/disable gpu functionality:
+    if gpu == False:
+        nGPU = 0
+
+    #rdrgrm = np.zeros((4803, len(sources)), np.complex128)
+    rdrgrm = np.zeros((1601, len(sources)), np.complex128)
+
+    if nGPU > 0:
+        rdrgrm = cp.asarray(rdrgrm)
+    
+    sltrng = []
+
+    if doppler:
+        phase=False
+
+    if phase: 
+        phase_hist = []
+
+    start_time = time.time()
+
+    surf_refr = terrain.get_surf([target[0], target[1]], dims)
+
+    if refl_dist:
+        refl_dists = []
+
+    for j, s in enumerate(sources):
+
+        surf_refl = terrain.get_surf(s.coord[:2], dims)
+
+        if progress:
+            elapsed = time.time() - start_time
+            avg_time = elapsed / (j + 1)
+            remaining = avg_time * (len(sources) - j - 1)
+            mins, secs = divmod(int(remaining), 60)
+            eta_str = f"{mins:02d}:{secs:02d}"
+
+            print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%) | ETA: {eta_str}", end="     \r")
+
+        model = Model(surf_refr, s, reflect=reflect, vec=True, polarization=polarization, 
+                      rough=rough, pt_response=pt_response, par=par, refl_surface=surf_refl)
+        model.set_target(target)
+
+        model.gen_raypaths(refl_center=refl_center)
+
+        if doppler:
+            model.comp_dopplers()
+
+        if nGPU == 0:
+            model.gen_timeseries_vec(show=False, doppler=doppler)
+        else:
+            model.gen_timeseries_gpu(show=False, doppler=doppler)
+
+        if refl_dist:
+            refl_dists.append(model.refl_dist)
+
+        rdrgrm[:,j] = model.signal
+
+        # get highest amplitude return raypath
+        if nGPU > 0:
+            max_idx = np.argmax(cp.asnumpy(model.tr))
+        else:
+            max_idx = np.argmax(model.tr)
+            
+        y_max, x_max = np.unravel_index(max_idx, model.tr.shape)
+
+        # append travel time to pathtimes
+        if nGPU > 0:
+            sltrng.append(cp.asnumpy(model.slant_range)[y_max, x_max])
+        else:
+            sltrng.append(model.slant_range[y_max, x_max])
+        if phase:
+            phase_hist.append(model.phase_hist)
+
+    if nGPU > 0:
+        rdrgrm = cp.asnumpy(rdrgrm)
+        ts = cp.asnumpy(model.ts)
+    else:
+        ts = model.ts
+    
+    if plot:
+        extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
+        fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
+        im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
+        ax.set_xlabel("Azumith [km]", fontsize=8)
+        ax.set_ylabel("Range [us]", fontsize=8)
+        ax.tick_params(labelsize=8)
+        cb = fig.colorbar(im, ax=ax, label="Power returned [W]")
+        cb.ax.tick_params(labelsize=8)
+        if savefig:
+            plt.savefig(savefig)
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+    output = [rdrgrm]
+
+    if phase == True:
+        output.extend([sltrng, phase_hist])
+    elif sltrng == True:
+        output.append(sltrng)
+    elif refl_dist:
+        output.append(refl_dists)
+    else:
+        output.append(model.ts)
+
+    return output
 
 
 class Model():
 
     def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, 
-                       vec=False, polarization=None, rough=True, pt_response=None, par={}):
+                       vec=False, polarization=None, rough=True, pt_response=None, par={},
+                       refl_surface=None):
         
         self.c = 299792458 # speed of light
         self.nu0 = 376.7 # intrinsic impedance of free space
@@ -130,6 +253,11 @@ class Model():
 
         # set surface and source objects
         self.surface = surface
+        if not refl_surface:
+            self.refl_surf = None
+        else:
+            self.refr_surf = self.surface
+            self.refl_surf = refl_surface
         self.source = source
         self.lam = self.c / self.source.f0
 
@@ -211,7 +339,8 @@ class Model():
         self.gain = db_to_mag(self.db)
         
         # gain for surface
-        surf_db = 90#64
+        if "surf_gain" in par: surf_db = par['surf_gain']
+        else: surf_db = 78
         self.surf_gain = db_to_mag(surf_db)
 
         # --- WAVELET CONSTRUCTION ---
@@ -223,8 +352,8 @@ class Model():
         self.rx_window_offset = 20e3       # rx window offset [m]
         self.sampling         = 48e6       # rx sampling rate [Hz]
 
-        if "rx_window_offset" in par:
-            self.rx_window_offset = par['rx_window_offset']
+        if "rx_window_offset" in par: self.rx_window_offset = par['rx_window_offset']
+        if "rx_window_m"      in par: self.rx_window_m      = par['rx_window_m']
 
         # angular wavenumber
         self.k                = (2 * np.pi) / self.lam
@@ -476,6 +605,7 @@ class Model():
         # relative to facet normal in spherical coordinates
         rp_f2t_CN = normalize_vectors(rp_f2t_C)
         rp_f2t_SD_rF = cart_to_sp(rp_f2t_CN - surf_norms, vec=True) - rp_f2i_S_rF
+        # I think this should be the refracted (non-forced) raypath relative to facet normal
         theta_2 = rp_f2t_SD_rF[2, :, :]
 
         # develop reflection and transmission coefficients
@@ -541,7 +671,7 @@ class Model():
         tr *= np.abs(Model.beam_pattern_3D(rp_f2s_SD_rF[1, :, :], rp_f2s_SD_rF[2, :, :], self.lam,
                                            self.surface.fs, rp_s2f_S[0, :, :]))
         # implement radar equation
-        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :])
+        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]) * (self.surface.fs ** 2) * 2
         # phase change
         tr *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
         tr *= np.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
@@ -575,7 +705,7 @@ class Model():
             re *= np.abs(Model.beam_pattern_3D(np.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
                          self.surface.fs, rp_s2f_S[0, :, :]))
             # add distance loss
-            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
+            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :]) * (self.surface.fs ** 2) * 2
             # attenuation
             re *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
             
@@ -588,11 +718,21 @@ class Model():
 
         self.refl_slant_range = rp_s2f_S[0, :, :]
 
-    def gen_s2f_gpu(self, offsetx=0, offsety=0):
+    def gen_s2f_gpu(self, refl=False, offsetx=0, offsety=0):
 
-        rp_s2f_C = cp.stack(((cp.asarray(self.source.x) - cp.asarray(self.surface.X)) + offsetx, 
-                             (cp.asarray(self.source.y) - cp.asarray(self.surface.Y)) + offsety,
-                             (cp.asarray(self.source.z) - cp.asarray(self.surface.zs))))
+        if not self.refl_surf:
+            rp_s2f_C = cp.stack(((cp.asarray(self.source.x) - cp.asarray(self.surface.X)) + offsetx, 
+                                (cp.asarray(self.source.y) - cp.asarray(self.surface.Y)) + offsety,
+                                (cp.asarray(self.source.z) - cp.asarray(self.surface.zs))))
+        elif refl == False:
+            rp_s2f_C = cp.stack(((cp.asarray(self.source.x) - cp.asarray(self.refr_surf.X)) + offsetx, 
+                                (cp.asarray(self.source.y) - cp.asarray(self.refr_surf.Y)) + offsety,
+                                (cp.asarray(self.source.z) - cp.asarray(self.refr_surf.zs))))
+        elif refl == True:
+            rp_s2f_C = cp.stack(((cp.asarray(self.source.x) - cp.asarray(self.refl_surf.X)) + offsetx, 
+                                (cp.asarray(self.source.y) - cp.asarray(self.refl_surf.Y)) + offsety,
+                                (cp.asarray(self.source.z) - cp.asarray(self.refl_surf.zs))))
+
         rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
         # reverse of source to facet
         rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
@@ -608,7 +748,7 @@ class Model():
         surf_norms_SR = cart_to_sp(surf_norms * -1, vec=True)
 
         # first we need the raypath from source to facet
-        rp_s2f_C, rp_s2f_S = self.gen_s2f_gpu()
+        rp_s2f_C, rp_s2f_S = self.gen_s2f_gpu(False)
 
         rp_s2f_S_rF = rp_s2f_S - surf_norms_S
         rp_s2f_S_rF[2, :, :] -= cp.pi
@@ -627,22 +767,19 @@ class Model():
 
         rp_f2t_CN = normalize_vectors(rp_f2t_C)
         rp_f2t_SD_rF = cart_to_sp(rp_f2t_CN - surf_norms, vec=True) - rp_f2i_S_rF
+        # I think this should be the refracted (non-forced) raypath relative to facet normal
         theta_2 = rp_f2t_SD_rF[2, :, :]
 
         # develop reflection and transmission coefficients
         if self.polarization == "h":
             rho_h = (self.nu2 * cp.cos(theta_1) - self.nu1 * cp.cos(theta_2)) / (self.nu2 * cp.cos(theta_1) + self.nu1 * cp.cos(theta_2))
-            re = cp.abs(rho_h)**2
-            tr = 1 - re
+            tr = 1 - cp.abs(rho_h)**2
         elif self.polarization == "v":
             rho_v = (self.nu2 * cp.cos(theta_2) - self.nu1 * cp.cos(theta_1)) / (self.nu2 * cp.cos(theta_2) + self.nu1 * cp.cos(theta_1))
-            re = cp.abs(rho_v)**2
-            tr = 1 - re
+            tr = 1 - cp.abs(rho_v)**2
 
         # surface roughness
         if self.rough:
-            psi_1 = self.ks * cp.cos(theta_1)
-            re *= cp.exp(-4 * psi_1**2)
             psi_2 = self.ks * cp.cos(theta_2)
             tr *= cp.exp(-4 * psi_2**2)
 
@@ -679,7 +816,7 @@ class Model():
                                            self.surface.fs, rp_s2f_S[0, :, :]))
 
         # radar equation
-        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :])
+        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]) * (self.surface.fs ** 2) * 2
 
         # attenuation
         tr *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
@@ -706,16 +843,47 @@ class Model():
                 rp_s2f_S_rF = rp_s2f_S - surf_norms_S
                 rp_s2f_S_rF[2, :, :] -= cp.pi
 
+                re = 1 - tr
+
+            elif self.refr_surf:
+
+                rp_s2f_C, rp_s2f_S = self.gen_s2f_gpu(True)
+                rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+                rp_s2f_S_rF[2, :, :] -= cp.pi
+
+                # if using a difference surface for refraction calculations we need to compute the 
+                # reflection coefficients differently
+                theta_1 = rp_s2f_S_rF[2, :, :]
+
+                # temporary theta_2 to just make things work
+                theta_2 = -0.35
+
+                if self.polarization == "h":
+                    rho_h = (self.nu2 * cp.cos(theta_1) - self.nu1 * cp.cos(theta_2)) / (self.nu2 * cp.cos(theta_1) + self.nu1 * cp.cos(theta_2))
+                    re = cp.abs(rho_h)**2
+                elif self.polarization == "v":
+                    rho_v = (self.nu2 * cp.cos(theta_2) - self.nu1 * cp.cos(theta_1)) / (self.nu2 * cp.cos(theta_2) + self.nu1 * cp.cos(theta_1))
+                    re = cp.abs(rho_v)**2
+
+            else:
+
+                re = 1 - tr
+
+            if self.rough:
+                psi_1 = self.ks * cp.cos(theta_1)
+                re *= cp.exp(-4 * psi_1**2)
+
             if self.polarization is None:
                 re = cp.ones_like(cp.asarray(self.surface.zs)) * self.rho * -1
 
             re *= cp.abs(Model.beam_pattern_3D(cp.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
                          self.surface.fs, rp_s2f_S[0, :, :]))
-            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :])
+            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :]) * (self.surface.fs ** 2) * 2
             re *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
 
             self.re = re
             self.refl_time = cp.asnumpy((rp_s2f_S[0, :, :] / self.c1) * 2)
+            self.refl_dist = float(np.average(cp.asnumpy(rp_s2f_C[0, :, :])))
             self.refl_dth  = cp.asnumpy(cp.ones_like(rp_s2f_S_rF[2, :, :]) * cp.pi)
             self.refl_dph  = cp.asnumpy(rp_s2f_S_rF[2, :, :] * 2)
         
@@ -975,7 +1143,6 @@ class Model():
         idx_offsets = np.round(rel_times / self.source.dt).astype(int)
 
         # create empty output array
-        #sig_s = np.zeros(np.max(idx_offsets) + len(self.source.signal)).astype(np.complex128)
         sig_s = np.zeros(self.rb).astype(np.complex128)
 
         # make another for signal at target

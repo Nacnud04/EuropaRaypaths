@@ -50,13 +50,13 @@ def dbi_to_db(dbi):
     return dbi - 2.15
 
 def db_to_mag(db):
-    return 10 ** (db / 20)
+    return 10 ** (db / 10)
 
 def dbi_to_mag(dbi):
     return db_to_mag(dbi_to_db(dbi))
 
 def mag_to_db(mag):
-    return 20 * np.log10(mag)
+    return 10 * np.log10(mag)
 
 def db_to_dbi(db):
     return db + 2.15

@@ -40,16 +40,16 @@ t = (0, 0, -100)   # target location (x, y, z)
 
 # change in parameter matrix
 pars = {
-    "rx_window_offset":2e3
+    "rx_window_offset":2e3,
 }
 
 names = ("flat_surface.png", "symmetric_dune.png", "offsetx_dune.png")
 
 for surf, name in zip(surfs, names):
 
-    surf.show_2d_heatmap(ss=ss, t=t, savefig=f"surf-{name}")
-    surf.show_normals()
-    surf.get_profile(axis=1, save=f"prof-{name}")
+    surf.show_2d_heatmap(ss=ss, t=t, savefig=f"surf-{name}", show=False)
+    #surf.show_normals()
+    surf.get_profile(axis=1, save=f"prof-{name}", show=False)
 
     rdrgrm, time = run_sim_ms(surf, ss, t, reflect=False, polarization='v', 
                             sltrng=False, xmax=10, gpu=True, savefig=name, 

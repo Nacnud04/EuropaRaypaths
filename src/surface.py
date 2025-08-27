@@ -93,16 +93,10 @@ class Surface():
 
         self.gen_normals()
 
-    # add surface to 3D plot of model axis
-    #def add_to_axis(self, fig):
-    #    surface = go.Surface(x=self.X, y=self.Y, z=self.zs, colorscale='Viridis')
-    #    fig.add_trace(surface)
-    #    fig.update_layout(scene=dict(
-    #        xaxis_title='X',
-    #        yaxis_title='Y',
-    #        zaxis_title='Z'
-    #    ))
-    #    return fig
+    def zs_from_arr(self, zs, normals):
+
+        self.zs = zs
+        self.normals = normals
     
     # make 3D plot of surface
     def show_surf(self):
