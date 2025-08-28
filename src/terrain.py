@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from surface import Surface
+from util import simple_gaussian
 
 class Terrain():
 
@@ -60,6 +61,23 @@ class Terrain():
         self.gen_normals()
 
     
+    def double_ridge(self, amp1, amp2, peak_dist, ridge_width, center, axis='x'):
+
+        if axis != 'x':
+
+            raise NotImplementedError()
+
+        cen1 = center - peak_dist / 2
+        cen2 = center + peak_dist / 2
+
+        sig = ridge_width / 2.5
+
+        self.zs = simple_gaussian(self.XX, amp1, sig, xcen=cen1) + \
+                  simple_gaussian(self.XX, amp2, sig, xcen=cen2)
+        
+        self.gen_normals()
+
+    
     def get_surf(self, center, dims):
 
         # turn the center coordinate into index
@@ -111,6 +129,34 @@ class Terrain():
 
         if savefig:
             plt.savefig(savefig, bbox_inches='tight')
+
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+
+    def show_profile(self, axis, val, savefig=None, show=False):
+
+        if axis == 'x':
+
+            i = np.argmin(np.abs(self.ys - val))
+            prof = self.zs[i, :]
+            scale = self.xs
+
+        elif axis == 'y':
+
+            i = np.argmin(np.abs(self.xs - val))
+            prof = self.zs[:, i]
+            scale = self.ys
+
+        plt.plot(scale, prof, color="black", linewidth=1)
+        plt.xlabel("Profile distance [m]")
+        plt.ylabel("Height [m]")
+        plt.grid()
+
+        if savefig:
+            plt.savefig(savefig)
 
         if show:
             plt.show()
