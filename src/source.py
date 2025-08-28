@@ -145,7 +145,7 @@ class Source():
         return fig
 
     # plot the source and its magnitude spectra
-    def plot(self, plotly=False):
+    def plot(self, plotly=False, savefig=None, show=False):
 
         N = len(self.signal)
         T = self.t[1] - self.t[0]
@@ -184,4 +184,9 @@ class Source():
             ax[1].set_ylabel("Amplitude")
             ax[1].set_xscale("log")
             ax[1].set_yscale("log")
-            plt.show()
+            if savefig:
+                plt.savefig(savefig)
+            if show:
+                plt.show()
+            else:
+                plt.close()

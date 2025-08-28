@@ -21,7 +21,7 @@ if nGPU > 0:
 def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
                      sltrng=True, plot=True, xmin=-10, xmax=20, refl_center=False,
-                     gpu=True, savefig=None, par={}, show=False):
+                     gpu=True, savefig=None, par={}, show=False, nsmpl=4803):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -32,7 +32,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
     if gpu == False:
         nGPU = 0
 
-    rdrgrm = np.zeros((4803, len(sources)), np.complex128)
+    rdrgrm = np.zeros((nsmpl, len(sources)), np.complex128)
 
     if nGPU > 0:
         rdrgrm = cp.asarray(rdrgrm)
@@ -102,7 +102,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         ax.set_xlabel("Azumith [km]", fontsize=8)
         ax.set_ylabel("Range [us]", fontsize=8)
         ax.tick_params(labelsize=8)
-        cb = fig.colorbar(im, ax=ax, label="Power returned [W]")
+        cb = fig.colorbar(im, ax=ax, label="Power [W]")
         cb.ax.tick_params(labelsize=8)
         if savefig:
             plt.savefig(savefig)
@@ -124,7 +124,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
 def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
                      sltrng=False, plot=True, xmin=-10, xmax=20, refl_center=False,
-                     gpu=True, savefig=None, par={}, show=False, refl_dist=False):
+                     gpu=True, savefig=None, par={}, show=False, refl_dist=False, nsmpl=1601):
     """
     Run sim over a bunch of sources and construct radargram
     """
@@ -135,8 +135,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
     if gpu == False:
         nGPU = 0
 
-    #rdrgrm = np.zeros((4803, len(sources)), np.complex128)
-    rdrgrm = np.zeros((1601, len(sources)), np.complex128)
+    rdrgrm = np.zeros((nsmpl, len(sources)), np.complex128)
 
     if nGPU > 0:
         rdrgrm = cp.asarray(rdrgrm)
@@ -211,13 +210,17 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
         ts = model.ts
     
     if plot:
+        if "aspect" in par.keys():
+            aspect = par['aspect']
+        else:
+            aspect = 0.5
         extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
         fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
-        im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
+        im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=aspect, extent=extent, vmax=np.percentile(np.abs(rdrgrm), 99.99))
         ax.set_xlabel("Azumith [km]", fontsize=8)
         ax.set_ylabel("Range [us]", fontsize=8)
         ax.tick_params(labelsize=8)
-        cb = fig.colorbar(im, ax=ax, label="Power returned [W]")
+        cb = fig.colorbar(im, ax=ax, label="Power [W]")
         cb.ax.tick_params(labelsize=8)
         if savefig:
             plt.savefig(savefig)
@@ -335,7 +338,8 @@ class Model():
         self.power = power
         
         # gain for subsurface
-        self.db = 80
+        if "gain" in par: self.db = par['gain']
+        else: self.db = 78
         self.gain = db_to_mag(self.db)
         
         # gain for surface
@@ -354,6 +358,9 @@ class Model():
 
         if "rx_window_offset" in par: self.rx_window_offset = par['rx_window_offset']
         if "rx_window_m"      in par: self.rx_window_m      = par['rx_window_m']
+        if "sampling"         in par: self.sampling         = par['sampling']
+        if "range_resolution" in par: self.range_resolution = par['range_resolution']
+        if "lambda"           in par: self.lam              = par['lambda']
 
         # angular wavenumber
         self.k                = (2 * np.pi) / self.lam
@@ -801,6 +808,7 @@ class Model():
         # account for aperture losses
         tr *= cp.abs(Model.beam_pattern_3D(rp_f2t_SD_rF[1, :, :], rp_f2t_SD_rF[2, :, :], self.lam,
                                            self.surface.fs, rp_f2t_S[0, :, :]))
+        
         # exiting subsurface
         rp_f2o_S_rF = comp_refracted_vectorized(surf_norms, normalize_vectors(rp_f2t_C),
                                                  self.c1, self.c2, rev=True)
@@ -816,7 +824,7 @@ class Model():
                                            self.surface.fs, rp_s2f_S[0, :, :]))
 
         # radar equation
-        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]) * (self.surface.fs ** 2) * 2
+        tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]) * (self.surface.fs ** 2) #* 2
 
         # attenuation
         tr *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
@@ -878,7 +886,7 @@ class Model():
 
             re *= cp.abs(Model.beam_pattern_3D(cp.pi, rp_s2f_S_rF[2, :, :] * 2, self.lam,
                          self.surface.fs, rp_s2f_S[0, :, :]))
-            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :]) * (self.surface.fs ** 2) * 2
+            re *= radar_eq(self.power, self.surf_gain, 1, self.lam, rp_s2f_S[0, :, :]) * (self.surface.fs ** 2) #* 2
             re *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
 
             self.re = re
@@ -1303,6 +1311,7 @@ class Model():
         
         # --- ADD REFLECTED RAYPATHS ---
         if self.reflect:
+
             refl_wav, _ = compute_wav_gpu(self.re, self.refl_slant_range, cp.asarray(self.ssl),
                                       self.range_resolution, self.lam, rb_max, trc_max, scale=refl_mag)
             sig_s += refl_wav

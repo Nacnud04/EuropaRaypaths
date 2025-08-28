@@ -97,6 +97,11 @@ class Surface():
 
         self.zs = zs
         self.normals = normals
+
+        if zs.shape[0] != self.X.shape[0] or zs.shape[1] != self.X.shape[1]:
+            raise IndexError(f"Surface failed to succesfully generate. Provided array \
+of dimensions {self.zs.shape} does not match surface \
+dimensions of {self.X.shape}")
     
     # make 3D plot of surface
     def show_surf(self):
