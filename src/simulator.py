@@ -1,6 +1,15 @@
 import numpy as np
 import plotly.graph_objects as go # type: ignore
 import matplotlib.pyplot as plt
+import matplotlib
+
+#matplotlib.use("pgf")
+#matplotlib.rcParams.update({
+#    "pgf.texsystem": "pdflatex",
+#    'font.family': 'serif',
+#    'text.usetex': True,
+#    'pgf.rcfonts': False,
+#})
 
 from math import sqrt
 from time import time as Time
@@ -214,7 +223,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
             aspect = par['aspect']
         else:
             aspect = 0.5
-        extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
+        extent = (xmin, xmax, model.t_en, model.t_st)
         fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
         im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=aspect, extent=extent, vmax=np.percentile(np.abs(rdrgrm), 99.99))
         ax.set_xlabel("Azumith [km]", fontsize=8)
@@ -238,7 +247,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
     elif refl_dist:
         output.append(refl_dists)
     else:
-        output.append(model.ts)
+        output.append(ts)
 
     return output
 
@@ -361,6 +370,10 @@ class Model():
         if "sampling"         in par: self.sampling         = par['sampling']
         if "range_resolution" in par: self.range_resolution = par['range_resolution']
         if "lambda"           in par: self.lam              = par['lambda']
+
+        # start and end times in microseconds for the rx window
+        self.t_st = 2 * (self.rx_window_offset / self.c) * 10 ** 6
+        self.t_en = 2 * ((self.rx_window_offset + self.rx_window_m) / self.c) * 10 ** 6
 
         # angular wavenumber
         self.k                = (2 * np.pi) / self.lam
@@ -571,11 +584,21 @@ class Model():
     
         return rp
 
-    def gen_s2f_cpu(self, offsetx=0, offsety=0):
+    def gen_s2f_cpu(self, refl=False, offsetx=0, offsety=0, force_normal=True):
 
-        rp_s2f_C = np.stack(((self.source.x - self.surface.X) + offsetx, 
-                             (self.source.y - self.surface.Y) + offsety,
-                             (self.source.z - self.surface.zs)))
+        if not self.refl_surf or force_normal:
+            rp_s2f_C = np.stack(((self.source.x - self.surface.X) + offsetx, 
+                                 (self.source.y - self.surface.Y) + offsety,
+                                 (self.source.z - self.surface.zs)))
+        elif refl == False:
+            rp_s2f_C = np.stack(((np.asarray(self.source.x) - np.asarray(self.refr_surf.X)) + offsetx, 
+                                (np.asarray(self.source.y) - np.asarray(self.refr_surf.Y)) + offsety,
+                                (np.asarray(self.source.z) - np.asarray(self.refr_surf.zs))))
+        elif refl == True:
+            rp_s2f_C = np.stack(((np.asarray(self.source.x) - np.asarray(self.refl_surf.X)) + offsetx, 
+                                (np.asarray(self.source.y) - np.asarray(self.refl_surf.Y)) + offsety,
+                                (np.asarray(self.source.z) - np.asarray(self.refl_surf.zs))))
+    
         rp_s2f_S = cart_to_sp(rp_s2f_C, vec=True)
         # reverse of source to facet
         rp_s2f_S = cart_to_sp(-1 * rp_s2f_C, vec=True)
@@ -591,7 +614,9 @@ class Model():
         surf_norms_SR = cart_to_sp(surf_norms * -1, vec=True)
 
         # first we need the raypath from source to facet
-        rp_s2f_C, rp_s2f_S = self.gen_s2f_cpu()
+        rp_s2f_C, rp_s2f_S = self.gen_s2f_cpu(False, force_normal=False)
+
+        #print(np.mean(rp_s2f_S[0, :, :]))
 
         rp_s2f_S_rF = rp_s2f_S - surf_norms_S
         rp_s2f_S_rF[2, :, :] -= np.pi
@@ -625,16 +650,17 @@ class Model():
             re = np.abs(rho_v)**2
             tr = 1 - re
 
+        # generate array for % energy transmitted
+        if self.polarization is None:
+            tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
+            re = 1 - tr
+
         # manipulate coefficients if surface roughness enabled
         if self.rough == True:
             psi_1 = self.ks * np.cos(theta_1)
             re *= np.exp(-4 * psi_1**2)
             psi_2 = self.ks * np.cos(theta_2)
             tr *= np.exp(-4 * psi_2**2)
-
-        # generate array for % energy transmitted
-        if self.polarization is None:
-            tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
 
         facet_incident = cart_to_sp(rp_f2t_CN, vec=True)
 
@@ -687,6 +713,7 @@ class Model():
         self.comp_val = np.copy(tr)
         self.path_time = (rp_s2f_S[0, :, :] / self.c1 + rp_f2t_S[0, :, :] / self.c2) * 2
         self.slant_range = rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]
+        self.refr_atm_slant_range = rp_s2f_S[0, :, :]
         self.refr_dth  = rp_f2t_SD_rF[1, :, :]
         self.refr_dph  = rp_f2t_SD_rF[2, :, :]
         
@@ -703,6 +730,26 @@ class Model():
 
                 rp_s2f_S_rF = rp_s2f_S - surf_norms_S
                 rp_s2f_S_rF[2, :, :] -= cp.pi
+
+            elif self.refr_surf:
+
+                rp_s2f_C, rp_s2f_S = self.gen_s2f_cpu(True, force_normal=False)
+                rp_s2f_S_rF = rp_s2f_S - surf_norms_S
+                rp_s2f_S_rF[2, :, :] -= np.pi
+
+                # if using a difference surface for refraction calculations we need to compute the 
+                # reflection coefficients differently
+                theta_1 = rp_s2f_S_rF[2, :, :]
+
+                # temporary theta_2 to just make things work
+                theta_2 = -0.35
+
+                if self.polarization == "h":
+                    rho_h = (self.nu2 * np.cos(theta_1) - self.nu1 * np.cos(theta_2)) / (self.nu2 * np.cos(theta_1) + self.nu1 * np.cos(theta_2))
+                    re = np.abs(rho_h)**2
+                elif self.polarization == "v":
+                    rho_v = (self.nu2 * np.cos(theta_2) - self.nu1 * np.cos(theta_1)) / (self.nu2 * np.cos(theta_2) + self.nu1 * np.cos(theta_1))
+                    re = np.abs(rho_v)**2
             
             if self.polarization is None:
                 # generate array for % energy reflected
@@ -785,14 +832,14 @@ class Model():
             rho_v = (self.nu2 * cp.cos(theta_2) - self.nu1 * cp.cos(theta_1)) / (self.nu2 * cp.cos(theta_2) + self.nu1 * cp.cos(theta_1))
             tr = 1 - cp.abs(rho_v)**2
 
+        # default transmission coefficient
+        if self.polarization is None:
+            tr = cp.ones_like(cp.asarray(self.surface.zs)) * self.tau * self.tau_rev
+
         # surface roughness
         if self.rough:
             psi_2 = self.ks * cp.cos(theta_2)
             tr *= cp.exp(-4 * psi_2**2)
-
-        # default transmission coefficient
-        if self.polarization is None:
-            tr = cp.ones_like(cp.asarray(self.surface.zs)) * self.tau * self.tau_rev
 
         facet_incident = cart_to_sp(rp_f2t_CN, vec=True)
 
@@ -835,6 +882,7 @@ class Model():
         self.comp_val = cp.asnumpy(cp.copy(tr))
         self.path_time = cp.asnumpy((rp_s2f_S[0, :, :] / self.c1 + rp_f2t_S[0, :, :] / self.c2) * 2)
         self.slant_range = rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]
+        self.refr_atm_slant_range = rp_s2f_S[0, :, :]
         self.refr_dth  = cp.asnumpy(rp_f2t_SD_rF[1, :, :])
         self.refr_dph  = cp.asnumpy(rp_f2t_SD_rF[2, :, :])
         
@@ -1196,7 +1244,7 @@ class Model():
             max_idx = np.argmax(self.tr)
             rb_max, trc_max = np.unravel_index(max_idx, self.tr.shape)
             # compute the effective slant range - correcting for velocity change in subsurface
-            eff_slant_range = self.refl_slant_range + (self.slant_range - self.refl_slant_range) * (self.c1 / self.c2)
+            eff_slant_range = self.refr_atm_slant_range + (self.slant_range - self.refr_atm_slant_range) * (self.c1 / self.c2)
             refrwav, self.phase_hist = compute_wav(self.tr, eff_slant_range, self.ssl, self.range_resolution, self.lam, rb_max, trc_max)
             sig_s += refrwav
             sig_t += sig_s
@@ -1301,7 +1349,7 @@ class Model():
             max_idx = cp.argmax(self.tr)
             rb_max, trc_max = cp.unravel_index(max_idx, self.tr.shape)
 
-            eff_slant_range = self.refl_slant_range + (self.slant_range - self.refl_slant_range) * (self.c1 / self.c2)
+            eff_slant_range = self.refr_atm_slant_range + (self.slant_range - self.refr_atm_slant_range) * (self.c1 / self.c2)
 
             refrwav, self.phase_hist = compute_wav_gpu(self.tr, eff_slant_range, cp.asarray(self.ssl),
                                                    self.range_resolution, self.lam, rb_max, trc_max)
