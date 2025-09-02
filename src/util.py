@@ -179,7 +179,7 @@ def target_function_sinusoidal(phi, theta, f=10):
     return (np.cos(f * phi) + 1) + (np.cos(f * theta) + 1)
 
 
-def target_function_gaussian(phi, theta, phi0=0, sigma=2, scale=1, verb=False):
+def target_function_gaussian(phi, theta, phi0=0, sigma=4, scale=1, verb=False):
 
     phi_deg = phi * (180 / np.pi)
     phi_deg = (phi_deg + 180) % 360 - 180
@@ -190,6 +190,17 @@ def target_function_gaussian(phi, theta, phi0=0, sigma=2, scale=1, verb=False):
     exponent = -((phi_deg - phi0)**2) / (2 * sigma**2)
     
     return scale * np.exp(exponent)
+
+
+def target_function_boxcar(phi, theta, phi0=0, width=6, scale=1):
+
+    phi_deg = phi * (180 / np.pi)
+    phi_deg = (phi_deg + 180) % 360 - 180
+
+    val = scale * (phi_deg > phi0 - (width/2)) * (phi_deg < phi0 + (width/2))
+    #print(val[:,200])
+
+    return val
 
 
 def simple_gaussian(x, H, sig, xcen=0):

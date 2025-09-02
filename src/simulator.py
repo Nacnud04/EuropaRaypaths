@@ -3,18 +3,22 @@ import plotly.graph_objects as go # type: ignore
 import matplotlib.pyplot as plt
 import matplotlib
 
-#matplotlib.use("pgf")
-#matplotlib.rcParams.update({
-#    "pgf.texsystem": "pdflatex",
-#    'font.family': 'serif',
-#    'text.usetex': True,
-#    'pgf.rcfonts': False,
-#})
+import copy, os
+
+"""
+os.environ["PATH"] += os.pathsep + '/usr/share/texlive/texmf-dist/tex/xelatex'
+
+matplotlib.use("pgf")
+matplotlib.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    'font.family': 'serif',
+    'text.usetex': True,
+    'pgf.rcfonts': False,
+})
+"""
 
 from math import sqrt
 from time import time as Time
-import copy, os
-
 from source import *
 from surface import *
 from raypath import *
@@ -105,16 +109,22 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         ts = model.ts
     
     if plot:
-        extent = (xmin, xmax, np.max(ts) / 1e-6, np.min(ts) / 1e-6)
-        fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
-        im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=0.5, extent=extent)
+
+        if "aspect" in par.keys():
+            aspect = par['aspect']
+        else:
+            aspect = 0.5
+        
+        extent = (xmin, xmax, model.t_en, model.t_st)
+        fig, ax = plt.subplots(1, figsize=(4, 4), constrained_layout=True)
+        im = ax.imshow(np.abs(rdrgrm)*1e6, cmap="gray", aspect=aspect, extent=extent)
         ax.set_xlabel("Azumith [km]", fontsize=8)
-        ax.set_ylabel("Range [us]", fontsize=8)
+        ax.set_ylabel("Range [µs]", fontsize=8)
         ax.tick_params(labelsize=8)
-        cb = fig.colorbar(im, ax=ax, label="Power [W]")
+        cb = fig.colorbar(im, ax=ax, label=r"Power [µW]", shrink=0.5)
         cb.ax.tick_params(labelsize=8)
         if savefig:
-            plt.savefig(savefig)
+            plt.savefig(savefig, bbox_inches='tight')
         if show:
             plt.show()
         else:
@@ -224,7 +234,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
         else:
             aspect = 0.5
         extent = (xmin, xmax, model.t_en, model.t_st)
-        fig, ax = plt.subplots(1, figsize=(10, 5), constrained_layout=True)
+        fig, ax = plt.subplots(1, figsize=(4, 4), constrained_layout=True)
         im = ax.imshow(np.abs(rdrgrm), cmap="gray", aspect=aspect, extent=extent, vmax=np.percentile(np.abs(rdrgrm), 99.99))
         ax.set_xlabel("Azumith [km]", fontsize=8)
         ax.set_ylabel("Range [us]", fontsize=8)
@@ -684,6 +694,10 @@ class Model():
                 
             tr *= gauss_transmit
 
+        elif self.pt_response == 'boxcar':
+            
+            tr *= target_function_boxcar(facet_incident[2, :, :], 0, phi0=180)
+
         del facet_incident
 
         # account for aperture losses
@@ -849,6 +863,15 @@ class Model():
         elif self.pt_response == "gaussian":
             gauss_transmit = target_function_gaussian(facet_incident[2, :, :], 0, phi0=180)          
             tr *= gauss_transmit
+
+        elif self.pt_response == 'boxcar':
+
+            npmax = np.unravel_index(tr.argmax(), tr.shape)
+            phi_deg = facet_incident[2, :, :][npmax] * (180 / np.pi)
+            phi_deg = (phi_deg + 180) % 360 - 180
+            #print(f"phi4trmax: {phi_deg}")
+            
+            tr *= target_function_boxcar(facet_incident[2, :, :], 0, phi0=180)
 
         del facet_incident
 

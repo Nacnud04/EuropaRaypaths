@@ -38,6 +38,12 @@ def snell_intersection(xA, zA, xB, zB, v1, v2):
         raise RuntimeError("Root finding did not converge.")
 
 def est_slant_range(sx, sz, tx, tz, c1, c2):
+
+    # cast lists into numpy arrays
+    for s in (sx, sz):
+        if type(s) == list:
+            s = np.array(s)
+    
     sltrng_ests = []
     for x in sx:
         # estimate surface intersections
