@@ -202,3 +202,26 @@ dimensions of {self.X.shape}")
             plt.show()
         else:
             plt.close()
+
+    def reduce_by_aperture(self, aperture, alt):
+
+        """
+        CRITICAL: THIS ASSUMES THAT THE FACETED SURFACE IS AT NADIR WHICH IS INVALID FOR THE REFRACTED SURFACE
+        """
+
+        radius   = np.sin(np.radians(aperture)) * alt
+        n_facets = radius // self.fs 
+
+        half_x   = self.dims[0] // 2
+        half_y   = self.dims[1] // 2
+
+        self.X = self.X[int(half_x - n_facets):int(half_x + n_facets + 1),
+                        int(half_y - n_facets):int(half_y + n_facets + 1)]
+        self.Y = self.Y[int(half_x - n_facets):int(half_x + n_facets + 1),
+                        int(half_y - n_facets):int(half_y + n_facets + 1)]
+        
+        self.zs = self.zs[int(half_x - n_facets):int(half_x + n_facets + 1),
+                        int(half_y - n_facets):int(half_y + n_facets + 1)]
+
+        self.normals = self.normals[int(half_x - n_facets):int(half_x + n_facets + 1),
+                        int(half_y - n_facets):int(half_y + n_facets + 1)]

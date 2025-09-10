@@ -3,7 +3,7 @@ import numpy as np
 import numba as nb # type: ignore
 import warnings, functools
 
-from math import ceil
+from math import ceil, floor
 
 nGPU = int(os.getenv("nGPU"))
 
@@ -237,3 +237,14 @@ def repeating_slant_gaussian(xs, H, sig1, sig2, gap, xoffset=0):
     gaussians = [slant_gaussian(xs, H, sig1, sig2, (i * 2 * gap) + gap + xoffset) for i in range(count)]
 
     return np.sum(gaussians, axis=0)
+
+
+def split_attenuation_field_x(xmin, xmax, ymin, ymax, zmin, zmax, fs, split, sigA=1, sigB=1e-6):
+
+    xs = np.arange(floor(xmin//fs)*fs, xmax+fs, fs)
+    ys = np.arange(floor(xmin//fs)*fs, ymax+fs, fs)
+    zs = np.arange(floor(xmin//fs)*fs, zmax+fs, fs)
+
+    YY, XX, ZZ = np.meshgrid(xs, ys, zs)
+
+    return sigA * (XX < split) + sigB * (XX > split)

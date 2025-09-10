@@ -140,7 +140,7 @@ def run_sim_ms(surf, sources, target, reflect=True, progress=True, doppler=False
         return rdrgrm, model.ts
     
 
-def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True, doppler=False, 
+def run_sim_terrain(terrain, dims, sources, target, atten=None, reflect=True, progress=True, doppler=False, 
                      phase=False, polarization=None, rough=True, pt_response=None,
                      sltrng=False, plot=True, xmin=-10, xmax=20, refl_center=False,
                      gpu=True, savefig=None, par={}, show=False, refl_dist=False, nsmpl=1601):
@@ -173,7 +173,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
 
     if refl_dist:
         refl_dists = []
-
+    
     for j, s in enumerate(sources):
 
         surf_refl = terrain.get_surf(s.coord[:2], dims)
@@ -187,7 +187,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
 
             print(f"Simulating: {j+1}/{len(sources)} ({round(100*((j+1)/len(sources)), 1)}%) | ETA: {eta_str}", end="     \r")
 
-        model = Model(surf_refr, s, reflect=reflect, vec=True, polarization=polarization, 
+        model = Model(surf_refr, s, atten=atten, reflect=reflect, vec=True, polarization=polarization, 
                       rough=rough, pt_response=pt_response, par=par, refl_surface=surf_refl)
         model.set_target(target)
 
@@ -264,7 +264,7 @@ def run_sim_terrain(terrain, dims, sources, target, reflect=True, progress=True,
 
 class Model():
 
-    def __init__(self, surface, source, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, 
+    def __init__(self, surface, source, atten=None, power=11.75, reflect=True, eps2=3.15, sig2=1e-6, 
                        vec=False, polarization=None, rough=True, pt_response=None, par={},
                        refl_surface=None):
         
@@ -304,7 +304,10 @@ class Model():
         
         # material conductivity
         self.sig1 = 0
-        self.sig2 = sig2
+        if type(atten) != type(None):
+            self.sig2 = atten
+        else:
+            self.sig2 = sig2
         
         # --- VELOCITIES ---
         
@@ -342,8 +345,8 @@ class Model():
         
         # calc for below surface
         eps_pp = self.sig2 / (2 * np.pi * source.f0 * self.eps0)
-        alpha2 = sqrt(1 + (eps_pp/self.eps2)**2) - 1
-        alpha2 = sqrt(0.5 * self.eps2 * alpha2)
+        alpha2 = np.sqrt(1 + (eps_pp/self.eps2)**2) - 1
+        alpha2 = np.sqrt(0.5 * self.eps2 * alpha2)
         self.alpha2 = (alpha2 * 2 * np.pi) / source.lam
 
         # --- FACTOR APPLIED TO WAVENUMBER ---
@@ -405,6 +408,8 @@ class Model():
         # --- POINT TARGET RESPONSE ---
         
         self.pt_response = pt_response
+
+        self.par = par
         
         
     # set target location
@@ -665,6 +670,10 @@ class Model():
             tr = np.ones_like(self.surface.zs) * self.tau * self.tau_rev
             re = 1 - tr
 
+        # implement aperture
+        if 'aperture' in self.par.keys():
+            tr *= np.sqrt(rp_s2f_C[0, :, :]**2 + rp_s2f_C[1, :, :]) < np.sin(np.radians(self.par['aperture'])) * self.source.z
+
         # manipulate coefficients if surface roughness enabled
         if self.rough == True:
             psi_1 = self.ks * np.cos(theta_1)
@@ -719,9 +728,10 @@ class Model():
                                            self.surface.fs, rp_s2f_S[0, :, :]))
         # implement radar equation
         tr *= radar_eq(self.power, self.gain, 1, self.lam, rp_s2f_S[0, :, :] + rp_f2t_S[0, :, :]) * (self.surface.fs ** 2) * 2
-        # phase change
+        # attenuation losses
         tr *= np.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
         tr *= np.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
+        
         # vars to save for time series or computation
         self.tr = tr
         self.comp_val = np.copy(tr)
@@ -850,6 +860,14 @@ class Model():
         if self.polarization is None:
             tr = cp.ones_like(cp.asarray(self.surface.zs)) * self.tau * self.tau_rev
 
+        # this is the case that applies if there is no real computation of reflection coefficient later
+        # if we were to implement this later there would be issues
+        re = 1 - tr
+
+        # implement aperture
+        if 'aperture' in self.par.keys():
+            tr *= cp.sqrt(rp_s2f_C[0, :, :]**2 + rp_s2f_C[1, :, :]) < np.sin(np.radians(self.par['aperture'])) * self.source.z
+
         # surface roughness
         if self.rough:
             psi_2 = self.ks * cp.cos(theta_2)
@@ -869,7 +887,6 @@ class Model():
             npmax = np.unravel_index(tr.argmax(), tr.shape)
             phi_deg = facet_incident[2, :, :][npmax] * (180 / np.pi)
             phi_deg = (phi_deg + 180) % 360 - 180
-            #print(f"phi4trmax: {phi_deg}")
             
             tr *= target_function_boxcar(facet_incident[2, :, :], 0, phi0=180)
 
@@ -898,7 +915,27 @@ class Model():
 
         # attenuation
         tr *= cp.exp(-1 * self.alpha1 * 2 * rp_s2f_S[0, :, :])
-        tr *= cp.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
+
+        if type(self.alpha2) == np.ndarray: 
+            # discretization of attenuation space [m]
+            atten_fs = 50 
+            # find the maximum amount of samples required based on the longest raypath
+            # this is necessary to keep things properly paralllized
+            counts = int(np.max(rp_f2t_S[0, :, :]) // atten_fs)
+            # get the raypaths as spatial index series in x, y, and z
+            xmin, ymin, zmin = floor(-11e3//atten_fs)*atten_fs, floor(-3.9e3//atten_fs)*atten_fs, floor(-1e3//atten_fs)*atten_fs
+            rp_f2t_ixs = ((cp.asarray(self.surface.X) + rp_f2t_C[0, :, :]*cp.linspace(0, 1, counts)[:, None, None] - xmin) // atten_fs).astype(int)
+            rp_f2t_iys = ((cp.asarray(self.surface.Y) + rp_f2t_C[1, :, :]*cp.linspace(0, 1, counts)[:, None, None] - ymin) // atten_fs).astype(int)
+            rp_f2t_izs = ((cp.asarray(self.surface.zs) + rp_f2t_C[2, :, :]*cp.linspace(0, 1, counts)[:, None, None] - zmin) // atten_fs).astype(int)
+            # get discretization of each raypath
+            rp_f2t_dR = rp_f2t_S[0, :, :] / counts
+            # do attenuation
+            fac = cp.exp(-1 * cp.sum(cp.asarray(self.alpha2)[rp_f2t_ixs, rp_f2t_iys, rp_f2t_izs] * rp_f2t_dR, axis=0))
+            tr *= fac
+            del rp_f2t_ixs, rp_f2t_iys, rp_f2t_izs, rp_f2t_dR, fac
+            
+        else:
+            tr *= cp.exp(-1 * self.alpha2 * 2 * rp_f2t_S[0, :, :])
 
         # save vars
         self.tr = tr
@@ -943,10 +980,6 @@ class Model():
                 elif self.polarization == "v":
                     rho_v = (self.nu2 * cp.cos(theta_2) - self.nu1 * cp.cos(theta_1)) / (self.nu2 * cp.cos(theta_2) + self.nu1 * cp.cos(theta_1))
                     re = cp.abs(rho_v)**2
-
-            else:
-
-                re = 1 - tr
 
             if self.rough:
                 psi_1 = self.ks * cp.cos(theta_1)
