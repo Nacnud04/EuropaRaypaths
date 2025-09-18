@@ -136,7 +136,7 @@ class Terrain():
             plt.close()
 
 
-    def show_profile(self, axis, val, savefig=None, show=False):
+    def show_profile(self, axis, val, savefig=None, show=False, shape=(4, 3)):
 
         if axis == 'x':
 
@@ -150,13 +150,15 @@ class Terrain():
             prof = self.zs[:, i]
             scale = self.ys
 
-        plt.plot(scale, prof, color="black", linewidth=1)
-        plt.xlabel("Profile distance [m]")
-        plt.ylabel("Height [m]")
+        fig, ax = plt.subplots(1, 1, figsize=shape)
+
+        ax.plot(scale/1e3, prof, color="black", linewidth=1)
+        ax.set_xlabel("Profile distance [km]")
+        ax.set_ylabel("Height [m]")
         plt.grid()
 
         if savefig:
-            plt.savefig(savefig)
+            plt.savefig(savefig, bbox_inches="tight")
 
         if show:
             plt.show()
