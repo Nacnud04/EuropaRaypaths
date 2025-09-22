@@ -37,17 +37,17 @@ void reportNewAlloc(int bytes, const char* varName) {
 
 void showMemAlloc()
 {
-    size_t free_byte;
+    size_t fLEe_byte;
     size_t total_byte;
-    cudaError_t cuda_status = cudaMemGetInfo(&free_byte, &total_byte);
+    cudaError_t cuda_status = cudaMemGetInfo(&fLEe_byte, &total_byte);
     if (cudaSuccess != cuda_status) {
         std::cout << "Error: cudaMemGetInfo fails, " << cudaGetErrorString(cuda_status) << std::endl;
         exit(1);
     }
-    float free_db = (float)free_byte;
+    float fLEe_db = (float)fLEe_byte;
     float total_db = (float)total_byte;
-    float used_db = total_db - free_db;
-    std::cout << "GPU memory usage: used = " << used_db / 1024.0 / 1024.0 << " MB, free = " << free_db / 1024.0 / 1024.0 << " MB, total = " << total_db / 1024.0 / 1024.0 << " MB" << std::endl;
+    float used_db = total_db - fLEe_db;
+    std::cout << "GPU memory usage: used = " << used_db / 1024.0 / 1024.0 << " MB, fLEe = " << fLEe_db / 1024.0 / 1024.0 << " MB, total = " << total_db / 1024.0 / 1024.0 << " MB" << std::endl;
 }
 
 int main()
@@ -59,21 +59,67 @@ int main()
     sx = 0.0f; sy = 0.0f; sz = 10000.0f;
 
     float c     = 299792458.0f; // speed of light [m/s]
+    float pi    = 3.14159;      // pi
+
     float P     = 100;          // Power [w]
-    float f0    = 9e6;          // center frequency [Hz]
-    float B     = 1e6;          // bandwidth [Hz]
+    float f0    = 9e6;          // center fLEquency [Hz]
+    //float B     = 1e6;          // bandwidth [Hz]
     float lam   = c / f0;       // wavelength [m]
+    float k     = (2*pi)/lam;    // wave #
     float sigma = 1.0; 
-    float Grefl = 80;           // reflector gain [dB]
+    float Grefr = 75;           // subsurface gain [dB]
+    float Grefl = 75;           // surface gain [dB]
 
     float rng_res = 300; // range resolution [m]
 
-    // linear reflector gain
-    float Grefl_lin = pow(10, Grefl / 10.0f);
+    int pol = 1; // vertical polarization
 
-    // subsurface params
+    // linear gain
+    float Grefl_lin = pow(10, Grefl / 10.0f);
+    float Grefr_lin = pow(10, Grefr / 10.0f);
+
+    // --- TARGET ---
+
+    float tx, ty, tz;
+    tx = 0.0f; ty = 0.0f; tz = -1000.0f;
+
+    // --- SURFACE PARAMS --- 
+    
+    float rms_h = 0.4;    // surface RMS height [m]
+    float ks    = rms_h * k; // em roughness
+
+
+    // --- SUBSURFACE PARAMS ---
+    
+    // permittivities
+    float eps_0 = 8.85e-12;
     float eps_1 = 1;
     float eps_2 = 3.15;
+
+    // velocities
+    float c_1 = c / sqrt(eps_1);
+    float c_2 = c / sqrt(eps_2);
+
+    // impedances
+    float nu0 = 376.7;
+    float nu1 = nu0 / sqrt(eps_1);
+    float nu2 = nu0 / sqrt(eps_2);
+
+    // conductivies
+    float sig1 = 0.0f;
+    float sig2 = 1e-6f;
+
+    // attenuation coefficients
+    float eps_pp_1 = sig1 / (2 * pi * f0 * eps_0);
+    float alpha1   = sqrt(1 + (eps_pp_1/eps_1)*(eps_pp_1/eps_1)) - 1;
+          alpha1   = sqrt(0.5 * eps_1 * alpha1);
+          alpha1   = (alpha1 * 2 * pi) / lam;
+
+    float eps_pp_2 = sig2 / (2 * pi * f0 * eps_0);
+    float alpha2   = sqrt(1 + (eps_pp_2/eps_2)*(eps_pp_2/eps_2)) - 1;
+          alpha2   = sqrt(0.5 * eps_2 * alpha2);
+          alpha2   = (alpha2 * 2 * pi) / lam;
+
 
     // --- FACET ARRAY ---
 
@@ -117,7 +163,6 @@ int main()
                          nxfacets, nyfacets);
 
     reportTime("Generate facets and normals");
-
 
     // --- FACET FROM HOST -> DEVICE ---
 
@@ -185,29 +230,54 @@ int main()
     checkCUDAError("compIncidentRays kernel");
 
 
+    // --- COMP REFRACTED RAYS ---
+    
+    // for refracted ray computation inclincation is computed via snells law
+    // and the azumuth is the same as incidence
+    float* d_Rth; float* d_Rtd;
+    cudaMalloc((void**)&d_Rth, nfacets * sizeof(float));
+    cudaMemset(d_Rth, 0, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_Rtd, nfacets * sizeof(float));
+    cudaMemset(d_Rtd, 0, nfacets * sizeof(float));
+    compRefractedRays<<<numBlocks, blockSize>>>(d_Ith, d_Iph, 
+                                                d_Rth, d_Rtd,
+                                                d_fx, d_fy, d_fz,
+                                                tx, ty, tz,
+                                                eps_1, eps_2, nfacets);
+    checkCUDAError("compRefractedRays kernel");
+
+    // array for refraction coefficients
+    float* d_fRfrC;
+    cudaMalloc((void**)&d_fRfrC, nfacets * sizeof(float));
+    cudaMemset(d_fRfrC, 0, nfacets * sizeof(float));
+
+    // array for refraction travel distance to target
+    float* d_fRfrSR;
+    cudaMalloc((void**)&d_fRfrSR, nfacets * sizeof(float));
+    cudaMemset(d_fRfrSR, 0, nfacets * sizeof(float));
+
+
     // --- COMP REFLECTED ENERGY ---
 
-    float nu0 = 376.7;
-    float nu1 = nu0 / sqrt(eps_1);
-    float nu2 = nu0 / sqrt(eps_2);
-
     // reflected energy for each facet (default 0)
-    cuFloatComplex* d_fRe;
-    reportNewAlloc(nfacets * sizeof(cuFloatComplex), "reflected energy");
-    cudaMalloc((void**)&d_fRe, nfacets * sizeof(cuFloatComplex));
-    cudaMemset(d_fRe, 0, nfacets * sizeof(cuFloatComplex));
+    cuFloatComplex* d_fReflE;
+    reportNewAlloc(2 * nfacets * sizeof(cuFloatComplex), "energy arrays"); // this also accounts for refracted later
+    cudaMalloc((void**)&d_fReflE, nfacets * sizeof(cuFloatComplex));
+    cudaMemset(d_fReflE, 0, nfacets * sizeof(cuFloatComplex));
 
-    compRefractedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
-                                                  d_fRe,
+    compReflectedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
+                                                  d_fReflE, d_Rth, d_fRfrC,
                                                   P, Grefl_lin, sigma, fs, lam,
-                                                  nu1, nu2, nfacets);
-    checkCUDAError("compRefractedEnergy kernel");
+                                                  nu1, nu2, alpha1, ks, 
+                                                  pol, nfacets);
+    checkCUDAError("compReflectedEnergy kernel");
 
     
     // --- CONSTRUCT REFLECTED SIGNAL ---
+
     // range window params
     float rst =  8000.0f;  // start range [m]
-    float ren = 12000.0f;  // end range [m]
+    float ren = 13000.0f;  // end range [m]
     int   nr  =  1000;      // number of range bins
     float dr  = (ren - rst) / (nr - 1); // range step [m]
 
@@ -216,11 +286,51 @@ int main()
     cudaMalloc((void**)&d_refl_sig, nr * sizeof(cuFloatComplex));
     cudaMemset(d_refl_sig, 0, nr * sizeof(cuFloatComplex));
 
-    constructReflectedSignal<<<numBlocks, blockSize>>>(d_Itd, d_fRe, d_refl_sig,
-                                                       rst, dr, nr,
-                                                       rng_res, lam, c, 1, nfacets);
-    checkCUDAError("constructReflectedSignal kernel");
-    reportTime("Constructing reflection");
+    reflRadarSignal<<<numBlocks, blockSize>>>(d_Itd, d_fReflE, d_refl_sig,
+                                                   rst, dr, nr,
+                                                   rng_res, lam, nfacets);
+    checkCUDAError("constructRadarSignal kernel1");
+
+
+    // --- CONSTRUCT REFRACTED WEIGHTS INWARDS ---
+
+    // first get weights
+    cuFloatComplex* d_fReflEI;
+    cudaMalloc((void**)&d_fReflEI, nfacets * sizeof(cuFloatComplex));
+    cudaMemset(d_fReflEI, 0, nfacets * sizeof(cuFloatComplex));
+    compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
+                                             d_Rtd, d_Rth, d_fRfrC,
+                                             d_fReflEI, d_fRfrSR,
+                                             ks, nfacets, alpha2, c_1, c_2,
+                                             fs, P, Grefr_lin, lam);
+    checkCUDAError("compRefrEnergyIn kernel");
+
+
+    // --- COMPUTE UPWARD TRANSMITTED RAYS ---
+
+    cuFloatComplex* d_fReflEO;
+    cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(cuFloatComplex));
+    cudaMemset(d_fReflEO, 0, nfacets * sizeof(cuFloatComplex));
+    compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
+                                                d_Rtd, d_Rth, 
+                                                d_fReflEO, d_fRfrC, 
+                                                ks, nfacets, alpha1, alpha2, c_1, c_2,
+                                                fs, P, lam);
+    checkCUDAError("compRefrEnergyOut kernel");
+
+
+    // now compute signal
+    cuFloatComplex* d_refr_sig;
+    cudaMalloc((void**)&d_refr_sig, nr * sizeof(cuFloatComplex));
+    // zero the newly allocated refracted signal buffer (was incorrectly zeroing d_refl_sig)
+    cudaMemset(d_refr_sig, 0, nr * sizeof(cuFloatComplex));
+    refrRadarSignal<<<numBlocks, blockSize>>>(d_fRfrSR, d_fReflEI, d_fReflEO,
+                                              d_refr_sig,
+                                              rst, dr, nr,
+                                              rng_res, lam, nfacets);
+    checkCUDAError("refrRadarSignal kernel");
+
+    reportTime("Constructing signals");
 
     // Wait for the GPU to finish before accessing on host
     cudaDeviceSynchronize();
@@ -228,11 +338,31 @@ int main()
     // copy Itd to host and export as file
     cuFloatComplex* h_sig = (cuFloatComplex*)malloc(nr * sizeof(cuFloatComplex));
     cudaMemcpy(h_sig, d_refl_sig, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToHost);
-    FILE* fItd = fopen("Ith_cuda.txt", "w");
+    FILE* fItd = fopen("ReflSignal.txt", "w");
     //print example values
     for (int i = 0; i < nr; i++) {
         fprintf(fItd, "%f\n", cuCabsf(h_sig[i]));
     }
+    fclose(fItd);
+
+    h_sig = (cuFloatComplex*)malloc(nr * sizeof(cuFloatComplex));
+    cudaMemcpy(h_sig, d_refr_sig, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToHost);
+    fItd = fopen("RefrSignal.txt", "w");
+    //print example values
+    for (int i = 0; i < nr; i++) {
+        fprintf(fItd, "%f\n", cuCabsf(h_sig[i]));
+    }
+    fclose(fItd);
+
+    // copy Rtd to host and export as file
+    float* h_Rth = (float*)malloc(nfacets * sizeof(float));
+    cudaMemcpy(h_Rth, d_Itd, nfacets * sizeof(float), cudaMemcpyDeviceToHost);
+    FILE* fRtd = fopen("Rtd_cuda.txt", "w");
+    //print example values
+    for (int i = 0; i < nxfacets; i++) {
+        fprintf(fRtd, "%f\n", h_Rth[i + i * 400]);
+    }
+    fclose(fRtd);
 
     return 0;
 }
