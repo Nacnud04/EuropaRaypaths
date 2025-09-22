@@ -41,6 +41,7 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
 
 __device__ cuFloatComplex facetReradiation(float dist, float th, float ph,  
                                   float lam, float fs){
+    // NOTE: dist is the observer distance from the facet aperture
 
     // start with k
     float k = 2 * 3.14159265f / lam;
@@ -72,15 +73,26 @@ __device__ float radarEq(float P, float G, float sigma, float lam, float dist, f
     // Pr = (Pt * G^2 * lam^2 * sigma) / ((4*pi)^3 * R^4)
     float num = P * G * G * lam * lam * sigma;
     float denom = pow(4 * 3.14159, 3) * dist * dist * dist * dist; // (4*pi)^3
-    return num / denom;
+    return (num / denom) * fs * fs;
 
 }
 
 
-__global__ void compRefractedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
-                                    cuFloatComplex* d_fRe,
+__device__ float radarEqOneWay(float P, float G, float lam, float dist, float fs){
+    
+    // Pr = (Pt * G^2 * lam^2) / ((4*pi)^2 * R^2)
+    float num = P * G * G * lam * lam;
+    float denom = pow(4 * 3.14159, 2) * dist * dist; // (4*pi)^2
+    return (num / denom) * fs * fs;
+
+}
+
+
+__global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
+                                    cuFloatComplex* d_fRe, float* d_Rth, float* d_fRfrC,
                                     float P, float G, float sigma, float fs, float lam, 
-                                    float nu1, float nu2, int nfacets){
+                                    float nu1, float nu2, float alpha1, 
+                                    float ks, int polarization, int nfacets){
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
@@ -91,31 +103,145 @@ __global__ void compRefractedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         // losses from radar equation
         d_fRe[idx] = cuCmulf(d_fRe[idx], make_cuFloatComplex(radarEq(P, G, sigma, lam, d_Itd[idx], fs), 0.0f));
 
-        // just say theta2 = -0.35
-        float theta2 = -0.35;
-
         // reflection coefficient
-        float rho_h = (nu2 * slowCos(d_Ith[idx]) - nu1 * slowCos(d_Ith[idx])) /
-                      (nu2 * slowCos(d_Ith[idx]) + nu1 * slowCos(d_Ith[idx]));
-        d_fRe[idx] = cuCmulf(d_fRe[idx], make_cuFloatComplex(1 - rho_h * rho_h, 0.0f));
+        // horizontal pol.
+        float rho_h;
+        if (polarization == 0){ 
+            rho_h = (nu2 * slowCos(d_Ith[idx]) - nu1 * slowCos(d_Rth[idx])) /
+                    (nu2 * slowCos(d_Ith[idx]) + nu1 * slowCos(d_Rth[idx]));
+        } 
+        // vertical pol.
+        else if (polarization == 1) {
+            rho_h = (nu2 * slowCos(d_Rth[idx]) - nu1 * slowCos(d_Ith[idx])) /
+                    (nu2 * slowCos(d_Rth[idx]) + nu1 * slowCos(d_Ith[idx]));
+        }
+        d_fRfrC[idx] = rho_h * rho_h;
+        d_fRe[idx] = cuCmulf(d_fRe[idx], 
+                             make_cuFloatComplex(1 - d_fRfrC[idx], 0.0f));
+
+        // signal attenuation
+        d_fRe[idx] = cuCmulf(d_fRe[idx], 
+                             make_cuFloatComplex(expf(-2.0f * alpha1 * d_Itd[idx]), 0.0f));
+
+        // surface roughness losses
+        float rough_loss = expf(-4*((ks*slowCos(d_Ith[idx]))*(ks*slowCos(d_Ith[idx]))));
+        d_fRe[idx] = cuCmulf(d_fRe[idx],
+                             make_cuFloatComplex(rough_loss, 0.0f));
 
     }
 
 }
 
 
-__global__ void snellsLaw(float* Ith, float eps_1, float eps_2, int nfacets) {
+__device__ float snellsLaw(float th, float eps_1, float eps_2) {
+
+    float sin_th = slowSin(th);
+    float sin_Rth = sqrtf(eps_1/eps_2) * sin_th;
+    if (sin_Rth > 1.0f) {
+        // total internal reflection set to something more than pi/2 so it is easy to identify
+        return 1e4;
+    } else {
+        return slowArcSin(sin_Rth);
+    }
+
+}
+
+
+__global__ void compRefractedRays(float* d_Ith, float* d_Iph,
+                                  float* d_Rth, float* d_Rtd,
+                                  float* d_fx, float* d_fy, float* d_fz,
+                                  float tx, float ty, float tz,
+                                  float eps_1, float eps_2, int nfacets) {
+
+    pointDistanceBulk(tx, ty, tz,
+                      d_fx, d_fy, d_fz,
+                      d_Rtd, nfacets);
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
-        float sin_Ith = slowSin(Ith[idx]);
-        float sin_Rth = sqrtf(eps_1/eps_2) * sin_Ith;
-        if (sin_Rth > 1.0f) {
-            // total internal reflection set to something more than pi/2 so it is easy to identify
-            Ith[idx] = 1e4;
-        } else {
-            Ith[idx] = slowArcSin(sin_Rth);
-        }
+        // refracted inclination
+        d_Rth[idx] = snellsLaw(d_Ith[idx], eps_1, eps_2);
+
+    }    
+
+}
+
+
+__global__ void compRefrEnergyIn(
+                    float* d_Itd, float* d_Iph,
+                    float* d_Rtd, float* d_Rth, float* d_fRfrC,
+                    cuFloatComplex* d_fRefrEI, float* d_fRfrSR,
+                    float ks, int nfacets, float alpha2, float c1, float c2,
+                    float fs, float P, float G, float lam) {
+
+    float c = 299792458.0f; // speed of light in m/s
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id < nfacets) {
+
+        // start with facet reradiation
+        d_fRefrEI[id] = facetReradiation(d_Rtd[id], d_Rth[id], d_Iph[id], lam, fs);
+
+        // losses from radar equation
+        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id], make_cuFloatComplex(radarEqOneWay(P, G, lam, d_Itd[id]+d_Rtd[id], fs), 0.0f));
+
+        // refraction coefficient
+        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id], 
+                               make_cuFloatComplex(d_fRfrC[id], 0.0f));
+
+        // signal attenuation
+        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id], 
+                               make_cuFloatComplex(expf(-2 * alpha2 * d_Rtd[id]), 0.0f));
+
+        // surface roughness losses
+        float rough_loss = expf(-4*((ks*slowCos(d_Rth[id]))*(ks*slowCos(d_Rth[id]))));
+        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id],
+                                 make_cuFloatComplex(rough_loss, 0.0f));
+
+        // total travel slant range
+        d_fRfrSR[id] = d_Itd[id] * (c / c1) +  d_Rtd[id] * (c / c2);
+
     }
+
+}
+
+
+__global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
+                                  float* d_Rtd, float* d_Rth,
+                                  cuFloatComplex* d_fRefrEO, float* d_fRfrC, 
+                                  float ks, int nfacets, float alpha1, float alpha2, float c1, float c2,
+                                  float fs, float G, float lam){
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < nfacets) {
+
+        // first get facet reradiation
+        d_fRefrEO[idx] = facetReradiation(d_Itd[idx], d_Rth[idx], -1*d_Iph[idx], lam, fs);
+
+        // losses from radar equation
+        // we dont need power here as this acts to scale the power from the inbound path
+        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
+                         make_cuFloatComplex(radarEqOneWay(1, G, lam, d_Rtd[idx]+d_Itd[idx], fs), 0.0f));
+
+        // for transmission coefficient use refraction cofficient from before
+        // THIS MIGHT NOT BE RIGHT
+        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
+                             make_cuFloatComplex(d_fRfrC[idx], 0.0f));
+
+        // signal attenuation
+        // first above surface
+        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
+                             make_cuFloatComplex(expf(-2.0f * alpha1 * d_Itd[idx]), 0.0f));
+        // then in subsurface
+        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
+                             make_cuFloatComplex(expf(-2.0f * alpha2 * d_Rtd[idx]), 0.0f));
+
+        // surface roughness losses
+        float rough_loss = expf(-4*((ks*slowCos(d_Rth[idx]))*(ks*slowCos(d_Rth[idx]))));
+        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx],
+                             make_cuFloatComplex(rough_loss, 0.0f));
+
+    }
+
 }
