@@ -1,1 +1,1 @@
-nvcc sim.cu -o sim
+nvcc sim.cu -O3 -lineinfo -o sim
