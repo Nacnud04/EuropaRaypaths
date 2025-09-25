@@ -10,6 +10,13 @@ __device__ void slowSinBulk(float* input, float* output, int n) {
 __device__ float slowSin(float input) {
     return sinf(input);
 }
+__device__ float sinGPU(float x) {
+    return slowSin(x);
+    // Approximate sin(x) using a Taylor series expansion
+    // sin(x) ≈ x - x^3/6 + x^5/120 - x^7/5040 for small x
+    //float x2 = x * x;
+    //return x * (1 - x2 / 6 + x2 * x2 / 120 - x2 * x2 * x2 / 5040);
+}
 
 // sinc function
 __device__ float sinc(float x) {
@@ -37,6 +44,13 @@ __device__ void slowCosBulk(float* input, float* output, int n) {
 }
 __device__ float slowCos(float input) {
     return cosf(input);
+}
+__device__ float cosGPU(float x) {
+    return slowCos(x);
+    // Approximate cos(x) using a Taylor series expansion
+    // cos(x) ≈ 1 - x^2/2 + x^4/24 - x^6/720 for small x
+    //float x2 = x * x;
+    //return 1 - x2 / 2 + x2 * x2 / 24 - x2 * x2 * x2 / 720;
 }
 
 // slow but accurate arccos function
