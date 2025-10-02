@@ -76,7 +76,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 }
 
 
-__device__ cuFloatComplex facetReradiation(float dist, float th, float ph,  
+__device__ float facetReradiation(float dist, float th, float ph,  
                                   float lam, float fs){
     // NOTE: dist is the observer distance from the facet aperture
 
@@ -95,12 +95,12 @@ __device__ cuFloatComplex facetReradiation(float dist, float th, float ph,
 
     // now get sinc components:
     // np.sinc(((r) / lam) * np.sin(ph) * np.cos(th))
-    float sinc1 = sinc((fs / lam) * sinGPU(ph) * cosGPU(th));
+    float sinc1 = sinc((fs / lam) * sinGPU(th) * cosGPU(ph));
     // np.sinc(((r) / lam) * np.sin(ph) * np.sin(th))
-    float sinc2 = sinc((fs / lam) * sinGPU(ph) * sinGPU(th));
+    float sinc2 = sinc((fs / lam) * sinGPU(th) * sinGPU(ph));
 
     // combine all together
-    return cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f));
+    return cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f)));
 
 }
 
@@ -116,7 +116,7 @@ __device__ float radarEq(float P, float G, float sigma, float lam, float dist, f
 
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
-                                    cuFloatComplex* d_fRe, float* d_Rth, float* d_fRfrC,
+                                    float* d_fRe, float* d_Rth, float* d_fRfrC,
                                     float P, float G, float sigma, float fs, float lam, 
                                     float nu1, float nu2, float alpha1, 
                                     float ks, int polarization, int nfacets){
@@ -130,7 +130,7 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], lam, fs);
 
         // losses from radar equation
-        d_fRe[idx] = cuCmulf(d_fRe[idx], make_cuFloatComplex(radarEq(P, G, sigma, lam, d_Itd[idx], fs), 0.0f));
+        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, sigma, lam, d_Itd[idx], fs);
 
         // reflection coefficient
         // horizontal pol.
@@ -146,17 +146,14 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                     (nu2 * cosGPU(d_Rth[idx]) + nu1 * cosGPU(d_Ith[idx]));
             d_fRfrC[idx] = 1 - (rho * rho);
         }
-        d_fRe[idx] = cuCmulf(d_fRe[idx], 
-                             make_cuFloatComplex(rho * rho, 0.0f));
+        d_fRe[idx] = d_fRe[idx] * rho * rho;
 
         // signal attenuation
-        d_fRe[idx] = cuCmulf(d_fRe[idx], 
-                             make_cuFloatComplex(expf(-2.0f * alpha1 * d_Itd[idx]), 0.0f));
+        d_fRe[idx] = d_fRe[idx] * expf(-2.0f * alpha1 * d_Itd[idx]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Ith[idx]))*(ks*cosGPU(d_Ith[idx]))));
-        d_fRe[idx] = cuCmulf(d_fRe[idx],
-                             make_cuFloatComplex(rough_loss, 0.0f));
+        d_fRe[idx] = d_fRe[idx] * rough_loss;
 
     }
 
@@ -201,7 +198,7 @@ __global__ void compRefractedRays(float* d_Ith, float* d_Iph,
 __global__ void compRefrEnergyIn(
                     float* d_Rtd, float* d_Rth, float* d_Itd, float* d_Iph,
                     float* d_Ttd, float* d_Tth, float* d_Tph, float* d_fRfrC,
-                    cuFloatComplex* d_fRefrEI, float* d_fRfrSR,
+                    float* d_fRefrEI, float* d_fRfrSR,
                     float ks, int nfacets, float alpha2, float c1, float c2,
                     float fs, float P, float G, float lam) {
 
@@ -219,20 +216,17 @@ __global__ void compRefrEnergyIn(
         d_fRefrEI[id] = facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
 
         // refraction coefficient
-        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id], 
-                               make_cuFloatComplex(d_fRfrC[id], 0.0f));
+        d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
 
         // signal attenuation
-        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id], 
-                               make_cuFloatComplex(expf(-2 * alpha2 * d_Rtd[id]), 0.0f));
+        d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Rtd[id]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Rth[id]))*(ks*cosGPU(d_Rth[id]))));
-        d_fRefrEI[id] = cuCmulf(d_fRefrEI[id],
-                                 make_cuFloatComplex(rough_loss, 0.0f));
+        d_fRefrEI[id] = d_fRefrEI[id] * rough_loss;
 
         // total travel slant range
-        d_fRfrSR[id] = d_Itd[id] * (c / c1) +  d_Rtd[id] * (c / c2);
+        d_fRfrSR[id] = d_Itd[id] + d_Rtd[id];
 
     }
 
@@ -241,7 +235,7 @@ __global__ void compRefrEnergyIn(
 
 __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
                                   float* d_Ttd, float* d_Tth, float* d_Tph,
-                                  cuFloatComplex* d_fRefrEO, float* d_fRfrC, 
+                                  float* d_fRefrEO, float* d_fRfrC, 
                                   float ks, int nfacets, float alpha1, float alpha2, float c1, float c2,
                                   float fs, float G, float lam, float eps_1, float eps_2){
 
@@ -255,21 +249,17 @@ __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
         d_fRefrEO[idx] = facetReradiation(d_Itd[idx], RrTh, d_Tph[idx]-d_Iph[idx], lam, fs);
 
         // for transmission coefficient use refraction cofficient from before
-        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
-                             make_cuFloatComplex(d_fRfrC[idx], 0.0f));
+        d_fRefrEO[idx] = d_fRefrEO[idx] * d_fRfrC[idx];
 
         // signal attenuation
         // first above surface
-        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
-                             make_cuFloatComplex(expf(-2.0f * alpha1 * d_Itd[idx]), 0.0f));
+        d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha1 * d_Itd[idx]);
         // then in subsurface
-        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx], 
-                             make_cuFloatComplex(expf(-2.0f * alpha2 * d_Ttd[idx]), 0.0f));
+        d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha2 * d_Ttd[idx]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Tth[idx]))*(ks*cosGPU(d_Tth[idx]))));
-        d_fRefrEO[idx] = cuCmulf(d_fRefrEO[idx],
-                             make_cuFloatComplex(rough_loss, 0.0f));
+        d_fRefrEO[idx] = d_fRefrEO[idx] * rough_loss;
 
     }
 

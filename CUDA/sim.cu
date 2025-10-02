@@ -169,9 +169,9 @@ int main()
     cudaMemsetAsync(d_fRfrSR, 0, nfacets * sizeof(float));
 
     // reflected energy for each facet (default 0)
-    cuFloatComplex* d_fReflE;
-    cudaMalloc((void**)&d_fReflE, nfacets * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_fReflE, 0, nfacets * sizeof(cuFloatComplex));
+    float* d_fReflE;
+    cudaMalloc((void**)&d_fReflE, nfacets * sizeof(float));
+    cudaMemsetAsync(d_fReflE, 0, nfacets * sizeof(float));
 
     // refl signal array
     cuFloatComplex* d_refl_sig;
@@ -185,14 +185,14 @@ int main()
     cudaMalloc((void**)&d_Tth, nfacets * sizeof(float));
 
     // inwards refracted weights
-    cuFloatComplex* d_fReflEI;
-    cudaMalloc((void**)&d_fReflEI, nfacets * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_fReflEI, 0, nfacets * sizeof(cuFloatComplex));
+    float* d_fReflEI;
+    cudaMalloc((void**)&d_fReflEI, nfacets * sizeof(float));
+    cudaMemsetAsync(d_fReflEI, 0, nfacets * sizeof(float));
 
     // upward transmitted
-    cuFloatComplex* d_fReflEO;
-    cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_fReflEO, 0, nfacets * sizeof(cuFloatComplex));
+    float* d_fReflEO;
+    cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(float));
+    cudaMemsetAsync(d_fReflEO, 0, nfacets * sizeof(float));
 
     // refracted signal
     cuFloatComplex* d_refr_sig;
@@ -265,9 +265,6 @@ int main()
         reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
                                 par.rst, par.dr, par.nr,
                                 par.rng_res, par.lam, nfacets);
-        //reflRadarSignalSLOW<<<numBlocks, blockSize>>>(d_Itd, d_fReflE, d_refl_sig,
-        //                                             par.rst, par.dr, par.nr,
-        //                                             par.rng_res, par.lam, nfacets);
         checkCUDAError("constructRadarSignal kernel1");
 
 
@@ -284,7 +281,6 @@ int main()
 
 
         // --- CONSTRUCT REFRACTED WEIGHTS INWARDS ---
-
         compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rtd, d_Rth, d_Itd, d_Iph,
                                                 d_Ttd, d_Tth, d_Tph, d_fRfrC,
                                                 d_fReflEI, d_fRfrSR,
@@ -301,19 +297,15 @@ int main()
                                                     par.ks, nfacets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                     fs, par.P, par.lam, par.eps_1, par.eps_2);
         checkCUDAError("compRefrEnergyOut kernel");
-
         
         // --- CONSTRUCT REFRACTED SIGNAL ---
 
         // launch with shared memory for per-block accumulation (real+imag floats)
-        refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_fReflEI, d_fReflEO,
-                        d_refr_sig,
-                        par.rst, par.dr, par.nr,
+        refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Rtd, 
+                        d_fReflEI, d_fReflEO,
+                        d_refr_sig, 
+                        par.rst, par.dr, par.nr, par.c, par.c_2,
                         par.rng_res, par.P, par.Grefr_lin, fs, par.lam, nfacets);
-        //refrRadarSignalSLOW<<<numBlocks, blockSize>>>(d_fRfrSR, d_fReflEI, d_fReflEO,
-        //                                      d_refr_sig,
-        //                                      par.rst, par.dr, par.nr,
-         //                                     par.rng_res, par.P, par.Grefr_lin, fs, par.lam, nfacets);
         checkCUDAError("refrRadarSignal kernel");
 
 

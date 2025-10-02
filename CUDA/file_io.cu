@@ -6,9 +6,10 @@ using json = nlohmann::json;
 
 struct SimulationParameters {
 
-    float c = 299792480.0f; // speed of light in m/s
+    float c = 299792458.0f; // speed of light in m/s
     float nu0 = 376.7f;
     float eps_0 = 8.85e-12;
+    float pi = 3.14159265f;
 
     // source parameters
     float sx, sy, sz;   // Source position
@@ -74,9 +75,12 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.rng_res = j["range_resolution"];
 
     params.lam = params.c / params.f0;
-    params.k = 2 * 3.14159 / params.lam;
+    params.k = 2 * params.pi / params.lam;
     params.Grefr_lin = pow(10, params.Grefr / 10.f);
     params.Grefl_lin = pow(10, params.Grefl / 10.f);
+
+    // print frequency and wavelength
+    std::cout << "Frequency: " << params.f0 / 1e6 << " MHz, Wavelength: " << params.lam << " m" << std::endl;
 
     params.sigma = j["sigma"];
     params.rms_h = j["rms_height"];
