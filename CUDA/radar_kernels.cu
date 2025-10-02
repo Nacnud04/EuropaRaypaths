@@ -4,80 +4,107 @@
 // Tile size for range bins processed per-block in shared memory
 #define REFL_TILE_NR 128
 
-__global__ void reflRadarSignal(float* d_SltRng, cuFloatComplex* d_fRe,
+__global__ void reflRadarSignal(float* d_SltRng, float* d_fRe,
                                 cuFloatComplex* refl_sig, float r0, float dr, int nr,
                                 float range_res, float lam, int nfacets) {
 
-    // each block will process a contiguous tile of range bins at a time and
-    // accumulate partial sums into shared memory, then flush once to global memory.
-    extern __shared__ float s_mem[]; // size = 2 * tile_size (real, imag)
-    float* s_real = s_mem; 
-    float* s_imag = s_mem + REFL_TILE_NR;
+
+    // Each block processes a contiguous tile of range bins. For each bin we
+    // perform a block-level reduction: each thread computes a partial sum over
+    // its assigned facets, then we reduce within warps using shuffles and
+    // across warps using a small shared-memory array. Finally thread 0 in the
+    // block does one atomicAdd into global memory per bin. This removes the
+    // many atomic operations per-facet and drastically reduces contention.
+
+    extern __shared__ float s_mem[]; // sized by launcher; we use it for warp partials
+    // layout: s_mem[0..maxWarps-1] = real partials per-warp
+    //         s_mem[REFL_TILE_NR .. REFL_TILE_NR+maxWarps-1] = imag partials
+    float* s_warp_real = s_mem;
+    float* s_warp_imag = s_mem + REFL_TILE_NR; // safe because launcher provides >= REFL_TILE_NR
 
     int tid = threadIdx.x;
     int id = blockIdx.x * blockDim.x + tid;
-
-    // number of facets handled by this thread stride
     int stride = blockDim.x * gridDim.x;
+
+    const unsigned warpMask = 0xffffffffu;
+    int lane = tid & 31;
+    int warpId = tid >> 5;
+    int numWarps = (blockDim.x + 31) / 32;
 
     for (int tileStart = 0; tileStart < nr; tileStart += REFL_TILE_NR) {
 
         int tileSize = min(REFL_TILE_NR, nr - tileStart);
 
-        // initialize shared accumulators
-        for (int i = tid; i < tileSize; i += blockDim.x) {
-            s_real[i] = 0.0f;
-            s_imag[i] = 0.0f;
-        }
-        __syncthreads();
+        for (int ti = 0; ti < tileSize; ++ti) {
 
-        // each thread processes multiple facets (strided)
-        for (int fid = id; fid < nfacets; fid += stride) {
+            int ir = tileStart + ti;
 
-            // load per-facet data into registers once
-            float sRng = d_SltRng[fid];
-            cuFloatComplex fRe = d_fRe[fid];
+            // each thread computes partial sum for this bin across its facets
+            float acc_re = 0.0f;
+            float acc_im = 0.0f;
 
-            // precompute phase multiplier (depends only on facet)
-            float phase = (2.0f * pi / lam) * sRng;
-            float twoPhase = 2.0f * phase;
+            // iterate facets assigned to this thread
+            for (int fid = id; fid < nfacets; fid += stride) {
+                float sRng = d_SltRng[fid];
+                float fRe = d_fRe[fid];
 
-            // iterate over bins in this tile
-            for (int ti = 0; ti < tileSize; ++ti) {
-                int ir = tileStart + ti;
                 float r = r0 + ir * dr;
                 float delta_r = (r - sRng) / range_res;
 
-                // compute phase_exp using sincosf for efficiency
+                float phase = (4.0f * 3.14159265f / lam) * sRng;
                 float c, s;
-                sincosf(twoPhase, &s, &c); // sincosf returns sin then cos? using (s, c)
-                // careful: sincosf stores sin to first param, cos to second; we want (cos, sin)
+                sincosf(phase, &s, &c);
                 cuFloatComplex phase_exp = make_cuFloatComplex(c, s);
 
                 float scale_val = sinc(delta_r);
-
-                // contrib = phase_exp * fRe * scale
-                cuFloatComplex contrib = cuCmulf(phase_exp, cuCmulf(fRe, make_cuFloatComplex(scale_val, 0.0f)));
-
-                // accumulate into shared memory (use atomicAdd on shared floats)
-                float cre = cuCrealf(contrib);
-                float cim = cuCimagf(contrib);
-                atomicAdd(&s_real[ti], cre);
-                atomicAdd(&s_imag[ti], cim);
+                cuFloatComplex contrib = cuCmulf(phase_exp, make_cuFloatComplex(scale_val * fRe, 0.0f));
+                acc_re += cuCrealf(contrib);
+                acc_im += cuCimagf(contrib);
             }
 
-        }
+            // warp-level reduction using shuffle
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                float cre = __shfl_down_sync(warpMask, acc_re, offset);
+                float cim = __shfl_down_sync(warpMask, acc_im, offset);
+                acc_re += cre;
+                acc_im += cim;
+            }
 
-        __syncthreads();
+            // lane 0 of each warp writes its partial to shared memory
+            if (lane == 0) {
+                s_warp_real[warpId] = acc_re;
+                s_warp_imag[warpId] = acc_im;
+            }
+            __syncthreads();
 
-        // flush shared accumulators to global memory once per block
-        for (int i = tid; i < tileSize; i += blockDim.x) {
-            atomicAdd(&(refl_sig[tileStart + i].x), s_real[i]);
-            atomicAdd(&(refl_sig[tileStart + i].y), s_imag[i]);
+            // reduce the warp partials using first warp
+            float block_re = 0.0f;
+            float block_im = 0.0f;
+            if (warpId == 0) {
+                // each thread in warp 0 loads one warp partial (if within numWarps)
+                int idx = lane;
+                if (idx < numWarps) {
+                    block_re = s_warp_real[idx];
+                    block_im = s_warp_imag[idx];
+                }
+
+                // reduce across lanes of warp 0
+                for (int offset = 16; offset > 0; offset >>= 1) {
+                    float cre = __shfl_down_sync(warpMask, block_re, offset);
+                    float cim = __shfl_down_sync(warpMask, block_im, offset);
+                    block_re += cre;
+                    block_im += cim;
+                }
+
+                // lane 0 now has the block's total for this bin
+                if (lane == 0) {
+                    atomicAdd(&(refl_sig[ir].x), block_re);
+                    atomicAdd(&(refl_sig[ir].y), block_im);
+                }
+            }
+            __syncthreads();
         }
-        __syncthreads();
     }
-
 }
 
 
@@ -91,71 +118,102 @@ __device__ int reradiate_index(int id0)
 // Tile size reuse for refracted signal
 #define REFR_TILE_NR 128
 
-__global__ void refrRadarSignal(float* d_SltRng, 
-                                cuFloatComplex* d_fReflEI, cuFloatComplex* d_fReflEO,
+__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, 
+                                float* d_fReflEI, float* d_fReflEO,
                                 cuFloatComplex* refr_sig, 
-                                float r0, float dr, int nr,
+                                float r0, float dr, int nr, float c, float c2, 
                                 float range_res, float P, float G, float fs, float lam, int nfacets) {
 
-    extern __shared__ float s_mem2[]; // 2 * tile for real/imag
-    float* s_real = s_mem2;
-    float* s_imag = s_mem2 + REFR_TILE_NR;
+    // Similar block-level reduction as in reflRadarSignal. Each block will
+    // compute a partial sum per range-bin and perform a single atomicAdd per
+    // bin when flushing to global memory.
+
+    extern __shared__ float s_mem2[]; // provided by launcher; reused for warp partials
+    float* s_warp_real = s_mem2;
+    float* s_warp_imag = s_mem2 + REFR_TILE_NR;
 
     int tid = threadIdx.x;
     int id0 = blockIdx.x * blockDim.x + tid;
     int stride = blockDim.x * gridDim.x;
 
+    const unsigned warpMask = 0xffffffffu;
+    int lane = tid & 31;
+    int warpId = tid >> 5;
+    int numWarps = (blockDim.x + 31) / 32;
+
     for (int tileStart = 0; tileStart < nr; tileStart += REFR_TILE_NR) {
 
         int tileSize = min(REFR_TILE_NR, nr - tileStart);
 
-        // initialize shared accumulators
-        for (int i = tid; i < tileSize; i += blockDim.x) {
-            s_real[i] = 0.0f;
-            s_imag[i] = 0.0f;
-        }
-        __syncthreads();
+        for (int ti = 0; ti < tileSize; ++ti) {
 
-        // process facets in a strided fashion
-        for (int fid = id0; fid < nfacets; fid += stride) {
-            int fid1 = reradiate_index(fid);
+            int ir = tileStart + ti;
 
-            // compute sltrng and reradConst once per facet
-            float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
-            cuFloatComplex reradConst = cuCmulf(d_fReflEI[fid], d_fReflEO[fid1]);
-            reradConst = cuCmulf(reradConst, make_cuFloatComplex(radarEq(P, G, 1, lam, sltrng, fs), 0.0f));
+            float acc_re = 0.0f;
+            float acc_im = 0.0f;
 
-            float phase = (2.0f * pi / lam) * sltrng;
-            float twoPhase = 2.0f * phase;
+            // accumulate over facets assigned to this thread
+            for (int fid = id0; fid < nfacets; fid += stride) {
+                int fid1 = reradiate_index(fid);
 
-            for (int ti = 0; ti < tileSize; ++ti) {
-                int ir = tileStart + ti;
+                float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
+                
+                float reradConst = d_fReflEI[fid] * d_fReflEO[fid1];
+                reradConst = reradConst * radarEq(P, G, 1, lam, sltrng, fs);
+
+                // slantrange equivalent time
+                float rngt = (sltrng - d_Rtd[fid]) + d_Rtd[fid] * (c / c2); 
+
                 float r = r0 + ir * dr;
-                float delta_r = (r - sltrng) / range_res;
+                float delta_r = (r - (rngt)) / range_res;
 
+                float phase = (4.0f * 3.14159265f / lam) * sltrng;
                 float c, s;
-                sincosf(twoPhase, &s, &c);
+                sincosf(phase, &s, &c);
                 cuFloatComplex phase_exp = make_cuFloatComplex(c, s);
 
                 float scale_val = sinc(delta_r);
-
-                cuFloatComplex contrib = cuCmulf(phase_exp, cuCmulf(reradConst, make_cuFloatComplex(scale_val, 0.0f)));
-
-                float cre = cuCrealf(contrib);
-                float cim = cuCimagf(contrib);
-                atomicAdd(&s_real[ti], cre);
-                atomicAdd(&s_imag[ti], cim);
+                cuFloatComplex contrib = cuCmulf(phase_exp, make_cuFloatComplex(scale_val * reradConst, 0.0f));
+                acc_re += cuCrealf(contrib);
+                acc_im += cuCimagf(contrib);
             }
-        }
 
-        __syncthreads();
+            // warp-level reduction
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                float cre = __shfl_down_sync(warpMask, acc_re, offset);
+                float cim = __shfl_down_sync(warpMask, acc_im, offset);
+                acc_re += cre;
+                acc_im += cim;
+            }
 
-        // flush to global
-        for (int i = tid; i < tileSize; i += blockDim.x) {
-            atomicAdd(&(refr_sig[tileStart + i].x), s_real[i]);
-            atomicAdd(&(refr_sig[tileStart + i].y), s_imag[i]);
+            if (lane == 0) {
+                s_warp_real[warpId] = acc_re;
+                s_warp_imag[warpId] = acc_im;
+            }
+            __syncthreads();
+
+            // reduce across warps in warp 0
+            float block_re = 0.0f;
+            float block_im = 0.0f;
+            if (warpId == 0) {
+                int idx = lane;
+                if (idx < numWarps) {
+                    block_re = s_warp_real[idx];
+                    block_im = s_warp_imag[idx];
+                }
+                for (int offset = 16; offset > 0; offset >>= 1) {
+                    float cre = __shfl_down_sync(warpMask, block_re, offset);
+                    float cim = __shfl_down_sync(warpMask, block_im, offset);
+                    block_re += cre;
+                    block_im += cim;
+                }
+                if (lane == 0) {
+                    atomicAdd(&(refr_sig[ir].x), block_re);
+                    atomicAdd(&(refr_sig[ir].y), block_im);
+                }
+            }
+            __syncthreads();
         }
-        __syncthreads();
     }
 
 }

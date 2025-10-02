@@ -21,7 +21,7 @@ __device__ float sinGPU(float x) {
 // sinc function
 __device__ float sinc(float x) {
     if (fabsf(x) < 1e-6f) return 1.0f;
-    return sinf(M_PI * x) / (M_PI * x);
+    return slowSin(M_PI * x) / (M_PI * x);
 }
 
 // slow but accurate arcsin function

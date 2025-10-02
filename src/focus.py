@@ -54,7 +54,7 @@ def est_slant_range(sx, sz, tx, tz, c1, c2):
     trc_min = np.argmin(sltrng_ests)
     if trc_min < len(sltrng_ests) // 2:
         newsltrng = sltrng_ests[:-2 * int(len(sltrng_ests) // 2 - trc_min)]
-    elif trc_min > len(sltrng_ests) // 2:
+    elif trc_min >= len(sltrng_ests) // 2:
         newsltrng = sltrng_ests[2 * int(trc_min - len(sltrng_ests) // 2):]
     sltrng_ests = newsltrng
     return sltrng_ests
@@ -87,7 +87,7 @@ def focus_pix_jit(rdr, t, T, bins, filter, rb):
 
 
 @nb.njit(parallel=True)
-def focus_jit(rdr, bins, filter, rb):
+def focus_jit(rdr, bins, match_filter, rb):
 
     """
     Focus entire radar image.
@@ -102,6 +102,6 @@ def focus_jit(rdr, bins, filter, rb):
 
     for t in nb.prange(rows):
         for T in range(cols):
-            focused[t, T] = focus_pix_jit(rdr, t, T, bins, filter, rb)
+            focused[t, T] = focus_pix_jit(rdr, t, T, bins, match_filter, rb)
 
     return focused
