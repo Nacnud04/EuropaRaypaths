@@ -41,10 +41,44 @@ params = {
     "sy": 0,                # source y location [m]
     "sz": 10e3,#25e3,             # source z location [m]
 
+    # facet array params
+    "ox": -5e3,
+    "oy": -1e3,
+    "oz": 0,
+    "fs": 5,
+    "nx": 2000,
+    "ny": 400,
+
 }
 
 with open("params.json", "w") as f:
     json.dump(params, f, indent=4)
+
+
+# --- MAKE FACET FILE
+sys.path.append("../src")
+from terrain import Terrain
+
+xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
+ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
+
+terrain = Terrain(xmin, xmax, ymin, ymax, params["fs"])
+terrain.gen_flat(0)
+
+# write output facet data
+xx, yy, zz = terrain.XX, terrain.YY, terrain.zs
+norms      = np.reshape(terrain.normals, (xx.shape[0]*xx.shape[1], 3))
+uvecs      = np.reshape(terrain.uvectors, (xx.shape[0]*xx.shape[1], 3))
+vvecs      = np.reshape(terrain.vvectors, (xx.shape[0]*xx.shape[1], 3))
+
+with open("facets.fct", 'w') as f:
+    for x, y, z, (nx, ny, nz), (ux, uy, uz), (vx, vy, vz) in zip(xx.flatten(), yy.flatten(), zz.flatten(), norms, uvecs, vvecs):
+        f.write(f"{x},{y},{z}:{nx},{ny},{nz}:{ux},{uy},{uz}:{vx},{vy},{vz}\n")
+    
+
+
+# --- END MAKE FACET FILE
+
 
 filenames = glob.glob("rdrgrm/s*.txt")
 
@@ -102,7 +136,58 @@ for arr, name, cmap, cbar_label, v in zip(lst, names, cmaps, cbar_labels, vmin):
     plt.savefig(name)
     plt.close()
 
-focused = focus_jit(rdrgrm, slt_rb, match_filter, rb)
+#focused = focus_jit(rdrgrm, slt_rb, match_filter, rb)
+
+
+Nr, Na = rdrgrm.shape
+
+# --- 2. Range Cell Migration Correction (RCMC) ---
+shift_amounts = slt_rb - np.min(slt_rb)
+rolled_matrix = np.array([
+    np.roll(rdrgrm[:, i], -int(shift_amounts[i]))
+    for i in range(rdrgrm.shape[1])
+]).T
+
+#plt.imshow(np.abs(rolled_matrix), aspect=0.2)
+#plt.show()
+
+# --- 3. Azimuth matched filter ---
+k = (2 * np.pi) / (c1 / params["frequency"])
+match_filter = np.exp(-2j * k * sltrng)
+
+#plt.plot(sltrng)
+#plt.show()
+
+#fig, ax = plt.subplots(2)
+#ax[0].plot(np.real(match_filter))
+#ax[0].plot(np.real(match_filter*rolled_matrix[np.min(slt_rb), :])/np.max(np.real(match_filter*rolled_matrix[np.min(slt_rb), :])))
+#ax[1].plot(np.imag(match_filter))
+#ax[1].plot(np.imag(match_filter*rolled_matrix[np.min(slt_rb), :])/np.max(np.imag(match_filter*rolled_matrix[np.min(slt_rb), :])))
+#plt.show()
+
+# --- 1. Azimuth FFT ---
+fft_len = int(2 * Na)
+pad = fft_len - Na
+
+# Pad only at the end
+rolled_matrix = np.pad(rolled_matrix, ((0, 0), (0, pad)), mode='constant')
+match_filter = np.pad(match_filter, (0, pad), mode='constant')
+
+# FFT along azimuth
+az_fft = np.fft.fft(rolled_matrix, axis=1, n=fft_len)
+H_az = np.fft.fft(match_filter, n=fft_len)
+
+# Apply filter
+focused_freq = az_fft * H_az[np.newaxis, :]
+
+# --- 4. Inverse FFT ---
+focused = np.fft.ifft(focused_freq, axis=1)
+
+# Crop to original azimuth size (centered)
+start = pad // 2
+end = start + Na
+focused = focused[:, start:end]
+
 
 plt.imshow(lin_to_db(np.abs(focused)), aspect='auto', vmin=0, 
            extent=[-5, 5, 2*(params["rx_window_offset_m"] + params["rx_window_m"])/299.792458, 2*params["rx_window_offset_m"]/299.792458])

@@ -43,6 +43,18 @@ class Terrain():
         
         self.normals = np.transpose(normals, (1, 2, 0))
 
+        self.uvectors = np.zeros_like(self.normals)
+        self.uvectors[:, :, 0] = 1
+        self.uvectors[:, :, 2] = dz_dx
+        norm = np.linalg.norm(self.uvectors, axis=2)
+        self.uvectors /= norm[:, :, np.newaxis]
+
+        self.vvectors = np.zeros_like(self.normals)
+        self.vvectors[:, :, 1] = 1
+        self.vvectors[:, :, 2] = dz_dy
+        norm = np.linalg.norm(self.vvectors, axis=2)
+        self.vvectors /= norm[:, :, np.newaxis]
+
     
     def gen_flat(self, z, normal=(0, 0, 1)):
 
