@@ -71,10 +71,7 @@ int main()
     // load file and count facets
     FILE *facetFile = fopen(filename, "r");
     const int totFacets = count_lines(facetFile);
-    std::cout << "Loaded " << totFacets << " facets from " << filename << std::endl;
-
-    // TEMPORARY FOR ONLY W/O APERTURE
-    int nfacets  = totFacets;
+    std::cout << "Found " << totFacets << " in " << filename << std::endl;
 
     // allocate host memory for facet arrays
     float *h_fx = (float*)malloc(totFacets * sizeof(float));
@@ -101,11 +98,62 @@ int main()
     reportTime("Loading facets and their bases");
 
     // estimate the number of illuminated facets
-    float aperture = 5; // aperture in degrees
-    int nilluminated = nIlluminatedFacets(par.sz, 0, par.fs, aperture);
-    std::cout << "Estimated that " << nilluminated << " facets are illuminated by aperture" << std::endl;
+    float aperture = 7.5; // aperture in degrees
+    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, aperture);
+    std::cout << "Estimated that " << nfacets << " facets are illuminated by aperture" << std::endl;
+
+    // temp change to stop illegal access
+    nfacets = totFacets;
 
     // --- MOVE ALL FACETS FROM HOST TO GPU ---
+    // ----- this alloc is for all facets -----
+
+    // facet coordinates
+    float *d_Ffx, *d_Ffy, *d_Ffz;
+    // facet normal
+    float *d_Ffnx, *d_Ffny, *d_Ffnz;
+    // facet tangents
+    float *d_Ffux, *d_Ffuy, *d_Ffuz;
+    float *d_Ffvx, *d_Ffvy, *d_Ffvz;
+
+    reportNewAlloc(12 * totFacets * sizeof(float), "all facets");
+
+    // allocate
+    cudaMalloc((void**)&d_Ffx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffnx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffny, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffnz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffux, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffuy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffuz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffvx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffvy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ffvz, totFacets * sizeof(float));
+
+    // copy host -> device
+    cudaMemcpy(d_Ffx, h_fx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffy, h_fy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffz, h_fz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffnx, h_fnx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffny, h_fny, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffnz, h_fnz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffux, h_fux, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffuy, h_fuy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffuz, h_fuz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffvx, h_fvx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffvy, h_fvy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_Ffvz, h_fvz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+
+    // allocate incident rays
+    float *d_FItd, *d_FIph, *d_FIth;
+    cudaMalloc((void**)&d_FItd, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_FIph, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_FIth, totFacets * sizeof(float));
+
+
+    // --- this alloc is for cropped facets ---
 
     // facet coordinates
     float *d_fx, *d_fy, *d_fz;
@@ -115,41 +163,28 @@ int main()
     float *d_fux, *d_fuy, *d_fuz;
     float *d_fvx, *d_fvy, *d_fvz;
 
-    reportNewAlloc(12 * totFacets * sizeof(float), "facets");
+    reportNewAlloc(29 * nfacets * sizeof(float), "illuminated facets");
 
     // allocate
-    cudaMalloc((void**)&d_fx, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fy, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fz, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fnx, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fny, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fnz, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fux, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fuy, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fuz, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fvx, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fvy, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_fvz, totFacets * sizeof(float));
-
-    // copy host -> device
-    cudaMemcpy(d_fx, h_fx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fy, h_fy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fz, h_fz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fnx, h_fnx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fny, h_fny, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fnz, h_fnz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fux, h_fux, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fuy, h_fuy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fuz, h_fuz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvx, h_fvx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvy, h_fvy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvz, h_fvz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&d_fx, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fy, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fz, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fnx, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fny, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fnz, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fux, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fuy, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fuz, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fvx, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fvy, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fvz, nfacets * sizeof(float));
 
     // allocate incident rays
     float *d_Itd, *d_Iph, *d_Ith;
-    cudaMalloc((void**)&d_Itd, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_Iph, totFacets * sizeof(float));
-    cudaMalloc((void**)&d_Ith, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Itd, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_Iph, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_Ith, nfacets * sizeof(float));
+
 
     // allocate refracted rays
     float* d_Rth; float* d_Rtd;
@@ -226,18 +261,45 @@ int main()
         // optional; left out for slightly better performance.
 
         // --- COMP INCIDENT RAYS ---
-        
         int blockSize = 256;
-        int numBlocks = (nfacets + blockSize - 1) / blockSize;
-        compIncidentRays<<<numBlocks, blockSize>>>(sx, par.sy, par.sz,
-                                                d_fx, d_fy, d_fz,
-                                                d_fnx, d_fny, d_fnz,
-                                                d_fux, d_fuy, d_fuz,
-                                                d_fvx, d_fvy, d_fvz,
-                                                d_Itd, d_Iph, d_Ith,
-                                                nfacets);
+        // compute incident rays for the full facet set (totFacets)
+        int numBlocksAll = (totFacets + blockSize - 1) / blockSize;
+        compIncidentRays<<<numBlocksAll, blockSize>>>(sx, par.sy, par.sz,
+                            d_Ffx, d_Ffy, d_Ffz,
+                            d_Ffnx, d_Ffny, d_Ffnz,
+                            d_Ffux, d_Ffuy, d_Ffuz,
+                            d_Ffvx, d_Ffvy, d_Ffvz,
+                            d_FItd, d_FIph, d_FIth,
+                            totFacets);
         checkCUDAError("compIncidentRays kernel");
+        cudaDeviceSynchronize();
 
+        // --- CROP TO ILLUMINATED ---
+        // crop full facet arrays into the per-source cropped arrays and get
+        // the number of valid (illuminated) facets returned by the function
+        
+        int valid_facets = cropByAperture(totFacets, nfacets, aperture,
+                                        d_Ffx,  d_Ffy,  d_Ffz,
+                                        d_Ffnx, d_Ffny, d_Ffnz,
+                                        d_Ffux, d_Ffuy, d_Ffuz,
+                                        d_Ffvx, d_Ffvy, d_Ffvz,
+                                        d_FItd, d_FIph, d_FIth,
+                                        d_fx,   d_fy,   d_fz,
+                                        d_fnx,  d_fny,  d_fnz,
+                                        d_fux,  d_fuy,  d_fuz,
+                                        d_fvx,  d_fvy,  d_fvz,
+                                        d_Itd,  d_Iph,  d_Ith);
+        checkCUDAError("cropByAperture process");
+        cudaDeviceSynchronize();
+
+        // If no facets are illuminated, skip per-facet kernels to avoid
+        // operating on uninitialised memory which can produce NaNs.
+        if (valid_facets == 0) {
+            std::cout << "No illuminated facets for source " << is << ", skipping." << std::endl;
+            continue;
+        }
+
+        int numBlocks = (nfacets + blockSize - 1) / blockSize;
 
         // --- COMP REFRACTED RAYS ---
                 
@@ -245,7 +307,7 @@ int main()
                                                     d_Rth, d_Rtd,
                                                     d_fx, d_fy, d_fz,
                                                     par.tx, par.ty, par.tz,
-                                                    par.eps_1, par.eps_2, nfacets);
+                                                    par.eps_1, par.eps_2, valid_facets);
         checkCUDAError("compRefractedRays kernel");
 
         
@@ -255,7 +317,7 @@ int main()
                                                     d_fReflE, d_Rth, d_fRfrC,
                                                     par.P, par.Grefl_lin, par.sigma, par.fs, par.lam,
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
-                                                    par.pol, nfacets);
+                                                    par.pol, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
 
         
@@ -264,19 +326,19 @@ int main()
         // launch with shared memory for per-block accumulation (real+imag floats)
         reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
                                 par.rst, par.dr, par.nr,
-                                par.rng_res, par.lam, nfacets);
+                                par.rng_res, par.lam, valid_facets);
         checkCUDAError("constructRadarSignal kernel1");
 
 
         // --- FORCED RAY TO TARGET COMP ---
         
         compTargetRays<<<numBlocks, blockSize>>>(par.tx, par.ty, par.tz,
-                                                d_fx, d_fy, d_fz,
+                                                d_fx,  d_fy,  d_fz,
                                                 d_fnx, d_fny, d_fnz,
                                                 d_fux, d_fuy, d_fuz,
                                                 d_fvx, d_fvy, d_fvz,
                                                 d_Ttd, d_Tph, d_Tth,
-                                                nfacets);
+                                                valid_facets);
         checkCUDAError("compTargetRays kernel");
 
 
@@ -284,7 +346,7 @@ int main()
         compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rtd, d_Rth, d_Itd, d_Iph,
                                                 d_Ttd, d_Tth, d_Tph, d_fRfrC,
                                                 d_fReflEI, d_fRfrSR,
-                                                par.ks, nfacets, par.alpha2, par.c_1, par.c_2,
+                                                par.ks, valid_facets, par.alpha2, par.c_1, par.c_2,
                                                 par.fs, par.P, par.Grefr_lin, par.lam);
         checkCUDAError("compRefrEnergyIn kernel");
 
@@ -294,7 +356,7 @@ int main()
         compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
                                                     d_Ttd, d_Tth, d_Tph, 
                                                     d_fReflEO, d_fRfrC, 
-                                                    par.ks, nfacets, par.alpha1, par.alpha2, par.c_1, par.c_2,
+                                                    par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                     par.fs, par.P, par.lam, par.eps_1, par.eps_2);
         checkCUDAError("compRefrEnergyOut kernel");
         
@@ -305,7 +367,7 @@ int main()
                         d_fReflEI, d_fReflEO,
                         d_refr_sig, 
                         par.rst, par.dr, par.nr, par.c, par.c_2,
-                        par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, nfacets);
+                        par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
         checkCUDAError("refrRadarSignal kernel");
 
 
@@ -328,6 +390,11 @@ int main()
 
     }
 
+    cudaFree(d_Ffx); cudaFree(d_Ffy); cudaFree(d_Ffz);
+    cudaFree(d_Ffnx); cudaFree(d_Ffny); cudaFree(d_Ffnz);
+    cudaFree(d_Ffux); cudaFree(d_Ffuy); cudaFree(d_Ffuz);
+    cudaFree(d_Ffvx); cudaFree(d_Ffvy); cudaFree(d_Ffvz);
+    cudaFree(d_FItd); cudaFree(d_FIph); cudaFree(d_FIth);
     cudaFree(d_fx); cudaFree(d_fy); cudaFree(d_fz);
     cudaFree(d_fnx); cudaFree(d_fny); cudaFree(d_fnz);
     cudaFree(d_fux); cudaFree(d_fuy); cudaFree(d_fuz);

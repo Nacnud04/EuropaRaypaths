@@ -10,7 +10,7 @@ params = {
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
     "surface_gain": 75,       # Antenna gain [dB]
-    "subsurface_gain": 95,   # Subsurface antenna gain [dB]
+    "subsurface_gain": 100,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
 
