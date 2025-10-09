@@ -52,6 +52,10 @@ struct SimulationParameters {
     int nr;
     float smpl;         // Sampling rate (Hz)
 
+    // facet parameters
+    int nx, ny;
+    float fs, ox, oy, oz;
+
 };
 
 __host__ SimulationParameters parseSimulationParameters(const std::string& filename) {
@@ -123,6 +127,18 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << "Sampling window: " << params.rst << " to " << params.ren << " m, ";
     std::cout << params.nr << " samples at " << params.smpl << " Hz" << std::endl;
 
+    // load facet params
+    std::cout << "\n -------- FACET -------- " << std::endl;
+    params.ox = j["ox"];
+    params.oy = j["oy"];
+    params.oz = j["oz"];
+    std::cout << "Terrain origin: (" << params.ox << "," << params.oy << "," << params.oz << ") " << std::endl;
+    params.nx = j["nx"];
+    params.ny = j["ny"];
+    std::cout << "Surface facet dimensions: (" << params.nx << "," << params.ny << ") " << std::endl;
+    params.fs = j["fs"];
+    std::cout << "Facet size: " << params.fs << std::endl;
+    
     return params;
 }
 
@@ -138,5 +154,57 @@ __host__ void saveSignalToFile(const char* filename, cuFloatComplex* d_sig, int 
         fprintf(fItd, "%e %e\n", cuCrealf(h_sig[i]), cuCimagf(h_sig[i]));
     }
     fclose(fItd);
+
+}
+
+#define BUF_SIZE 65536
+
+int count_lines(FILE* file)
+{
+    char buf[BUF_SIZE];
+    int counter = 0;
+    for(;;)
+    {
+        size_t res = fread(buf, 1, BUF_SIZE, file);
+        if (ferror(file))
+            return -1;
+
+        int i;
+        for(i = 0; i < res; i++)
+            if (buf[i] == '\n')
+                counter++;
+
+        if (feof(file))
+            break;
+    }
+    rewind(file);
+
+    return counter;
+}
+
+__host__ void loadFacetFile(FILE * file, const int totfacets,
+                            float* h_fx, float* h_fy, float* h_fz,
+                            float* h_fnx, float* h_fny, float* h_fnz,
+                            float* h_fux, float* h_fuy, float* h_fuz,
+                            float* h_fvx, float* h_fvy, float* h_fvz) {
+
+    // go through line by line and load the facet into memory
+    char line[256];
+    int i = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+        // parse line
+        sscanf(line, "%f,%f,%f:%f,%f,%f:%f,%f,%f:%f,%f,%f",
+               &h_fx[i],   &h_fy[i],  &h_fz[i], &h_fnx[i], &h_fny[i], &h_fnz[i],
+               &h_fux[i], &h_fuy[i], &h_fuz[i], &h_fvx[i], &h_fvy[i], &h_fvz[i]);
+        i++;
+
+        // somehow if we are out of memory, break before segfault
+        if (i > totfacets) {
+            std::cout << "File has more facets than memory allocated - stopping read." << std::endl;
+            break;
+        }
+
+    }
 
 }

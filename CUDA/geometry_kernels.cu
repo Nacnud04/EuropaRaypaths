@@ -5,6 +5,26 @@
 
 const float pi = 3.14159265f;
 
+// function which approximates the amount of illuminated facets within the aperture
+// assuming the facets are arranged in a grid
+__host__ int nIlluminatedFacets(float sz, float fz, float fs, float theta) {
+    
+    // get radius of illuminated area on surface
+    float r;
+    r = (sz - fz) * sinf((pi/180)*theta);
+
+    // turn into area
+    float A;
+    A = pi * r * r;
+
+    // get the amount of illuminated facets
+    float nfacets;
+    nfacets = A / (fs * fs);
+
+    return nfacets;
+
+}
+
 __global__ void compIncidentRays(float sx, float sy, float sz,
                                  float* d_fx, float* d_fy, float* d_fz,
                                  float* d_fnx, float* d_fny, float* d_fnz,

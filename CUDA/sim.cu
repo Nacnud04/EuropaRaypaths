@@ -62,50 +62,50 @@ int main()
     SimulationParameters par;
     par = parseSimulationParameters("params.json");
 
-    // --- FACET ARRAY ---
+    // --- LOAD FACETS ---
 
-    // dimensions
-    int nxfacets = 2000;
-    int nyfacets = 400;
-    int nfacets  = nxfacets * nyfacets;
+    // first open facet file
+    const char* filename;
+    filename = "facets.fct";
 
-    // origin
-    float x0 = -5000.0f; // x origin
-    float y0 = -1000.0f; // y origin
-    float z0 = 0.0f;     // z origin
+    // load file and count facets
+    FILE *facetFile = fopen(filename, "r");
+    const int totFacets = count_lines(facetFile);
+    std::cout << "Loaded " << totFacets << " facets from " << filename << std::endl;
 
-    // facet size
-    float fs = 5.0f;
+    // TEMPORARY FOR ONLY W/O APERTURE
+    int nfacets  = totFacets;
 
     // allocate host memory for facet arrays
-    float *h_fx = (float*)malloc(nfacets * sizeof(float));
-    float *h_fy = (float*)malloc(nfacets * sizeof(float));
-    float *h_fz = (float*)malloc(nfacets * sizeof(float));
-    float *h_fnx = (float*)malloc(nfacets * sizeof(float));
-    float *h_fny = (float*)malloc(nfacets * sizeof(float));
-    float *h_fnz = (float*)malloc(nfacets * sizeof(float));
-    float *h_fux = (float*)malloc(nfacets * sizeof(float));
-    float *h_fuy = (float*)malloc(nfacets * sizeof(float));
-    float *h_fuz = (float*)malloc(nfacets * sizeof(float));
-    float *h_fvx = (float*)malloc(nfacets * sizeof(float));
-    float *h_fvy = (float*)malloc(nfacets * sizeof(float));
-    float *h_fvz = (float*)malloc(nfacets * sizeof(float));
+    float *h_fx = (float*)malloc(totFacets * sizeof(float));
+    float *h_fy = (float*)malloc(totFacets * sizeof(float));
+    float *h_fz = (float*)malloc(totFacets * sizeof(float));
+    float *h_fnx = (float*)malloc(totFacets * sizeof(float));
+    float *h_fny = (float*)malloc(totFacets * sizeof(float));
+    float *h_fnz = (float*)malloc(totFacets * sizeof(float));
+    float *h_fux = (float*)malloc(totFacets * sizeof(float));
+    float *h_fuy = (float*)malloc(totFacets * sizeof(float));
+    float *h_fuz = (float*)malloc(totFacets * sizeof(float));
+    float *h_fvx = (float*)malloc(totFacets * sizeof(float));
+    float *h_fvy = (float*)malloc(totFacets * sizeof(float));
+    float *h_fvz = (float*)malloc(totFacets * sizeof(float));
 
     startTimer();
 
-    // generate flat surface
-    generateFlatSurface(h_fx, h_fy, h_fz, nxfacets, nyfacets, x0, y0, z0, fs);
+    loadFacetFile(facetFile, totFacets,
+                  h_fx, h_fy, h_fz, 
+                  h_fnx, h_fny, h_fnz, 
+                  h_fux, h_fuy, h_fuz,
+                  h_fvx, h_fvy, h_fvz);
 
-    // compute facet normals
-    generateFacetNormals(h_fx, h_fy, h_fz, 
-                         h_fnx, h_fny, h_fnz, 
-                         h_fux, h_fuy, h_fuz,
-                         h_fvx, h_fvy, h_fvz,
-                         nxfacets, nyfacets);
+    reportTime("Loading facets and their bases");
 
-    reportTime("Generate facets and normals");
+    // estimate the number of illuminated facets
+    float aperture = 5; // aperture in degrees
+    int nilluminated = nIlluminatedFacets(par.sz, 0, par.fs, aperture);
+    std::cout << "Estimated that " << nilluminated << " facets are illuminated by aperture" << std::endl;
 
-    // --- FACET FROM HOST -> DEVICE ---
+    // --- MOVE ALL FACETS FROM HOST TO GPU ---
 
     // facet coordinates
     float *d_fx, *d_fy, *d_fz;
@@ -115,41 +115,41 @@ int main()
     float *d_fux, *d_fuy, *d_fuz;
     float *d_fvx, *d_fvy, *d_fvz;
 
-    reportNewAlloc(12 * nfacets * sizeof(float), "facets");
+    reportNewAlloc(12 * totFacets * sizeof(float), "facets");
 
     // allocate
-    cudaMalloc((void**)&d_fx, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fy, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fz, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fnx, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fny, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fnz, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fux, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fuy, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fuz, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fvx, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fvy, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_fvz, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_fx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fnx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fny, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fnz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fux, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fuy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fuz, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fvx, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fvy, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_fvz, totFacets * sizeof(float));
 
     // copy host -> device
-    cudaMemcpy(d_fx, h_fx, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fy, h_fy, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fz, h_fz, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fnx, h_fnx, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fny, h_fny, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fnz, h_fnz, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fux, h_fux, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fuy, h_fuy, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fuz, h_fuz, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvx, h_fvx, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvy, h_fvy, nfacets * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fvz, h_fvz, nfacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fx, h_fx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fy, h_fy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fz, h_fz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fnx, h_fnx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fny, h_fny, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fnz, h_fnz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fux, h_fux, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fuy, h_fuy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fuz, h_fuz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fvx, h_fvx, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fvy, h_fvy, totFacets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_fvz, h_fvz, totFacets * sizeof(float), cudaMemcpyHostToDevice);
 
     // allocate incident rays
     float *d_Itd, *d_Iph, *d_Ith;
-    cudaMalloc((void**)&d_Itd, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_Iph, nfacets * sizeof(float));
-    cudaMalloc((void**)&d_Ith, nfacets * sizeof(float));
+    cudaMalloc((void**)&d_Itd, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Iph, totFacets * sizeof(float));
+    cudaMalloc((void**)&d_Ith, totFacets * sizeof(float));
 
     // allocate refracted rays
     float* d_Rth; float* d_Rtd;
@@ -253,7 +253,7 @@ int main()
 
         compReflectedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
                                                     d_fReflE, d_Rth, d_fRfrC,
-                                                    par.P, par.Grefl_lin, par.sigma, fs, par.lam,
+                                                    par.P, par.Grefl_lin, par.sigma, par.fs, par.lam,
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
                                                     par.pol, nfacets);
         checkCUDAError("compReflectedEnergy kernel");
@@ -285,7 +285,7 @@ int main()
                                                 d_Ttd, d_Tth, d_Tph, d_fRfrC,
                                                 d_fReflEI, d_fRfrSR,
                                                 par.ks, nfacets, par.alpha2, par.c_1, par.c_2,
-                                                fs, par.P, par.Grefr_lin, par.lam);
+                                                par.fs, par.P, par.Grefr_lin, par.lam);
         checkCUDAError("compRefrEnergyIn kernel");
 
 
@@ -295,7 +295,7 @@ int main()
                                                     d_Ttd, d_Tth, d_Tph, 
                                                     d_fReflEO, d_fRfrC, 
                                                     par.ks, nfacets, par.alpha1, par.alpha2, par.c_1, par.c_2,
-                                                    fs, par.P, par.lam, par.eps_1, par.eps_2);
+                                                    par.fs, par.P, par.lam, par.eps_1, par.eps_2);
         checkCUDAError("compRefrEnergyOut kernel");
         
         // --- CONSTRUCT REFRACTED SIGNAL ---
@@ -305,7 +305,7 @@ int main()
                         d_fReflEI, d_fReflEO,
                         d_refr_sig, 
                         par.rst, par.dr, par.nr, par.c, par.c_2,
-                        par.rng_res, par.P, par.Grefr_lin, fs, par.lam, nfacets);
+                        par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, nfacets);
         checkCUDAError("refrRadarSignal kernel");
 
 

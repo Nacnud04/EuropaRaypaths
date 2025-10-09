@@ -167,7 +167,7 @@ __global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd,
                 float r = r0 + ir * dr;
                 float delta_r = (r - (rngt)) / range_res;
 
-                float phase = (4.0f * 3.14159265f / lam) * sltrng;
+                float phase = (4.0f * 3.14159265f / lam) * rngt;
                 float c, s;
                 sincosf(phase, &s, &c);
                 cuFloatComplex phase_exp = make_cuFloatComplex(c, s);
