@@ -1,6 +1,12 @@
 #include <cuComplex.h>
 #include <math.h>
 
+// thrust includes for aperture cropping
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/functional.h>
+
 #include "elementary_kernels.cu"
 
 const float pi = 3.14159265f;
@@ -21,7 +27,10 @@ __host__ int nIlluminatedFacets(float sz, float fz, float fs, float theta) {
     float nfacets;
     nfacets = A / (fs * fs);
 
-    return nfacets;
+    // add a buffer amount
+    float buff = 4.0f;
+
+    return nfacets * buff;
 
 }
 
@@ -58,6 +67,73 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
 
     }    
 
+}
+
+
+struct is_below_threshold
+{
+    const float thresh;
+    __host__ __device__
+    is_below_threshold(float t) : thresh(t) {}
+
+    __host__ __device__
+    bool operator()(const float x) const {
+        return x < thresh;
+    }
+};
+
+int cropByAperture(int totfacets, int nfacets, float aperture,
+                    float* d_Ffx,  float* d_Ffy,  float* d_Ffz,
+                    float* d_Ffnx, float* d_Ffny, float* d_Ffnz,
+                    float* d_Ffux, float* d_Ffuy, float* d_Ffuz,
+                    float* d_Ffvx, float* d_Ffvy, float* d_Ffvz,
+                    float* d_FItd, float* d_FIph, float* d_FIth,
+                    float* d_fx,  float* d_fy,  float* d_fz,
+                    float* d_fnx, float* d_fny, float* d_fnz,
+                    float* d_fux, float* d_fuy, float* d_fuz,
+                    float* d_fvx, float* d_fvy, float* d_fvz,
+                    float* d_Itd, float* d_Iph, float* d_Ith){
+
+    // wrap raw pointers with the thrust device pointer
+    thrust::device_ptr<float> Ffx(d_Ffx),     Ffy(d_Ffy),   Ffz(d_Ffz);
+    thrust::device_ptr<float> Ffnx(d_Ffnx), Ffny(d_Ffny), Ffnz(d_Ffnz);
+    thrust::device_ptr<float> Ffux(d_Ffux), Ffuy(d_Ffuy), Ffuz(d_Ffuz);
+    thrust::device_ptr<float> Ffvx(d_Ffvx), Ffvy(d_Ffvy), Ffvz(d_Ffvz);
+    thrust::device_ptr<float> FItd(d_FItd), FIph(d_FIph), FIth(d_FIth);
+
+    // define output thrust device pointers (point at the destination/cropped arrays)
+    thrust::device_ptr<float> fx(d_fx),     fy(d_fy),   fz(d_fz);
+    thrust::device_ptr<float> fnx(d_fnx), fny(d_fny), fnz(d_fnz);
+    thrust::device_ptr<float> fux(d_fux), fuy(d_fuy), fuz(d_fuz);
+    thrust::device_ptr<float> fvx(d_fvx), fvy(d_fvy), fvz(d_fvz);
+    thrust::device_ptr<float> Itd(d_Itd), Iph(d_Iph), Ith(d_Ith);
+
+    // define predicate
+    is_below_threshold pred((pi/180)*aperture);
+
+    // copy_if using d_FIth as a stencil
+    auto end_fx = thrust::copy_if(Ffx, Ffx + totfacets, FIth, fx, pred);
+    auto end_fy = thrust::copy_if(Ffy, Ffy + totfacets, FIth, fy, pred);
+    auto end_fz = thrust::copy_if(Ffz, Ffz + totfacets, FIth, fz, pred);
+
+    auto end_fnx = thrust::copy_if(Ffnx, Ffnx + totfacets, FIth, fnx, pred);
+    auto end_fny = thrust::copy_if(Ffny, Ffny + totfacets, FIth, fny, pred);
+    auto end_fnz = thrust::copy_if(Ffnz, Ffnz + totfacets, FIth, fnz, pred);
+
+    auto end_fux = thrust::copy_if(Ffux, Ffux + totfacets, FIth, fux, pred);
+    auto end_fuy = thrust::copy_if(Ffuy, Ffuy + totfacets, FIth, fuy, pred);
+    auto end_fuz = thrust::copy_if(Ffuz, Ffuz + totfacets, FIth, fuz, pred);
+
+    auto end_fvx = thrust::copy_if(Ffvx, Ffvx + totfacets, FIth, fvx, pred);
+    auto end_fvy = thrust::copy_if(Ffvy, Ffvy + totfacets, FIth, fvy, pred);
+    auto end_fvz = thrust::copy_if(Ffvz, Ffvz + totfacets, FIth, fvz, pred);
+
+    auto end_Itd = thrust::copy_if(FItd, FItd + totfacets, FIth, Itd, pred);
+    auto end_Iph = thrust::copy_if(FIph, FIph + totfacets, FIth, Iph, pred);
+    auto end_Ith = thrust::copy_if(FIth, FIth + totfacets, FIth, Ith, pred);
+
+    int valid = (int)(end_fx - fx);
+    return valid;
 }
 
 __global__ void compTargetRays(float tx, float ty, float tz,
