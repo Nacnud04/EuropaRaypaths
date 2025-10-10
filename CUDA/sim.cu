@@ -241,8 +241,8 @@ int main()
 
 
     // number of sources
-    int ns  = 200;
-    int dsx = 50;
+    int ns  = 1000;
+    int dsx = 10;
 
     for (int is=0; is<ns; is++) {
 
