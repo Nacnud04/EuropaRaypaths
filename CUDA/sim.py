@@ -34,7 +34,7 @@ params = {
     # target parameters
     "tx": 0,                # target x location [m]
     "ty": 0,                # target y location [m]
-    "tz": -1000,            # target z location [m]
+    "tz": -3000,            # target z location [m]
 
     # source parameters
     "sx": 0,                # source x location [m]
@@ -64,6 +64,12 @@ ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
 
 terrain = Terrain(xmin, xmax, ymin, ymax, params["fs"])
 terrain.gen_flat(0)
+# make double ridge
+#amp       = 225     # amplitude [m]
+#peak_dist = 6e3     # peak distance [m]
+#ridge_wid = 4e3     # ridge width [m]
+#x_offset  = 0       # x offset [m]
+#terrain.double_ridge(amp, amp, peak_dist, ridge_wid, x_offset)
 
 # write output facet data
 xx, yy, zz = terrain.XX, terrain.YY, terrain.zs
@@ -98,7 +104,7 @@ rdrgrm = np.array(rdrgrm).T
 sys.path.append("../src")
 from focus import *
 
-sx = -5e3 + 50 * np.arange(200) # source x locations [m]
+sx = -5e3 + 10 * np.arange(1000) # source x locations [m]
 sy = 0                          # source y locations [m]
 sz = 10e3                       # source z locations [m]
 
