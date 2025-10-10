@@ -27,8 +27,8 @@ __host__ int nIlluminatedFacets(float sz, float fz, float fs, float theta) {
     float nfacets;
     nfacets = A / (fs * fs);
 
-    // add a buffer amount
-    float buff = 4.0f;
+    // optional buffer amount
+    float buff = 1.0f;
 
     return nfacets * buff;
 
