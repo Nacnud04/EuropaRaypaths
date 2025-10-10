@@ -11,14 +11,20 @@ struct SimulationParameters {
     float eps_0 = 8.85e-12;
     float pi = 3.14159265f;
 
-    // source parameters
-    float sx, sy, sz;   // Source position
+    // source geometry
+    float sy, sz;   // Source position
+    float sx0, sdx;
+    int ns;
+
+    // source params
     float f0;           // Radar centerfrequency
     float B;            // Bandwidth
     float P;            // Transmitted power
     float Grefr;        // Subsurface gain
     float Grefl;        // Surface gain
     float rng_res;      // Range resolution
+    float aperture;     // Source aperture
+
     // computed params
     float lam;
     float k;
@@ -68,15 +74,22 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     file >> j;
 
     SimulationParameters params;
-    params.sx = j["sx"];
+
+    // load source geometry
     params.sy = j["sy"];
     params.sz = j["sz"];
+    params.sx0 = j["sx0"];
+    params.sdx = j["sdx"];
+    params.ns  = j["ns"];
+
+    // source function params
     params.f0 = j["frequency"];
     params.B = j["bandwidth"];
     params.P = j["power"];
     params.Grefr = j["subsurface_gain"];
     params.Grefl = j["surface_gain"];
     params.rng_res = j["range_resolution"];
+    params.aperture = j["aperture"];
 
     params.lam = params.c / params.f0;
     params.k = 2 * params.pi / params.lam;

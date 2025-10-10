@@ -98,12 +98,8 @@ int main()
     reportTime("Loading facets and their bases");
 
     // estimate the number of illuminated facets
-    float aperture = 7.5; // aperture in degrees
-    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, aperture);
-    std::cout << "Estimated that " << nfacets << " facets are illuminated by aperture" << std::endl;
-
-    // temp change to stop illegal access
-    nfacets = totFacets;
+    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, par.aperture);
+    std::cout << "Estimated that " << nfacets << " facets are illuminated by par.aperture" << std::endl;
 
     // --- MOVE ALL FACETS FROM HOST TO GPU ---
     // ----- this alloc is for all facets -----
@@ -240,14 +236,10 @@ int main()
     cudaMemsetAsync(d_sig, 0, par.nr * sizeof(cuFloatComplex));
 
 
-    // number of sources
-    int ns  = 1000;
-    int dsx = 10;
-
-    for (int is=0; is<ns; is++) {
+    for (int is=0; is<par.ns; is++) {
 
         // update source position
-        float sx = -5e3 + is * dsx;
+        float sx = par.sx0 + is * par.sdx;
 
         startTimer();
 
@@ -278,7 +270,7 @@ int main()
         // crop full facet arrays into the per-source cropped arrays and get
         // the number of valid (illuminated) facets returned by the function
         
-        int valid_facets = cropByAperture(totFacets, nfacets, aperture,
+        int valid_facets = cropByAperture(totFacets, nfacets, par.aperture,
                                         d_Ffx,  d_Ffy,  d_Ffz,
                                         d_Ffnx, d_Ffny, d_Ffnz,
                                         d_Ffux, d_Ffuy, d_Ffuz,
@@ -385,7 +377,7 @@ int main()
         saveSignalToFile(filename, d_sig, par.nr);
 
         // overwrite progress printed to terminal
-        printf("\rCompleted source %d of %d", is+1, ns);
+        printf("\rCompleted source %d of %d", is+1, par.ns);
         fflush(stdout);
 
     }
