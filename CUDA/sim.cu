@@ -26,6 +26,12 @@ void reportTime(const char* msg) {
     std::cout << msg << " took " << dt << " ms." << std::endl;
     gettimeofday(&t1, 0);
 }
+float reportTimeNum(){
+    gettimeofday(&t2, 0);
+    // report the amount of time in ms
+    float dt = (t2.tv_sec - t1.tv_sec) * 1e3 + (t2.tv_usec - t1.tv_usec) * 1e-3;
+    return dt;
+}
 
 void checkCUDAError(const char* msg)
 {
@@ -160,7 +166,7 @@ int main(int argc, const char* argv[])
     // inclination from source array
     float *d_FSth;
     cudaMalloc((void**)&d_FSth, totFacets * sizeof(float));
-
+    cudaMemsetAsync(d_FSth, 0, totFacets * sizeof(float));
 
     // --- this alloc is for cropped facets ---
 
@@ -193,6 +199,8 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_Itd, nfacets * sizeof(float));
     cudaMalloc((void**)&d_Iph, nfacets * sizeof(float));
     cudaMalloc((void**)&d_Ith, nfacets * sizeof(float));
+    cudaMemsetAsync(d_Iph, 0, nfacets * sizeof(float));
+    cudaMemsetAsync(d_Ith, 0, nfacets * sizeof(float));
 
 
     // allocate refracted rays
@@ -314,9 +322,10 @@ int main(int argc, const char* argv[])
                             d_fux, d_fuy, d_fuz,
                             d_fvx, d_fvy, d_fvz,
                             d_Itd, d_Iph, d_Ith,
-                            nfacets);
+                            valid_facets);
         checkCUDAError("compIncidentRays kernel");
         cudaDeviceSynchronize();
+        
 
         // --- COMP REFRACTED RAYS ---
                 
@@ -336,6 +345,7 @@ int main(int argc, const char* argv[])
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
                                                     par.pol, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
+
 
         
         // --- CONSTRUCT REFLECTED SIGNAL ---
@@ -376,7 +386,7 @@ int main(int argc, const char* argv[])
                                                     par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                     par.fs, par.P, par.lam, par.eps_1, par.eps_2);
         checkCUDAError("compRefrEnergyOut kernel");
-        
+
         // --- CONSTRUCT REFRACTED SIGNAL ---
 
         // launch with shared memory for per-block accumulation (real+imag floats)
@@ -405,7 +415,7 @@ int main(int argc, const char* argv[])
         free(filename);
 
         // overwrite progress printed to terminal
-        printf("\rCompleted source %d of %d, @ (%f, %f, %f)", is+1, par.ns, sx, par.sy, par.sz);
+        printf("\rCompleted source %d of %d in %.1f ms", is+1, par.ns, reportTimeNum());
         fflush(stdout);
 
     }
