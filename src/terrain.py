@@ -183,6 +183,14 @@ class Terrain():
         uvecs      = np.reshape(self.uvectors, (xx.shape[0]*xx.shape[1], 3))
         vvecs      = np.reshape(self.vvectors, (xx.shape[0]*xx.shape[1], 3))
 
+        i = 0
+        totLines = xx.shape[0]*xx.shape[1]
+
         with open(filename, 'w') as f:
             for x, y, z, (nx, ny, nz), (ux, uy, uz), (vx, vy, vz) in zip(xx.flatten(), yy.flatten(), zz.flatten(), norms, uvecs, vvecs):
+                if i % 100 == 0:
+                    print(f"Writing out {filename}: {round((100*i+1)/totLines, 2):5.2f} %", end="    \r")
                 f.write(f"{x},{y},{z}:{nx},{ny},{nz}:{ux},{uy},{uz}:{vx},{vy},{vz}\n")
+                i += 1
+
+        print("")

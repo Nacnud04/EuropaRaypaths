@@ -68,6 +68,10 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
                                  float* d_Itd, float* d_Iph, float* d_Ith,
                                  int nfacets) {
 
+    pointDistanceBulk(sx, sy, sz,
+                      d_fx, d_fy, d_fz,
+                      d_Itd, nfacets);
+
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
@@ -77,8 +81,11 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
         float Iz = (d_fz[idx] - sz) / d_Itd[idx];
 
         // incident inclination
-        d_Ith[idx] = slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
-                                          d_fnx[idx], d_fny[idx], d_fnz[idx]));
+        // NOTE: this is clamped to -1 to 1 b/c floating point errors can cause perfectly
+        // incident facets to return nan
+        d_Ith[idx] = fmaxf(-1.0f, fminf(1.0f, 
+                            slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
+                            d_fnx[idx], d_fny[idx], d_fnz[idx]))));
 
         // incident azimuth
         d_Iph[idx] = slowAtan2(
@@ -150,7 +157,7 @@ int cropByAperture(int totfacets, int nfacets, float aperture, float* d_FSth,
     auto end_fvy = thrust::copy_if(Ffvy, Ffvy + totfacets, FSth, fvy, pred);
     auto end_fvz = thrust::copy_if(Ffvz, Ffvz + totfacets, FSth, fvz, pred);
 
-    auto end_Itd = thrust::copy_if(FItd, FItd + totfacets, FSth, Itd, pred);
+    //auto end_Itd = thrust::copy_if(FItd, FItd + totfacets, FSth, Itd, pred);
 
     int valid = (int)(end_fx - fx);
     return valid;

@@ -16,7 +16,10 @@ rdrgrm = []
 for i, f in enumerate(filenames):
     if i < params['ns']:
         arr = np.loadtxt(f).T
-        rdrgrm.append(arr[0] + 1j * arr[1])
+        trc = arr[0] + 1j * arr[1]
+        if np.isnan(trc).any():
+            print(f"Found NaN in file: {f}")
+        rdrgrm.append(trc)
 
 rdrgrm = np.array(rdrgrm).T
 

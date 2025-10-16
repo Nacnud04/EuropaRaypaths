@@ -13,8 +13,8 @@ params = {
     "subsurface_gain": 98,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 3,           # aperture (from nadir->edge) [deg]
-    #"aperture": 8,           # aperture (from nadir->edge) [deg]
+    #"aperture": 5,           # aperture (from nadir->edge) [deg]
+    "aperture": 8,           # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  10e3,          # receive window length [m]
@@ -24,7 +24,7 @@ params = {
     # surface parameters
     "sigma": 1,              # sigma [?]
     "rms_height": 0.4,       # surface roughness [m]
-    "buff": 1.2,             # buffer on estimated facet count [.]
+    "buff": 1.05,            # buffer on estimated facet count [.]
 
     # atmosphere/subsurface parameters
     "eps_1": 1.0,            # permittivity of medium 1 
