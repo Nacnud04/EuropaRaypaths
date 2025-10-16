@@ -176,3 +176,13 @@ class Terrain():
             plt.show()
         else:
             plt.close()
+
+    def export(self, filename):
+        xx, yy, zz = self.XX, self.YY, self.zs
+        norms      = np.reshape(self.normals, (xx.shape[0]*xx.shape[1], 3))
+        uvecs      = np.reshape(self.uvectors, (xx.shape[0]*xx.shape[1], 3))
+        vvecs      = np.reshape(self.vvectors, (xx.shape[0]*xx.shape[1], 3))
+
+        with open(filename, 'w') as f:
+            for x, y, z, (nx, ny, nz), (ux, uy, uz), (vx, vy, vz) in zip(xx.flatten(), yy.flatten(), zz.flatten(), norms, uvecs, vvecs):
+                f.write(f"{x},{y},{z}:{nx},{ny},{nz}:{ux},{uy},{uz}:{vx},{vy},{vz}\n")

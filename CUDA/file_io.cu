@@ -36,6 +36,7 @@ struct SimulationParameters {
     float sigma;        // sigma
     float rms_h;        // surface rms height
     float ks;
+    float buff;         // buffer for estimated facet count
 
     // material parameters
     float eps_1;        // Permittivity of medium 1 
@@ -102,6 +103,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.sigma = j["sigma"];
     params.rms_h = j["rms_height"];
     params.ks = params.k * params.rms_h;
+    params.buff = j["buff"];
 
     params.eps_1 = j["eps_1"];
     params.eps_2 = j["eps_2"];
@@ -125,9 +127,11 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     alpha   = (alpha * 2 * 3.14159) / params.lam;
     params.alpha2  = alpha;
 
+    // target location
     params.tx = j["tx"];
     params.ty = j["ty"];
     params.tz = j["tz"];
+    std::cout << "Using target location: (" << params.tx << ", " << params.ty << ", " << params.tz << ")" << std::endl;
 
     params.smpl = j["rx_sample_rate"];
 

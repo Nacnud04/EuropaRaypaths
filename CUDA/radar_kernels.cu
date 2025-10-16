@@ -1,8 +1,10 @@
 #include <cuComplex.h>
+#include <math.h>
 
 
 // Tile size for range bins processed per-block in shared memory
 #define REFL_TILE_NR 128
+#define sqrt2pi 2.506628275f
 
 __global__ void reflRadarSignal(float* d_SltRng, float* d_fRe,
                                 cuFloatComplex* refl_sig, float r0, float dr, int nr,
@@ -107,6 +109,27 @@ __global__ void reflRadarSignal(float* d_SltRng, float* d_fRe,
     }
 }
 
+// -- TARGET RERADIATION FUNCTIONS ---
+// 0 = return all energy (corner reflector)
+// 1 = specular reflector (gaussain for difference between inbound and outbound theta)
+
+// this function returns a scalar proportional to the amount of energy reradiated
+// by the target from an inbound ray
+__device__ float rerad_funct(int funcnum, float th1, float th2){
+    if (funcnum == 0) {
+        return 1;
+    } else if (funcnum == 1) {
+        if (th1 < 2 * (pi/180)) {
+            return 1;
+        } else {return 0;}
+    } else if (funcnum == 2) {
+        float sigma = 2 * (pi/180);
+        float center = 0;
+        return expf(-0.5*pow((th1-center), 2)/(sigma*sigma));
+    } else {
+        return 1;
+    }
+}
 
 __device__ int reradiate_index(int id0)
  {
@@ -118,7 +141,7 @@ __device__ int reradiate_index(int id0)
 // Tile size reuse for refracted signal
 #define REFR_TILE_NR 128
 
-__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, 
+__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Ith, 
                                 float* d_fReflEI, float* d_fReflEO,
                                 cuFloatComplex* refr_sig, 
                                 float r0, float dr, int nr, float c, float c2, 
@@ -158,7 +181,7 @@ __global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd,
 
                 float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
                 
-                float reradConst = d_fReflEI[fid] * d_fReflEO[fid1];
+                float reradConst = rerad_funct(1, d_Ith[fid], d_Ith[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
                 reradConst = reradConst * radarEq(P, G, 1, lam, sltrng, fs);
 
                 // slantrange equivalent time
