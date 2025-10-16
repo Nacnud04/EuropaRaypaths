@@ -37,7 +37,7 @@ def snell_intersection(xA, zA, xB, zB, v1, v2):
     else:
         raise RuntimeError("Root finding did not converge.")
 
-def est_slant_range(sx, sz, tx, tz, c1, c2):
+def est_slant_range(sx, sz, tx, tz, c1, c2, trim=True):
 
     # cast lists into numpy arrays
     for s in (sx, sz):
@@ -51,6 +51,8 @@ def est_slant_range(sx, sz, tx, tz, c1, c2):
         sltrng_ests.append(np.sqrt((x - ix)**2 + sz**2) + np.sqrt((ix - tx)**2 + tz**2) * (c1/c2))
         #sltrng_ests.append(np.sqrt((x - ix)**2 + sz**2) + np.sqrt((ix - tx)**2 + tz**2))
     sltrng_ests = np.array(sltrng_ests)
+    if not trim:
+        return sltrng_ests
     # now center the estimate to adjust for target azumith offset
     trc_min = np.argmin(sltrng_ests)
     if trc_min < len(sltrng_ests) // 2:

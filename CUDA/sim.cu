@@ -56,17 +56,20 @@ void showMemAlloc()
     std::cout << "GPU memory usage: used = " << used_db / 1024.0 / 1024.0 << " MB, fLEe = " << fLEe_db / 1024.0 / 1024.0 << " MB, total = " << total_db / 1024.0 / 1024.0 << " MB" << std::endl;
 }
 
-int main()
+int main(int argc, const char* argv[])
 {
 
+    std::cout << "Using parameter file: " << argv[1] << std::endl;
+
     SimulationParameters par;
-    par = parseSimulationParameters("params.json");
+    par = parseSimulationParameters(argv[1]);
 
     // --- LOAD FACETS ---
 
     // first open facet file
     const char* filename;
-    filename = "facets.fct";
+    filename = argv[2];
+    std::cout << "Using facet file:     " << argv[2] << std::endl;
 
     // load file and count facets
     FILE *facetFile = fopen(filename, "r");
@@ -98,7 +101,13 @@ int main()
     reportTime("Loading facets and their bases");
 
     // estimate the number of illuminated facets
-    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, par.aperture);
+    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, par.aperture, par.buff);
+    
+    // you cannot have more facets illuminated than exist
+    if (nfacets > totFacets) {
+        nfacets = totFacets;
+    }
+
     std::cout << "Estimated that " << nfacets << " facets are illuminated by par.aperture" << std::endl;
 
     // --- MOVE ALL FACETS FROM HOST TO GPU ---
@@ -147,6 +156,10 @@ int main()
     cudaMalloc((void**)&d_FItd, totFacets * sizeof(float));
     cudaMalloc((void**)&d_FIph, totFacets * sizeof(float));
     cudaMalloc((void**)&d_FIth, totFacets * sizeof(float));
+
+    // inclination from source array
+    float *d_FSth;
+    cudaMalloc((void**)&d_FSth, totFacets * sizeof(float));
 
 
     // --- this alloc is for cropped facets ---
@@ -235,6 +248,10 @@ int main()
     cudaMalloc((void**)&d_sig, par.nr * sizeof(cuFloatComplex));
     cudaMemsetAsync(d_sig, 0, par.nr * sizeof(cuFloatComplex));
 
+    // temp source nadir vector
+    float snx, sny, snz;
+    snx = 0; sny = 0; snz = 1;
+
 
     for (int is=0; is<par.ns; is++) {
 
@@ -252,35 +269,32 @@ int main()
         // d_sig is fully overwritten by combineRadarSignals, so clearing it is
         // optional; left out for slightly better performance.
 
-        // --- COMP INCIDENT RAYS ---
+        
+        // --- GET INCLINATION OF EACH RAY RELATIVE TO SOURCE ---
         int blockSize = 256;
         // compute incident rays for the full facet set (totFacets)
         int numBlocksAll = (totFacets + blockSize - 1) / blockSize;
-        compIncidentRays<<<numBlocksAll, blockSize>>>(sx, par.sy, par.sz,
+        compSourceInclination<<<numBlocksAll, blockSize>>>(sx, par.sy, par.sz,
                             d_Ffx, d_Ffy, d_Ffz,
-                            d_Ffnx, d_Ffny, d_Ffnz,
-                            d_Ffux, d_Ffuy, d_Ffuz,
-                            d_Ffvx, d_Ffvy, d_Ffvz,
-                            d_FItd, d_FIph, d_FIth,
-                            totFacets);
-        checkCUDAError("compIncidentRays kernel");
-        cudaDeviceSynchronize();
+                            snx, sny, snz,
+                            d_FItd, d_FSth, totFacets);
+        checkCUDAError("compSourceInclination kernel");
 
         // --- CROP TO ILLUMINATED ---
         // crop full facet arrays into the per-source cropped arrays and get
         // the number of valid (illuminated) facets returned by the function
         
-        int valid_facets = cropByAperture(totFacets, nfacets, par.aperture,
+        int valid_facets = cropByAperture(totFacets, nfacets, par.aperture, d_FSth,
                                         d_Ffx,  d_Ffy,  d_Ffz,
                                         d_Ffnx, d_Ffny, d_Ffnz,
                                         d_Ffux, d_Ffuy, d_Ffuz,
                                         d_Ffvx, d_Ffvy, d_Ffvz,
-                                        d_FItd, d_FIph, d_FIth,
+                                        d_FItd,
                                         d_fx,   d_fy,   d_fz,
                                         d_fnx,  d_fny,  d_fnz,
                                         d_fux,  d_fuy,  d_fuz,
                                         d_fvx,  d_fvy,  d_fvz,
-                                        d_Itd,  d_Iph,  d_Ith);
+                                        d_Itd);
         checkCUDAError("cropByAperture process");
         cudaDeviceSynchronize();
 
@@ -292,6 +306,17 @@ int main()
         }
 
         int numBlocks = (nfacets + blockSize - 1) / blockSize;
+
+        // --- COMP INCIDENT RAYS ---
+        compIncidentRays<<<numBlocks, blockSize>>>(sx, par.sy, par.sz,
+                            d_fx,  d_fy,   d_fz,
+                            d_fnx, d_fny, d_fnz,
+                            d_fux, d_fuy, d_fuz,
+                            d_fvx, d_fvy, d_fvz,
+                            d_Itd, d_Iph, d_Ith,
+                            nfacets);
+        checkCUDAError("compIncidentRays kernel");
+        cudaDeviceSynchronize();
 
         // --- COMP REFRACTED RAYS ---
                 
@@ -356,7 +381,7 @@ int main()
 
         // launch with shared memory for per-block accumulation (real+imag floats)
         refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Rtd, 
-                        d_fReflEI, d_fReflEO,
+                        d_Rth, d_fReflEI, d_fReflEO,
                         d_refr_sig, 
                         par.rst, par.dr, par.nr, par.c, par.c_2,
                         par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
@@ -372,12 +397,15 @@ int main()
         cudaDeviceSynchronize();
 
         // copy Itd to host and export as file
-        char* filename = (char*)malloc(20 * sizeof(char));
-        sprintf(filename, "rdrgrm/s%03d.txt", is);
+        // use wider zero-padding so lexicographic sorting of filenames
+        // (performed by output.py) matches numeric order even for >3-digit indices
+        char* filename = (char*)malloc(32 * sizeof(char));
+        sprintf(filename, "rdrgrm/s%06d.txt", is);
         saveSignalToFile(filename, d_sig, par.nr);
+        free(filename);
 
         // overwrite progress printed to terminal
-        printf("\rCompleted source %d of %d", is+1, par.ns);
+        printf("\rCompleted source %d of %d, @ (%f, %f, %f)", is+1, par.ns, sx, par.sy, par.sz);
         fflush(stdout);
 
     }
