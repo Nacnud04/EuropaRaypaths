@@ -66,6 +66,7 @@ int main(int argc, const char* argv[])
 {
 
     std::cout << "Using parameter file: " << argv[1] << std::endl;
+    std::cout << "Exporting to: " << argv[3] << std::endl;
 
     SimulationParameters par;
     par = parseSimulationParameters(argv[1]);
@@ -260,6 +261,7 @@ int main(int argc, const char* argv[])
     float snx, sny, snz;
     snx = 0; sny = 0; snz = 1;
 
+    float runtime = 0; // run time in seconds
 
     for (int is=0; is<par.ns; is++) {
 
@@ -406,16 +408,17 @@ int main(int argc, const char* argv[])
         // Wait for the GPU to finish
         cudaDeviceSynchronize();
 
-        // copy Itd to host and export as file
-        // use wider zero-padding so lexicographic sorting of filenames
-        // (performed by output.py) matches numeric order even for >3-digit indices
-        char* filename = (char*)malloc(32 * sizeof(char));
-        sprintf(filename, "rdrgrm/s%06d.txt", is);
+        char* filename = (char*)malloc(64 * sizeof(char));
+        sprintf(filename, "%s/s%06d.txt", argv[3], is);
         saveSignalToFile(filename, d_sig, par.nr);
         free(filename);
 
         // overwrite progress printed to terminal
-        printf("\rCompleted source %d of %d in %.1f ms", is+1, par.ns, reportTimeNum());
+        runtime += reportTimeNum();
+        float time_remain = (((par.ns-is))*((runtime*1e-3)/is));
+        int min_remain = time_remain / 60;
+        float sec_remain = time_remain - min_remain * 60;
+        printf("\rCompleted source %d of %d in %.1f ms. Remaining: %d min %.1f sec         ", is+1, par.ns, reportTimeNum(), min_remain, sec_remain);
         fflush(stdout);
 
     }

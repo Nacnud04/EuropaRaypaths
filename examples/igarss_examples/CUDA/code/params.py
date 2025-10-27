@@ -1,7 +1,20 @@
-import sys
+import sys, os
 import pickle
 import numpy as np
 import json
+import pandas as pd
+
+import matplotlib
+
+os.environ["PATH"] += os.pathsep + '/usr/share/texlive/texmf-dist/tex/xelatex'
+
+matplotlib.use("pgf")
+matplotlib.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    'font.family': 'serif',
+    'text.usetex': True,
+    'pgf.rcfonts': False,
+})
 
 params = {
 
@@ -17,7 +30,7 @@ params = {
     "aperture": 8,           # aperture (from nadir->edge) [deg]
 
     # receive window parameters
-    "rx_window_m":  10e3,          # receive window length [m]
+    "rx_window_m": 7e3,            # receive window length [m]
     "rx_window_offset_m": 22.5e3,  # receive window offset [m]
     "rx_sample_rate": 48e6,        # receive sample rate [Hz]
 
@@ -82,3 +95,33 @@ ridge_wid = 4e3     # ridge width [m]
 x_offset  = 5e3     # x offset [m]
 terrain.double_ridge(amp, amp, peak_dist, ridge_wid, x_offset)
 terrain.export("facets/ridge.fct")
+
+# --- GENERATE w/ GIVEN DEM GEOMETRY
+
+# make track 60 km instead now
+params["ox"] = -30e3 
+params["nx"] = 12000
+xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
+
+# increase source count
+params['sx0'] = -30e3
+params['ns']  = 6000
+
+# move target to new center
+params['tx'] = 0
+
+# export parameter file
+with open("params/dem.json", "w") as f:
+    json.dump(params, f, indent=4)
+
+with open("params/dem.pkl", 'wb') as hdl:
+    pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
+
+# load CSV
+DEM = pd.read_csv("facets/dem_profile.csv")
+
+# create terrain object
+terrain = Terrain(xmin, xmax, ymin, ymax, params['fs'])
+terrain.gen_from_provided(DEM['Along Track (km)']*1e3, DEM['Surface Height (m)'])
+terrain.show_profile('x', 0, savefig="figures/dem_profile.pgf", shape=(3,1))
+terrain.export("facets/dem.fct")
