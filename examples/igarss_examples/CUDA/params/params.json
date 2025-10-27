@@ -7,7 +7,7 @@
     "range_resolution": 300,
     "polarization": "HH",
     "aperture": 8,
-    "rx_window_m": 10000.0,
+    "rx_window_m": 7000.0,
     "rx_window_offset_m": 22500.0,
     "rx_sample_rate": 48000000.0,
     "sigma": 1,

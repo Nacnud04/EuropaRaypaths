@@ -89,6 +89,21 @@ class Terrain():
         
         self.gen_normals()
 
+
+    def gen_from_provided(self, prov_xs, prov_zs, axis='x'):
+
+        if axis != 'x':
+
+            raise NotImplementedError()
+        
+        # interpolate profile onto x axis
+        profile = np.interp(self.xs, prov_xs, prov_zs)
+
+        for i in range(len(self.ys)):
+            self.zs[i, :] = profile
+
+        self.gen_normals()
+
     
     def get_surf(self, center, dims):
 
