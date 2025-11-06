@@ -192,6 +192,23 @@ class Terrain():
         else:
             plt.close()
 
+    def add_profile_to_axis(self, ax, axis, val):
+
+        if axis == 'x':
+
+            i = np.argmin(np.abs(self.ys - val))
+            prof = self.zs[i, :]
+            scale = self.xs
+
+        elif axis == 'y':
+
+            i = np.argmin(np.abs(self.xs - val))
+            prof = self.zs[:, i]
+            scale = self.ys
+
+        ax.plot(scale/1e3, prof, color="black", linewidth=1)
+        ax.set_ylabel("Height [m]")
+
     def export(self, filename):
         xx, yy, zz = self.XX, self.YY, self.zs
         norms      = np.reshape(self.normals, (xx.shape[0]*xx.shape[1], 3))

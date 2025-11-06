@@ -1,6 +1,18 @@
 #include <cuComplex.h>
 #include <math.h>
 
+// thrust includes for phasor computation
+#include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
+#include <thrust/reduce.h>
+#include <thrust/scatter.h>
+#include <thrust/complex.h>
+
+
+// FFT for chirp convolution
+#include <cufft.h>
+
 
 // Tile size for range bins processed per-block in shared memory
 #define REFL_TILE_NR 128
@@ -251,4 +263,222 @@ __global__ void combineRadarSignals(cuFloatComplex* refl_sig, cuFloatComplex* re
         total_sig[ir] = cuCaddf(refl_sig[ir], refr_sig[ir]);
 
     }
+}
+
+
+__global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs, 
+                              float* d_fReflE, float* d_SltRng, 
+                              float lam, float range_res, float nfacets,
+                              float rst, float dr, int nr) {
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id < nfacets) {
+
+        // evaluate the phasor exponent
+        float phase = (4.0f * 3.14159265f / lam) * d_SltRng[id];
+        
+        // exponentiate
+        float c, s;
+        sincosf(phase, &s, &c);
+        cuFloatComplex phasor = make_cuFloatComplex(c, s);
+
+        // scale by the coefficient
+        refl_phasor[id] = cuCmulf(phasor, make_cuFloatComplex(d_fReflE[id], 0.0f));
+
+        // compute the best range bin based on slant range
+        short bin = (short)((d_SltRng[id] - rst) / dr);
+
+        // if bin is out of range, set to bin 0, and zero the phasor
+        if ((bin < 0) || (bin >= nr)) {
+            bin = 0;
+            refl_phasor[id] = make_cuFloatComplex(0.0f, 0.0f);
+        }
+
+        // move bin into array
+        refl_rbs[id] = bin;
+
+    }
+
+}
+
+
+__global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
+                              float* d_fRfrSR, float* d_fReflEI, float* d_fReflEO, 
+                              float* d_Rth, float* d_Rtd,
+                              float P, float G, float lam, float fs, int nfacets,
+                              float rst, float dr, int nr, float c, float c2) {
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id < nfacets) {
+
+        // get total slant range
+        int id1 = reradiate_index(id);
+        float sltrng = (d_fRfrSR[id] + d_fRfrSR[id1]) * 0.5f;
+
+        // compute reradiation constant based on target reradiation function,
+        // the radar equation, and other losses in fReflEI and fReflEO
+        float reradConst = rerad_funct(1, d_Rth[id], d_Rth[id1]) * d_fReflEI[id] * d_fReflEO[id1];
+              reradConst = reradConst * radarEq(P, G, 1, lam, sltrng, fs);
+
+        // compute slant range equivalent time
+        float rngt = (sltrng - d_Rtd[id]) + d_Rtd[id] * (c / c2);
+
+        // evaluate the phasor exponent
+        float phase = (4.0f * 3.14159265f / lam) * rngt;
+        
+        // exponentiate
+        float c, s;
+        sincosf(phase, &s, &c);
+        cuFloatComplex phasor = make_cuFloatComplex(c, s);
+
+        // scale by the coefficient
+        refr_phasor[id] = cuCmulf(phasor, make_cuFloatComplex(reradConst, 0.0f));
+
+        // compute the best range bin based on slant range
+        short bin = (short)((rngt - rst) / dr);
+
+        // if bin is out of range, set to bin 0, and zero the phasor
+        if ((bin < 0) || (bin >= nr)) {
+            bin = 0;
+            refr_phasor[id] = make_cuFloatComplex(0.0f, 0.0f);
+        }
+
+        // move bin into array
+        refr_rbs[id] = bin;
+        
+    }
+
+}
+
+struct cuComplexAdd {
+    __host__ __device__
+    cuFloatComplex operator()(const cuFloatComplex& a, const cuFloatComplex& b) const {
+        return make_cuFloatComplex(a.x + b.x, a.y + b.y);
+    }
+};
+
+void genPhasorTrace(cuFloatComplex* d_phasorTrace,
+                    short* d_rbs, cuFloatComplex* d_phasors,
+                    int nfacets, int nr){
+
+    // turn pointers into thrust pointers
+    thrust::device_ptr<short> keys_begin(d_rbs);
+    thrust::device_ptr<short> keys_end(d_rbs + nfacets);
+    thrust::device_ptr<cuFloatComplex> vals_begin(d_phasors);
+
+    // create temporary buffers for sorted values and keys
+    thrust::device_vector<short> sorted_keys(keys_begin, keys_end);
+    thrust::device_vector<cuFloatComplex> sorted_vals(vals_begin, vals_begin + nfacets);
+
+    // SORT BY KEY (EQUAL RANGE BINS CONSECUTIVE)
+    thrust::sort_by_key(sorted_keys.begin(), sorted_keys.end(), sorted_vals.begin());
+
+    // REDUCE BY KEY (SUM VALUES WITHIN EQUAL RANGE BINS)
+    thrust::device_vector<short> unique_keys(nfacets);
+    thrust::device_vector<cuFloatComplex> reduced_vals(nfacets);
+
+    auto new_end = thrust::reduce_by_key(
+        sorted_keys.begin(), sorted_keys.end(),
+        sorted_vals.begin(),
+        unique_keys.begin(),
+        reduced_vals.begin(),
+        thrust::equal_to<short>(),
+        cuComplexAdd()
+    );
+
+    size_t num_unique = new_end.first - unique_keys.begin();
+    //std::cout << "Number of unique range bins in phasor trace: " << num_unique << std::endl;
+
+    // SCATTER REDUCED VALUES INTO OUTPUT PHASOR TRACE
+    thrust::device_ptr<cuFloatComplex> output_begin(d_phasorTrace);
+    thrust::fill(output_begin, output_begin + nr, make_cuFloatComplex(0.0f, 0.0f));
+
+    // scatter reduced results into output array (phasor trace)
+    thrust::scatter(
+        reduced_vals.begin(), reduced_vals.begin() + num_unique,
+        unique_keys.begin(), output_begin
+    );
+
+}
+
+
+__global__ void genChirp(float* d_chirp, float rst, float dr, int nr, float range_res){
+
+    int ir = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ir < nr) {
+
+        float r = rst + ir * dr;
+        float chirp_cen = rst;
+        d_chirp[ir] = sinc((r-chirp_cen)/range_res);
+        d_chirp[ir] += sinc((r-(rst + nr * dr))/range_res);
+
+    }
+
+}
+
+
+__global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSignal, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        complexSignal[i].x = realSignal[i];
+        complexSignal[i].y = 0.0f;
+    }
+}
+
+__global__ void complexPointwiseMul(cuFloatComplex* a, const cuFloatComplex* b, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        cuFloatComplex A = a[i];
+        cuFloatComplex B = b[i];
+        a[i] = make_cuFloatComplex(A.x * B.x - A.y * B.y,
+                                   A.x * B.y + A.y * B.x);
+    }
+}
+
+__global__ void scaleComplex(cuFloatComplex* data, int N, float scale) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        data[i].x *= scale;
+        data[i].y *= scale;
+    }
+}
+
+void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp, 
+                         cuFloatComplex* d_sig, int nr) {
+
+    // Allocate device memory for complex version of chirp
+    cuFloatComplex* d_chirpComplex;
+    cudaMalloc(&d_chirpComplex, sizeof(cuFloatComplex) * nr);
+
+    // Convert real chirp to complex
+    int threads = 256;
+    int blocks = (nr + threads - 1) / threads;
+    realToComplex<<<blocks, threads>>>(d_chirp, d_chirpComplex, nr);
+
+    // Copy phasor trace to output buffer (d_sig)
+    cudaMemcpy(d_sig, d_phasorTrace, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
+
+    // Create FFT plan
+    cufftHandle plan;
+    cufftPlan1d(&plan, nr, CUFFT_C2C, 1);
+
+    // Forward FFT
+    cufftExecC2C(plan, d_sig, d_sig, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_chirpComplex, d_chirpComplex, CUFFT_FORWARD);
+
+    // Multiply in frequency domain
+    complexPointwiseMul<<<blocks, threads>>>(d_sig, d_chirpComplex, nr);
+
+    // Inverse FFT
+    cufftExecC2C(plan, d_sig, d_sig, CUFFT_INVERSE);
+
+    // Normalize by array length
+    float scale = 1.0f / nr;
+    scaleComplex<<<blocks, threads>>>(d_sig, nr, scale);
+
+    // Cleanup
+    cufftDestroy(plan);
+    cudaFree(d_chirpComplex);
 }
