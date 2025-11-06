@@ -419,6 +419,20 @@ __global__ void genChirp(float* d_chirp, float rst, float dr, int nr, float rang
 }
 
 
+__global__ void genCenteredChirp(float* d_chirp, float rst, float dr, int nr, float range_res){
+
+    int ir = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ir < nr) {
+
+        float r = rst + ir * dr;
+        float chirp_cen = rst + (nr / 2) * dr;
+
+        d_chirp[ir] = sinc((r - chirp_cen) / range_res);
+
+    }
+}
+
+
 __global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSignal, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
@@ -481,4 +495,68 @@ void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp,
     // Cleanup
     cufftDestroy(plan);
     cudaFree(d_chirpComplex);
+}
+
+void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
+                               cuFloatComplex* d_sig, int nr) {
+
+    // zero padded size for linear convolution
+    int paddedNr = 2 * nr;              
+
+    // allocate device memory for padded complex chirp and phasor
+    cuFloatComplex* d_PADchirp;
+    cuFloatComplex* d_PADphasor;
+    cudaMalloc(&d_PADchirp, sizeof(cuFloatComplex) * paddedNr);
+    cudaMalloc(&d_PADphasor, sizeof(cuFloatComplex) * paddedNr);
+
+    // zero fill both padded arrays
+    cudaMemset(d_PADchirp, 0, sizeof(cuFloatComplex) * paddedNr);
+    cudaMemset(d_PADphasor, 0, sizeof(cuFloatComplex) * paddedNr);
+
+    // move phasor into padded array at beginning (indices 0..nr-1)
+    cudaMemcpy(d_PADphasor, d_phasorTrace, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
+
+    // convert chirp (real) -> complex in a temporary buffer of length nr
+    int threads = 256;
+    int blocks = (nr + threads - 1) / threads;
+    cuFloatComplex* d_chirpComplex;
+    cudaMalloc(&d_chirpComplex, sizeof(cuFloatComplex) * nr);
+    realToComplex<<<blocks, threads>>>(d_chirp, d_chirpComplex, nr);
+
+    // IMPORTANT: copy the chirpComplex into the START of the padded chirp buffer,
+    // not centered. this makes the linear convolution appear at indices [0..2*nr-2].
+    cudaMemcpy(d_PADchirp, d_chirpComplex, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
+    cudaFree(d_chirpComplex);
+
+    // create FFT plan for padded length
+    cufftHandle plan;
+    cufftPlan1d(&plan, paddedNr, CUFFT_C2C, 1);
+
+    // forward FFTs
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_PADchirp,  d_PADchirp,  CUFFT_FORWARD);
+
+    // multiply in frequency domain
+    blocks = (paddedNr + threads - 1) / threads;
+    complexPointwiseMul<<<blocks, threads>>>(d_PADphasor, d_PADchirp, paddedNr);
+
+    // inverse FFT
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_INVERSE);
+
+    // normalize by padded length
+    float scale = 1.0f / paddedNr;
+    scaleComplex<<<blocks, threads>>>(d_PADphasor, paddedNr, scale);
+
+    // linear convolution result lives in d_PADphasor[0 .. 2*nr-2].
+    // to return "same"-mode (length nr) aligned with the original phasor,
+    // extract nr samples starting at kernel_center = floor(kernel_len/2).
+    int kernel_center = nr / 2; // floor
+
+    // copy the centered 'same' portion back to d_sig
+    cudaMemcpy(d_sig, d_PADphasor + kernel_center, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
+
+    // cleanup
+    cufftDestroy(plan);
+    cudaFree(d_PADchirp);
+    cudaFree(d_PADphasor);
 }

@@ -32,5 +32,7 @@
     "oz": 0,
     "fs": 5,
     "nx": 2000,
-    "ny": 400
+    "ny": 400,
+    "convolution": true,
+    "convolution_linear": false
 }

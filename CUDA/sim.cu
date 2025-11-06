@@ -75,8 +75,6 @@ int main(int argc, const char* argv[])
     SimulationParameters par;
     par = parseSimulationParameters(argv[1]);
 
-    const bool convolve = true; // do fast (convolution) based processing
-
     // --- LOAD FACETS ---
 
     // first open facet file
@@ -253,30 +251,35 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(float));
     cudaMemsetAsync(d_fReflEO, 0, nfacets * sizeof(float));
 
-    // reflected and refracted phasors & range bins
     cuFloatComplex* d_refr_phasor;
-    cudaMalloc((void**)&d_refr_phasor, nfacets * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_refr_phasor, 0, nfacets * sizeof(cuFloatComplex));
-    short* d_refr_rbs;
-    cudaMalloc((void**)&d_refr_rbs, nfacets * sizeof(short));
-    cudaMemsetAsync(d_refr_rbs, 0, nfacets * sizeof(short));
-
     cuFloatComplex* d_refl_phasor;
-    cudaMalloc((void**)&d_refl_phasor, nfacets * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_refl_phasor, 0, nfacets * sizeof(cuFloatComplex));
-    short* d_refl_rbs;
-    cudaMalloc((void**)&d_refl_rbs, nfacets * sizeof(short));
-    cudaMemsetAsync(d_refl_rbs, 0, nfacets * sizeof(short));
-
-    // phasor trace
     cuFloatComplex* d_phasorTrace;
-    cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
-
-    // chirp 
+    short* d_refr_rbs; short* d_refl_rbs;
     float* d_chirp;
-    cudaMalloc((void**)&d_chirp, par.nr * sizeof(float));
-    cudaMemsetAsync(d_chirp, 0, par.nr * sizeof(float));
+    if (par.convolution) {
+
+        // reflected and refracted phasors & range bins
+        cudaMalloc((void**)&d_refr_phasor, nfacets * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_refr_phasor, 0, nfacets * sizeof(cuFloatComplex));
+        
+        cudaMalloc((void**)&d_refr_rbs, nfacets * sizeof(short));
+        cudaMemsetAsync(d_refr_rbs, 0, nfacets * sizeof(short));
+        
+        cudaMalloc((void**)&d_refl_phasor, nfacets * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_refl_phasor, 0, nfacets * sizeof(cuFloatComplex));
+
+        cudaMalloc((void**)&d_refl_rbs, nfacets * sizeof(short));
+        cudaMemsetAsync(d_refl_rbs, 0, nfacets * sizeof(short));
+
+        // phasor trace
+        cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
+
+        // chirp 
+        cudaMalloc((void**)&d_chirp, par.nr * sizeof(float));
+        cudaMemsetAsync(d_chirp, 0, par.nr * sizeof(float));
+
+    }
 
     // refracted signal
     cuFloatComplex* d_refr_sig;
@@ -296,9 +299,19 @@ int main(int argc, const char* argv[])
 
     int blockSize = 256;
 
-    // --- GENERATE CHIRP ---
-    genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
-    checkCUDAError("genChirp kernel");
+    // --- GENERATE CHIRP IF FAST METHOD ENABLED ---
+    if (par.convolution) {
+
+        if (!par.convolution_linear) {
+            genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
+            checkCUDAError("genChirp kernel");
+        } 
+        
+        else {
+            genCenteredChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
+            checkCUDAError("genCenteredChirp kernel");
+        }
+    }
 
     for (int is=0; is<par.ns; is++) {
 
@@ -386,7 +399,7 @@ int main(int argc, const char* argv[])
         
         
         // reflected signal construction using original method
-        if (!convolve ) {
+        if (!par.convolution ) {
 
             // --- CONSTRUCT REFLECTED SIGNAL SLOWLY ---
             // launch with shared memory for per-block accumulation (real+imag floats)
@@ -408,9 +421,14 @@ int main(int argc, const char* argv[])
             genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Reflected process");
 
-            // convolve with chirp to get reflected signal
-            convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
-            checkCUDAError("convolvePhasorChirp Reflected process");
+            // par.convolution with chirp to get reflected signal
+            if (!par.convolution_linear) {
+                convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                checkCUDAError("convolvePhasorChirp Reflected process");
+            } else {
+                convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                checkCUDAError("convolvePhasorChirpLinear Reflected process");
+            }
 
         }
 
@@ -445,7 +463,7 @@ int main(int argc, const char* argv[])
         checkCUDAError("compRefrEnergyOut kernel");
         
         // create refracted signal and total signal using original method
-        if (!convolve) {
+        if (!par.convolution) {
 
             // --- CONSTRUCT REFRACTED SIGNAL ---
             // launch with shared memory for per-block accumulation (real+imag floats)
@@ -472,9 +490,14 @@ int main(int argc, const char* argv[])
             genPhasorTrace(d_phasorTrace, d_refr_rbs, d_refr_phasor, valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Refracted process");
 
-            // convolve with chirp to get reflected signal
-            convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_sig, par.nr);
-            checkCUDAError("convolvePhasorChirp Refracted process");
+            // par.convolution with chirp to get reflected signal
+            if (!par.convolution_linear) {
+                convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_sig, par.nr);
+                checkCUDAError("convolvePhasorChirp Refracted process");
+            } else {
+                convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_sig, par.nr);
+                checkCUDAError("convolvePhasorChirpLinear Refracted process");
+            }
 
         }
 

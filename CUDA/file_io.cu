@@ -63,6 +63,10 @@ struct SimulationParameters {
     int nx, ny;
     float fs, ox, oy, oz;
 
+    // processing parameters
+    bool convolution;
+    bool convolution_linear;
+
 };
 
 __host__ SimulationParameters parseSimulationParameters(const std::string& filename) {
@@ -145,7 +149,6 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << params.nr << " samples at " << params.smpl << " Hz" << std::endl;
 
     // load facet params
-    std::cout << "\n -------- FACET -------- " << std::endl;
     params.ox = j["ox"];
     params.oy = j["oy"];
     params.oz = j["oz"];
@@ -155,6 +158,10 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << "Surface facet dimensions: (" << params.nx << "," << params.ny << ") " << std::endl;
     params.fs = j["fs"];
     std::cout << "Facet size: " << params.fs << std::endl;
+
+    // processing parameters
+    params.convolution = j["convolution"];
+    params.convolution_linear = j["convolution_linear"];
     
     return params;
 }

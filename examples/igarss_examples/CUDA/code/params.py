@@ -67,6 +67,10 @@ params = {
     "nx": 6400,
     "ny": 440,
 
+    # processing parameters
+    "convolution": 1,   # use convolution-based processing
+    "convolution_linear": 1,  # use linear convolution instead of circular
+
 }
 
 
