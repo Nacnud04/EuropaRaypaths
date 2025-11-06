@@ -53,6 +53,10 @@ params = {
     "nx": 2000,
     "ny": 400,
 
+    # processing parameters (BOOLEAN)
+    "convolution": True,   # use convolution-based processing
+    "convolution_linear": False,  # use linear convolution instead of circular
+
 }
 
 with open("params.json", "w") as f:
