@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import glob, sys, pickle, os
 
 import matplotlib
@@ -21,12 +22,21 @@ matplotlib.rcParams.update({
 sys.path.append("../../../src")
 from focus import est_slant_range
 from util import mag_to_db
+from terrain import Terrain
 
 # load parameters from pickle
 with open("params/dem.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
 params['aspect'] = 0.5
+
+# generate terrain again for the profile
+xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
+ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
+# import DEM csv
+DEM = pd.read_csv("facets/dem_profile.csv")
+terrain = Terrain(xmin, xmax, ymin, ymax, params['fs'])
+terrain.gen_from_provided(DEM['Along Track (km)']*1e3, DEM['Surface Height (m)'])
 
 lbl="dem"
 
@@ -147,13 +157,22 @@ plt.close()
 extent = (-30, 30, 2*((params['rx_window_offset_m'] + params['rx_window_m'])/c1)*10**6,
         2*(params['rx_window_offset_m']/c1)*10**6)
 
-fig, ax = plt.subplots(3, 1, figsize=(4, 6), constrained_layout=True, dpi=300)
+fig, ax = plt.subplots(4, 1, figsize=(3.555, 8), constrained_layout=True, dpi=300)
 
-im0 = ax[0].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
+# add profile to axis
+terrain.add_profile_to_axis(ax[0], 'x', 0)
+
+# shrink top plot
+pos = ax[0].get_position()
+new_height = pos.height * 0.5  # Reduce height to 50% (adjust as needed)
+new_y = pos.y0 + pos.height - new_height  # Shift upward to preserve spacing
+ax[0].set_position([pos.x0+0.052, new_y, pos.width, new_height])
+
+im0 = ax[1].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
                 vmin=-30, vmax=-15)
 
-im1 = ax[1].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
+im1 = ax[2].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
                 vmin=-10, vmax=8)
 
@@ -164,40 +183,41 @@ zoomed = np.abs(focused[int(s1*rb):int(s2*rb),
 zoomed_extent = (-30 + 60 * 0.4, -30 + 60 * 0.6,
                 2*((params['rx_window_offset_m'] + s2 * params['rx_window_m'])/c1)*10**6,
                 2*((params['rx_window_offset_m'] + s1 * params['rx_window_m'])/c1)*10**6)
-im3 = ax[2].imshow(mag_to_db(zoomed), cmap="viridis",
+im3 = ax[3].imshow(mag_to_db(zoomed), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=zoomed_extent,
                 vmin=-10, vmax=8)
 
 # shrink bottom plot to fit
-pos_top = ax[0].get_position()
-pos_bottom = ax[2].get_position()
+pos_top = ax[1].get_position()
+pos_bottom = ax[3].get_position()
 new_width = pos_top.width
 new_x = 0.05 + pos_bottom.x0 + (pos_bottom.width - new_width) / 2  # center it
-ax[2].set_position([new_x, pos_bottom.y0, new_width, pos_bottom.height])
+ax[3].set_position([new_x, pos_bottom.y0-0.02, new_width, pos_bottom.height])
 
 # add rectangle
 rect = Rectangle((zoomed_extent[0], zoomed_extent[2]),
                 zoomed_extent[1]-zoomed_extent[0],
                 zoomed_extent[3]-zoomed_extent[2],
                 linewidth=1, edgecolor="red", facecolor="none")
-ax[1].add_patch(rect)
+ax[2].add_patch(rect)
 
 # labels and text
-labels = ["(a)", "(b) Focused", "(c) Focused"]
-fontsizes = (11, 11, 9)
+labels = ["(a)","(b)", "(c) Focused", "(d) Focused"]
+fontsizes = (11, 11, 11, 9)
 for a, label, fs in zip(ax, labels, fontsizes):
-    a.set_ylabel("Range [µs]", fontsize=11)
+    
     a.tick_params(axis="both", which="major", labelsize=9, direction="out")
     a.tick_params(axis="both", which="minor", direction="out")
     a.text(0.02, 0.95, label, transform=a.transAxes, fontsize=fs,
         fontweight="bold", va="top", ha="left", color="black",
         bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
 
-ax[2].set_xlabel("Azimuth [km]", fontsize=11)
+ax[3].set_xlabel("Azimuth [km]", fontsize=11)
 
 # colorbars
 ims = [im0, im1, im3]
-for a, im in zip(ax, ims):
+for a, im in zip(ax[1:], ims):
+    a.set_ylabel("Range [µs]", fontsize=11)
     cax = inset_axes(a, width="3%", height="100%",
                     loc='center right', borderpad=-2)  # negative pad pushes it outward
     cbar = fig.colorbar(im, cax=cax, orientation="vertical")

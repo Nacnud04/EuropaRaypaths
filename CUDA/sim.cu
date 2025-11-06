@@ -68,8 +68,14 @@ int main(int argc, const char* argv[])
     std::cout << "Using parameter file: " << argv[1] << std::endl;
     std::cout << "Exporting to: " << argv[3] << std::endl;
 
+    // Program-level timer: start
+    struct timeval prog_t1, prog_t2;
+    gettimeofday(&prog_t1, 0);
+
     SimulationParameters par;
     par = parseSimulationParameters(argv[1]);
+
+    const bool convolve = true; // do fast (convolution) based processing
 
     // --- LOAD FACETS ---
 
@@ -247,6 +253,31 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(float));
     cudaMemsetAsync(d_fReflEO, 0, nfacets * sizeof(float));
 
+    // reflected and refracted phasors & range bins
+    cuFloatComplex* d_refr_phasor;
+    cudaMalloc((void**)&d_refr_phasor, nfacets * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_refr_phasor, 0, nfacets * sizeof(cuFloatComplex));
+    short* d_refr_rbs;
+    cudaMalloc((void**)&d_refr_rbs, nfacets * sizeof(short));
+    cudaMemsetAsync(d_refr_rbs, 0, nfacets * sizeof(short));
+
+    cuFloatComplex* d_refl_phasor;
+    cudaMalloc((void**)&d_refl_phasor, nfacets * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_refl_phasor, 0, nfacets * sizeof(cuFloatComplex));
+    short* d_refl_rbs;
+    cudaMalloc((void**)&d_refl_rbs, nfacets * sizeof(short));
+    cudaMemsetAsync(d_refl_rbs, 0, nfacets * sizeof(short));
+
+    // phasor trace
+    cuFloatComplex* d_phasorTrace;
+    cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
+
+    // chirp 
+    float* d_chirp;
+    cudaMalloc((void**)&d_chirp, par.nr * sizeof(float));
+    cudaMemsetAsync(d_chirp, 0, par.nr * sizeof(float));
+
     // refracted signal
     cuFloatComplex* d_refr_sig;
     cudaMalloc((void**)&d_refr_sig, par.nr * sizeof(cuFloatComplex));
@@ -262,6 +293,12 @@ int main(int argc, const char* argv[])
     snx = 0; sny = 0; snz = 1;
 
     float runtime = 0; // run time in seconds
+
+    int blockSize = 256;
+
+    // --- GENERATE CHIRP ---
+    genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
+    checkCUDAError("genChirp kernel");
 
     for (int is=0; is<par.ns; is++) {
 
@@ -281,7 +318,6 @@ int main(int argc, const char* argv[])
 
         
         // --- GET INCLINATION OF EACH RAY RELATIVE TO SOURCE ---
-        int blockSize = 256;
         // compute incident rays for the full facet set (totFacets)
         int numBlocksAll = (totFacets + blockSize - 1) / blockSize;
         compSourceInclination<<<numBlocksAll, blockSize>>>(sx, par.sy, par.sz,
@@ -347,17 +383,36 @@ int main(int argc, const char* argv[])
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
                                                     par.pol, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
-
-
         
-        // --- CONSTRUCT REFLECTED SIGNAL ---
+        
+        // reflected signal construction using original method
+        if (!convolve ) {
 
-        // launch with shared memory for per-block accumulation (real+imag floats)
-        reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
-                                par.rst, par.dr, par.nr,
-                                par.rng_res, par.lam, valid_facets);
-        checkCUDAError("constructRadarSignal kernel1");
+            // --- CONSTRUCT REFLECTED SIGNAL SLOWLY ---
+            // launch with shared memory for per-block accumulation (real+imag floats)
+            reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
+                                    par.rst, par.dr, par.nr,
+                                    par.rng_res, par.lam, valid_facets);
+            checkCUDAError("constructRadarSignal kernel1");
 
+        } else {
+
+            // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
+            // generate reflected phasor
+            genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
+                                                    d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
+                                                    par.rst, par.dr, par.nr);
+            checkCUDAError("genReflPhasor kernel");
+
+            // generate phasor trace
+            genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Reflected process");
+
+            // convolve with chirp to get reflected signal
+            convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+            checkCUDAError("convolvePhasorChirp Reflected process");
+
+        }
 
         // --- FORCED RAY TO TARGET COMP ---
         
@@ -388,20 +443,43 @@ int main(int argc, const char* argv[])
                                                     par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                     par.fs, par.P, par.lam, par.eps_1, par.eps_2);
         checkCUDAError("compRefrEnergyOut kernel");
+        
+        // create refracted signal and total signal using original method
+        if (!convolve) {
 
-        // --- CONSTRUCT REFRACTED SIGNAL ---
+            // --- CONSTRUCT REFRACTED SIGNAL ---
+            // launch with shared memory for per-block accumulation (real+imag floats)
+            refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Rtd, 
+                            d_Rth, d_fReflEI, d_fReflEO,
+                            d_refr_sig, 
+                            par.rst, par.dr, par.nr, par.c, par.c_2,
+                            par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
+            checkCUDAError("refrRadarSignal kernel");
 
-        // launch with shared memory for per-block accumulation (real+imag floats)
-        refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Rtd, 
-                        d_Rth, d_fReflEI, d_fReflEO,
-                        d_refr_sig, 
-                        par.rst, par.dr, par.nr, par.c, par.c_2,
-                        par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
-        checkCUDAError("refrRadarSignal kernel");
+        } else {
+
+            // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
+
+            // generate refracted phasor
+            genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
+                                                    d_fRfrSR, d_fReflEI, d_fReflEO, 
+                                                    d_Rth, d_Rtd,
+                                                    par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
+                                                    par.rst, par.dr, par.nr, par.c_1, par.c_2);
+            checkCUDAError("genRefrPhasor kernel");
+
+            // generate phasor trace
+            genPhasorTrace(d_phasorTrace, d_refr_rbs, d_refr_phasor, valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Refracted process");
+
+            // convolve with chirp to get reflected signal
+            convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_sig, par.nr);
+            checkCUDAError("convolvePhasorChirp Refracted process");
+
+        }
 
 
         // --- COMBINE INTO OUTPUT SIGNAL AND EXPORT ---
-
         combineRadarSignals<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refl_sig, d_refr_sig, d_sig, par.nr);
         checkCUDAError("combineRadarSignals kernel");
 
@@ -410,6 +488,7 @@ int main(int argc, const char* argv[])
 
         char* filename = (char*)malloc(64 * sizeof(char));
         sprintf(filename, "%s/s%06d.txt", argv[3], is);
+        //saveSignalToFile(filename, d_sig, par.nr);
         saveSignalToFile(filename, d_sig, par.nr);
         free(filename);
 
@@ -421,6 +500,23 @@ int main(int argc, const char* argv[])
         printf("\rCompleted source %d of %d in %.1f ms. Remaining: %d min %.1f sec         ", is+1, par.ns, reportTimeNum(), min_remain, sec_remain);
         fflush(stdout);
 
+    }
+
+    // Program-level timer: end and report summary
+    gettimeofday(&prog_t2, 0);
+    float total_ms = (prog_t2.tv_sec - prog_t1.tv_sec) * 1e3f + (prog_t2.tv_usec - prog_t1.tv_usec) * 1e-3f;
+    float total_s = total_ms / 1e3f;
+    std::cout << std::endl;
+    std::cout << "=== Run summary ===" << std::endl;
+    std::cout << "Total runtime: " << total_ms << " ms (" << total_s << " s)" << std::endl;
+    if (par.ns > 0) {
+        float per_source_ms = total_ms / (float)par.ns;
+        float per_source_s = per_source_ms / 1e3f;
+        std::cout << "Time per source (trace): " << per_source_ms << " ms (" << per_source_s << " s)" << std::endl;
+        float traces_per_sec = ((float)par.ns) / total_s;
+        std::cout << "Throughput: " << traces_per_sec << " traces/sec" << std::endl;
+    } else {
+        std::cout << "No sources (par.ns == 0), cannot compute per-source statistics." << std::endl;
     }
 
     cudaFree(d_Ffx); cudaFree(d_Ffy); cudaFree(d_Ffz);
