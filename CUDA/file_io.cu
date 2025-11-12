@@ -1,3 +1,27 @@
+/******************************************************************************
+ * File:        file_io.cu
+ * Author:      Duncan Byrne
+ * Institution: Univeristy of Colorado Boulder
+ * Department:  Aerospace Engineering Sciences
+ * Email:       duncan.byrne@colorado.edu
+ * Date:        2025-11-07
+ *
+ * Description:
+ *    File providing functions to read simulation parameters from JSON and load facets
+ *
+ * Contents:
+ *    - SimulationParameters struct: Holds all simulation parameters
+ *    - parseSimulationParameters: Reads parameters from a JSON file
+ *    - saveSignalToFile: saves a complex signal from device to a text file
+ *    - loadFacetFile: loads facet data from a text file into host arrays
+ *
+ * Usage:
+ *    #include "file_io.cu"
+ * 
+ * Notes:
+ *
+ ******************************************************************************/
+
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -43,6 +67,7 @@ struct SimulationParameters {
     float eps_2;        // Permittivity of medium 2 
     float sig_1;        // Conductivity in medium 1 
     float sig_2;        // Conductivity in medium 2
+
     // computed params
     float c_1; // speed in medium 1
     float c_2; // speed in medium 2
@@ -52,6 +77,7 @@ struct SimulationParameters {
     float alpha2;
 
     // target parameters
+    int rerad_funct;
     float tx, ty, tz;   // Target position
 
     // range window params
@@ -119,6 +145,10 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.nu_1 = params.nu0 / sqrt(params.eps_1);
     params.nu_2 = params.nu0 / sqrt(params.eps_2);
 
+    //print speeds
+    std::cout << "Speed in medium 1: " << params.c_1 << " m/s" << std::endl;
+    std::cout << "Speed in medium 2: " << params.c_2 << " m/s" << std::endl;
+
     float eps_pp = params.sig_1 / (2 * 3.14159 * params.f0 * params.eps_0);
     float alpha   = sqrt(1 + (eps_pp/params.eps_1)*(eps_pp/params.eps_1)) - 1;
           alpha   = sqrt(0.5 * params.eps_1 * alpha);
@@ -130,12 +160,6 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     alpha   = sqrt(0.5 * params.eps_2 * alpha);
     alpha   = (alpha * 2 * 3.14159) / params.lam;
     params.alpha2  = alpha;
-
-    // target location
-    params.tx = j["tx"];
-    params.ty = j["ty"];
-    params.tz = j["tz"];
-    std::cout << "Using target location: (" << params.tx << ", " << params.ty << ", " << params.tz << ")" << std::endl;
 
     params.smpl = j["rx_sample_rate"];
 
@@ -158,6 +182,9 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << "Surface facet dimensions: (" << params.nx << "," << params.ny << ") " << std::endl;
     params.fs = j["fs"];
     std::cout << "Facet size: " << params.fs << std::endl;
+
+    // target reradiation function
+    params.rerad_funct = j["rerad_funct"];
 
     // processing parameters
     params.convolution = j["convolution"];
@@ -186,7 +213,7 @@ __host__ void saveSignalToFile(const char* filename, cuFloatComplex* d_sig, int 
 int count_lines(FILE* file)
 {
     char buf[BUF_SIZE];
-    int counter = 0;
+    int counter = 1;
     for(;;)
     {
         size_t res = fread(buf, 1, BUF_SIZE, file);
@@ -226,6 +253,30 @@ __host__ void loadFacetFile(FILE * file, const int totfacets,
         // somehow if we are out of memory, break before segfault
         if (i > totfacets) {
             std::cout << "File has more facets than memory allocated - stopping read." << std::endl;
+            break;
+        }
+
+    }
+
+}
+
+
+__host__ void loadTargetFile(FILE* file, const int nt,
+                            float* h_tx, float* h_ty, float* h_tz) {
+
+    // go through line by line and load the targets into memory
+    char line[256];
+    int i = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+        // parse line
+        sscanf(line, "%f,%f,%f",
+               &h_tx[i],   &h_ty[i],  &h_tz[i]);
+        i++;
+
+        // somehow if we are out of memory, break before segfault
+        if (i > nt) {
+            std::cout << "File has more targets than memory allocated - stopping read." << std::endl;
             break;
         }
 

@@ -2,11 +2,11 @@
     "power": 100,
     "frequency": 9000000.0,
     "bandwidth": 1000000.0,
-    "surface_gain": 75,
-    "subsurface_gain": 100,
+    "surface_gain": 67,
+    "subsurface_gain": 95,
     "range_resolution": 300,
     "polarization": "HH",
-    "aperture": 10,
+    "aperture": 7,
     "rx_window_m": 10000.0,
     "rx_window_offset_m": 7500.0,
     "rx_sample_rate": 48000000.0,
@@ -19,9 +19,6 @@
     "sig_2": 1e-06,
     "mu_1": 1.0,
     "mu_2": 1.0,
-    "tx": 0,
-    "ty": 0,
-    "tz": -3000,
     "sy": 0,
     "sz": 10000.0,
     "sdx": 10,
@@ -33,6 +30,7 @@
     "fs": 5,
     "nx": 2000,
     "ny": 400,
+    "rerad_funct": 1,
     "convolution": true,
-    "convolution_linear": false
+    "convolution_linear": true
 }

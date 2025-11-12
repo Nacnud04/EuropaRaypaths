@@ -9,11 +9,11 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 75,       # Antenna gain [dB]
-    "subsurface_gain": 100,   # Subsurface antenna gain [dB]
+    "surface_gain": 67,       # Antenna gain [dB]
+    "subsurface_gain": 95,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 10,           # aperture (from nadir->edge) [deg]
+    "aperture": 7,           # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  10e3,         # receive window length [m]
@@ -21,7 +21,7 @@ params = {
     "rx_sample_rate": 48e6,       # receive sample rate [Hz]
 
     # surface parameters
-    "sigma": 1,              # sigma [?]
+    "sigma": 1,              # RCS (leave as 1) 
     "rms_height": 0.4,       # surface roughness [m]
     "buff": 1.5,             # buffer for facet estimate
 
@@ -32,11 +32,6 @@ params = {
     "sig_2": 1e-6,           # conductivity of medium 2 [S/m]
     "mu_1": 1.0,             # permeability of medium 1
     "mu_2": 1.0,             # permeability of medium 2
-
-    # target parameters
-    "tx": 0,                # target x location [m]
-    "ty": 0,                # target y location [m]
-    "tz": -3000,            # target z location [m]
 
     # source parameters 
     "sy": 0,                # source y location       [m]
@@ -53,9 +48,12 @@ params = {
     "nx": 2000,
     "ny": 400,
 
+    # target params
+    "rerad_funct": 1,  # 1-degree boxcar
+
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing
-    "convolution_linear": False,  # use linear convolution instead of circular
+    "convolution_linear": True,  # use linear convolution instead of circular
 
 }
 

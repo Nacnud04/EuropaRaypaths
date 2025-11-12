@@ -1,3 +1,35 @@
+/******************************************************************************
+ * File:        geometry_kernels.cu
+ * Author:      Duncan Byrne
+ * Institution: Univeristy of Colorado Boulder
+ * Department:  Aerospace Engineering Sciences
+ * Email:       duncan.byrne@colorado.edu
+ * Date:        2025-11-07
+ *
+ * Description:
+ *    File providing CUDA functions relevant to raypath geometry calculation
+ *
+ * Contents:
+ *    - nIlluminatedFacets: approximates number of illuminated facets within aperture
+ *    - compSourceInclination: computes source inclination angle for all facets
+ *    - compIncidentRays: computes incident ray parameters for facets
+ *    - cropByAperture: crops facets based on aperture angle using Thrust
+ *    - compTargetRays: computes target ray parameters for facets
+ *    - facetReradiation: computes facet reradiated field strength
+ *    - radarEq: computes radar equation losses
+ *    - compReflectedEnergy: computes reflected energy constant from each facet
+ *    - snellsLaw: computes refracted angle using Snell's law
+ *    - compRefractedRays: computes refracted ray parameters for facets
+ *    - compRefrEnergyIn: computes refracted energy constant into the subsurface
+ *    - compRefrEnergyOut: computed refracted energy constant out of the subsurface
+ *
+ * Usage:
+ *    #include "geometry_kernels.cu"
+ * 
+ * Notes:
+ *
+ ******************************************************************************/
+
 #include <cuComplex.h>
 #include <math.h>
 
@@ -180,13 +212,14 @@ __global__ void compTargetRays(float tx, float ty, float tz,
     if (idx < nfacets) {
 
         // get incident cartesian vector
-        float Ix = (d_fx[idx] - tx) / d_Ttd[idx];
-        float Iy = (d_fy[idx] - ty) / d_Ttd[idx];
-        float Iz = (d_fz[idx] - tz) / d_Ttd[idx];
+        float Ix = (tx - d_fx[idx]) / d_Ttd[idx];
+        float Iy = (tx - d_fy[idx]) / d_Ttd[idx];
+        float Iz = (tz - d_fz[idx]) / d_Ttd[idx];
 
         // incident inclination
-        d_Tth[idx] = slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
-                                          d_fnx[idx], d_fny[idx], d_fnz[idx]));
+        d_Tth[idx] = fmaxf(-1.0f, fminf(1.0f, 
+                            slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
+                            d_fnx[idx], d_fny[idx], d_fnz[idx]))));
 
         // incident azimuth
         d_Tph[idx] = slowAtan2(
@@ -228,12 +261,13 @@ __device__ float facetReradiation(float dist, float th, float ph,
 }
 
 
-__device__ float radarEq(float P, float G, float sigma, float lam, float dist, float fs){
+__device__ float radarEq(float P, float G, float fs, float lam, float dist){
     
     // Pr = (Pt * G^2 * lam^2 * sigma) / ((4*pi)^3 * R^4)
-    float num = P * G * G * lam * lam * sigma;
+    // note this is the radar equation using the RCS for a flat incident facet.
+    float num = P * G * G * lam * lam * fs * fs * fs * fs;
     float denom = pow(4 * 3.14159, 3) * dist * dist * dist * dist; // (4*pi)^3
-    return (num / denom) * fs * fs;
+    return (num / denom);
 
 }
 
@@ -253,7 +287,7 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], lam, fs);
 
         // losses from radar equation
-        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, sigma, lam, d_Itd[idx], fs);
+        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, fs, lam, d_Itd[idx]);
 
         // reflection coefficient
         // horizontal pol.
@@ -298,14 +332,9 @@ __device__ float snellsLaw(float th, float eps_1, float eps_2) {
 
 
 __global__ void compRefractedRays(float* d_Ith, float* d_Iph,
-                                  float* d_Rth, float* d_Rtd,
+                                  float* d_Rth, 
                                   float* d_fx, float* d_fy, float* d_fz,
-                                  float tx, float ty, float tz,
                                   float eps_1, float eps_2, int nfacets) {
-
-    pointDistanceBulk(tx, ty, tz,
-                      d_fx, d_fy, d_fz,
-                      d_Rtd, nfacets);
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
@@ -319,7 +348,7 @@ __global__ void compRefractedRays(float* d_Ith, float* d_Iph,
 
 
 __global__ void compRefrEnergyIn(
-                    float* d_Rtd, float* d_Rth, float* d_Itd, float* d_Iph,
+                    float* d_Rth, float* d_Itd, float* d_Iph,
                     float* d_Ttd, float* d_Tth, float* d_Tph, float* d_fRfrC,
                     float* d_fRefrEI, float* d_fRfrSR,
                     float ks, int nfacets, float alpha2, float c1, float c2,
@@ -342,14 +371,14 @@ __global__ void compRefrEnergyIn(
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
 
         // signal attenuation
-        d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Rtd[id]);
+        d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Ttd[id]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Rth[id]))*(ks*cosGPU(d_Rth[id]))));
         d_fRefrEI[id] = d_fRefrEI[id] * rough_loss;
 
         // total travel slant range
-        d_fRfrSR[id] = d_Itd[id] + d_Rtd[id];
+        d_fRfrSR[id] = d_Itd[id] + d_Ttd[id];
 
     }
 
