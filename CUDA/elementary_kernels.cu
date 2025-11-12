@@ -1,3 +1,25 @@
+/******************************************************************************
+ * File:        elementary_kernels.cu
+ * Author:      Duncan Byrne
+ * Institution: Univeristy of Colorado Boulder
+ * Department:  Aerospace Engineering Sciences
+ * Email:       duncan.byrne@colorado.edu
+ * Date:        2025-11-07
+ *
+ * Description:
+ *    File providing elementary CUDA kernels for mathematical functions
+ *
+ * Contents:
+ *    - Implementations of many trig functions
+ *    - Vector operations such as distance and dot product
+ *
+ * Usage:
+ *    #include "elementary_kernels.cu"
+ * 
+ * Notes:
+ *
+ ******************************************************************************/
+
 // --- TRIG FUNCTIONS ---
 
 // slow but accurate sin function

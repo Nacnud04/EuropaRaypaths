@@ -1,3 +1,40 @@
+/******************************************************************************
+ * File:        radar_kernels.cu
+ * Author:      Duncan Byrne
+ * Institution: Univeristy of Colorado Boulder
+ * Department:  Aerospace Engineering Sciences
+ * Email:       duncan.byrne@colorado.edu
+ * Date:        2025-11-07
+ *
+ * Description:
+ *    File providing CUDA functions relevant to radar signal generation
+ *
+ * Contents:
+ *    - reflRdrSignal: Kernel to compute reflected radar signal
+ *    - refrRdrSignal: Kernel to compute refracted radar signal
+ *    - rerad_funct:   Device function for target reradiation behavior
+ *    - reradiate_index: Device function for target reradiation index mapping
+ *    - combineRadarSignals: Kernel to sum reflected and refracted signals
+ *    - genReflPhasor: Kernel to generate reflection phasors
+ *    - genRefrPhasor: Kernel to generate refraction phasors
+ *    - genPhasorTrace: Function to bin phasors into range bins
+ *    - genChirp: Kernel to generate chirp signal
+ *    - genCenteredChirp: Kernel to generate a centered chirp signal
+ *    - genCenteredChirpPadded: Kernel to generate padded centered chirp
+ *    - realToComplex: Kernel to convert real signal to complex
+ *    - complexPointwiseMul: Kernel for pointwise complex multiplication
+ *    - scaleComplex: Kernel to scale complex array
+ *    - convolvePhasorChirp: Function to convolve phasor with chirp using FFT (circular)
+ *    - convolvePhasorChirpLinear: Same as above but linear convolution.
+ *
+ * Usage:
+ *    #include "radar_kernels.cu"
+ * 
+ * Notes:
+ *   - Requires CUDA toolkit with cuComplex and cuFFT libraries.
+ *
+ ******************************************************************************/
+
 #include <cuComplex.h>
 #include <math.h>
 
@@ -123,7 +160,7 @@ __global__ void reflRadarSignal(float* d_SltRng, float* d_fRe,
 
 // -- TARGET RERADIATION FUNCTIONS ---
 // 0 = return all energy (corner reflector)
-// 1 = specular reflector (gaussain for difference between inbound and outbound theta)
+// 1 = specular reflector (1 degree boxcar)
 
 // this function returns a scalar proportional to the amount of energy reradiated
 // by the target from an inbound ray
@@ -131,11 +168,19 @@ __device__ float rerad_funct(int funcnum, float th1, float th2){
     if (funcnum == 0) {
         return 1;
     } else if (funcnum == 1) {
-        if (th1 < 2 * (pi/180)) {
+        if (th1 < 1 * (pi/180)) {
             return 1;
         } else {return 0;}
     } else if (funcnum == 2) {
-        float sigma = 2 * (pi/180);
+        if (th1 < 2 * (pi/180)) {
+            return 1;
+        } else {return 0;}
+    } else if (funcnum == 3) {
+        if (th1 < 3 * (pi/180)) {
+            return 1;
+        } else {return 0;}
+    } else if (funcnum == 4) {
+        float sigma = (pi/180);
         float center = 0;
         return expf(-0.5*pow((th1-center), 2)/(sigma*sigma));
     } else {
@@ -153,10 +198,10 @@ __device__ int reradiate_index(int id0)
 // Tile size reuse for refracted signal
 #define REFR_TILE_NR 128
 
-__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Ith, 
+__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Rth, 
                                 float* d_fReflEI, float* d_fReflEO,
                                 cuFloatComplex* refr_sig, 
-                                float r0, float dr, int nr, float c, float c2, 
+                                float r0, float dr, int nr, float c, float c2, int target_fun,
                                 float range_res, float P, float G, float fs, float lam, int nfacets) {
 
     // Similar block-level reduction as in reflRadarSignal. Each block will
@@ -193,8 +238,8 @@ __global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Ith,
 
                 float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
                 
-                float reradConst = rerad_funct(1, d_Ith[fid], d_Ith[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
-                reradConst = reradConst * radarEq(P, G, 1, lam, sltrng, fs);
+                float reradConst = rerad_funct(target_fun, d_Rth[fid], d_Rth[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
+                reradConst = reradConst * radarEq(P, G, fs, lam, sltrng);
 
                 // slantrange equivalent time
                 float rngt = (sltrng - d_Rtd[fid]) + d_Rtd[fid] * (c / c2); 
@@ -305,7 +350,7 @@ __global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs,
 
 __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
                               float* d_fRfrSR, float* d_fReflEI, float* d_fReflEO, 
-                              float* d_Rth, float* d_Rtd,
+                              float* d_Tth, float* d_Ttd, int target_fun,
                               float P, float G, float lam, float fs, int nfacets,
                               float rst, float dr, int nr, float c, float c2) {
 
@@ -313,17 +358,17 @@ __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
 
     if (id < nfacets) {
 
-        // get total slant range
+        // get total slant ranged
         int id1 = reradiate_index(id);
         float sltrng = (d_fRfrSR[id] + d_fRfrSR[id1]) * 0.5f;
 
         // compute reradiation constant based on target reradiation function,
         // the radar equation, and other losses in fReflEI and fReflEO
-        float reradConst = rerad_funct(1, d_Rth[id], d_Rth[id1]) * d_fReflEI[id] * d_fReflEO[id1];
-              reradConst = reradConst * radarEq(P, G, 1, lam, sltrng, fs);
+        float reradConst = rerad_funct(target_fun, d_Tth[id], d_Tth[id1]) * d_fReflEI[id] * d_fReflEO[id1];
+              reradConst = reradConst * radarEq(P, G, fs, lam, sltrng);
 
         // compute slant range equivalent time
-        float rngt = (sltrng - d_Rtd[id]) + d_Rtd[id] * (c / c2);
+        float rngt = (sltrng - d_Ttd[id]) + d_Ttd[id] * (c / c2);
 
         // evaluate the phasor exponent
         float phase = (4.0f * 3.14159265f / lam) * rngt;
@@ -433,6 +478,30 @@ __global__ void genCenteredChirp(float* d_chirp, float rst, float dr, int nr, fl
 }
 
 
+// Generate a centered chirp inside a padded buffer of length paddedNr.
+// The chirp's nominal center corresponds to the center of an unpadded
+// kernel of length `nr` (chirp center at rst + (nr/2)*dr). We place that
+// center at index `kernel_center = nr/2` inside the padded buffer so that
+// downstream extraction (starting at kernel_center) matches the original
+// "same" extraction convention used by convolvePhasorChirpLinear.
+__global__ void genCenteredChirpPadded(float* d_chirp, float rst, float dr, int nr, int paddedNr, float range_res){
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < paddedNr) {
+
+        int kernel_center = nr / 2; // where the original kernel center sits in the padded buffer
+        // chirp center in meters
+        float chirp_cen = rst + (nr / 2) * dr;
+
+        // offset (in bins) from the chirp center for this padded index
+        float offset_bins = (float)(i - kernel_center);
+        float offset_range = offset_bins * dr;
+
+        d_chirp[i] = sinc(offset_range / range_res);
+    }
+}
+
+
 __global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSignal, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
@@ -456,6 +525,15 @@ __global__ void scaleComplex(cuFloatComplex* data, int N, float scale) {
     if (i < N) {
         data[i].x *= scale;
         data[i].y *= scale;
+    }
+}
+
+// Elementwise add: dest += src  (both length N)
+__global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        dest[i].x += src[i].x;
+        dest[i].y += src[i].y;
     }
 }
 
@@ -516,17 +594,13 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
     // move phasor into padded array at beginning (indices 0..nr-1)
     cudaMemcpy(d_PADphasor, d_phasorTrace, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
 
-    // convert chirp (real) -> complex in a temporary buffer of length nr
+    // convert chirp (real) -> complex directly into the padded chirp buffer.
+    // Here we expect `d_chirp` to already contain the padded chirp of length
+    // `paddedNr` (for the linear convolution path we generate a 2*nr chirp).
     int threads = 256;
-    int blocks = (nr + threads - 1) / threads;
-    cuFloatComplex* d_chirpComplex;
-    cudaMalloc(&d_chirpComplex, sizeof(cuFloatComplex) * nr);
-    realToComplex<<<blocks, threads>>>(d_chirp, d_chirpComplex, nr);
-
-    // IMPORTANT: copy the chirpComplex into the START of the padded chirp buffer,
-    // not centered. this makes the linear convolution appear at indices [0..2*nr-2].
-    cudaMemcpy(d_PADchirp, d_chirpComplex, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
-    cudaFree(d_chirpComplex);
+    int blocks = (paddedNr + threads - 1) / threads;
+    // convert the padded real chirp directly into the padded complex buffer
+    realToComplex<<<blocks, threads>>>(d_chirp, d_PADchirp, paddedNr);
 
     // create FFT plan for padded length
     cufftHandle plan;
@@ -549,7 +623,8 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
 
     // linear convolution result lives in d_PADphasor[0 .. 2*nr-2].
     // to return "same"-mode (length nr) aligned with the original phasor,
-    // extract nr samples starting at kernel_center = floor(kernel_len/2).
+    // extract nr samples starting at kernel_center which matches where we
+    // generated/centered the chirp above.
     int kernel_center = nr / 2; // floor
 
     // copy the centered 'same' portion back to d_sig

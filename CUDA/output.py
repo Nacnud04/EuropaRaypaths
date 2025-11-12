@@ -6,6 +6,10 @@ import glob, sys, pickle
 with open("params.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
+params['tx'] = 0
+params['ty'] = 0
+params['tz'] = -3000
+
 filenames = glob.glob("rdrgrm/s*.txt")
 
 # sort filenames to ensure correct order
@@ -54,10 +58,11 @@ vmin  = [-20, None]
 
 for arr, name, cmap, cbar_label, v in zip(lst, names, cmaps, cbar_labels, vmin):
     plt.imshow(arr, aspect='auto', cmap=cmap, interpolation='nearest', vmin=v,
-            extent=[-5, 5, 2*(params["rx_window_offset_m"] + params["rx_window_m"])/299.792458, 2*params["rx_window_offset_m"]/299.792458])
+            extent=[-5, 5, (params["rx_window_offset_m"] + params["rx_window_m"])/1e3, params["rx_window_offset_m"]/1e3])
+    plt.plot(sx/1e3, sltrng/1e3, color="red")
     plt.colorbar(label=cbar_label)
     plt.xlabel("Azimuth [km]")
-    plt.ylabel("Range [us]")
+    plt.ylabel("Range [km]")
     plt.savefig(name)
     plt.close()
 
