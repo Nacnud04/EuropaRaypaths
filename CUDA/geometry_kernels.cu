@@ -195,13 +195,84 @@ int cropByAperture(int totfacets, int nfacets, float aperture, float* d_FSth,
     return valid;
 }
 
+// note: the following function requires dx, dy and dz to be normalized
+__device__ float prismIntersectionDistance(float ox, float oy, float oz,
+                                          float dx, float dy, float dz,
+                                          float xmin, float xmax,
+                                          float ymin, float ymax,
+                                          float zmin, float zmax,
+                                          float t) {
+
+    const float INF = 1e30f;
+
+    // X slab
+    float tx1, tx2;
+    if (fabsf(dx) < 1e-12f) {
+        // Ray parallel to X planes: if origin outside slab -> no hit
+        if (ox < xmin || ox > xmax) return 0.0f;
+        tx1 = -INF;
+        tx2 = INF;
+    } else {
+        tx1 = (xmin - ox) / dx;
+        tx2 = (xmax - ox) / dx;
+        if (tx1 > tx2) { float tmp = tx1; tx1 = tx2; tx2 = tmp; } // ensure entry <= exit
+    }
+
+    // Y slab
+    float ty1, ty2;
+    if (fabsf(dy) < 1e-12f) {
+        if (oy < ymin || oy > ymax) return 0.0f;
+        ty1 = -INF;
+        ty2 = INF;
+    } else {
+        ty1 = (ymin - oy) / dy;
+        ty2 = (ymax - oy) / dy;
+        if (ty1 > ty2) { float tmp = ty1; ty1 = ty2; ty2 = tmp; }
+    }
+
+    // Z slab
+    float tz1, tz2;
+    if (fabsf(dz) < 1e-12f) {
+        if (oz < zmin || oz > zmax) return 0.0f;
+        tz1 = -INF;
+        tz2 = INF;
+    } else {
+        tz1 = (zmin - oz) / dz;
+        tz2 = (zmax - oz) / dz;
+        if (tz1 > tz2) { float tmp = tz1; tz1 = tz2; tz2 = tmp; }
+    }
+
+    // Largest entry, smallest exit
+    float t_entry = fmaxf(fmaxf(tx1, ty1), tz1);
+    float t_exit  = fminf(fminf(tx2, ty2), tz2);
+
+    // clamp by the length of the ray
+    if (t_entry < 0.0f) t_entry = 0.0f;
+    if (t_exit  > t)    t_exit  = t;
+
+    // check if there is no intersection
+    if (t_entry >= t_exit) {
+        return 0.0f;
+    }
+
+    // return the length of the ray inside the prism
+    return t_exit - t_entry;
+
+}
+
+
 __global__ void compTargetRays(float tx, float ty, float tz,
                                float* d_fx, float* d_fy, float* d_fz,
                                float* d_fnx, float* d_fny, float* d_fnz,
                                float* d_fux, float* d_fuy, float* d_fuz,
                                float* d_fvx, float* d_fvy, float* d_fvz,
                                float* d_Ttd, float* d_Tph, float* d_Tth,
-                               int nfacets) {
+                               int nfacets,
+                               float* d_attXmin, float* d_attXmax,
+                               float* d_attYmin, float* d_attYmax,
+                               float* d_attZmin, float* d_attZmax,
+                               float* d_alphas, float alpha2, int nAttenPrisms,
+                               float* d_fRefrEI, float* d_fRefrEO) {
     
     // first get the distance betweem the source and all facets
     pointDistanceBulk(tx, ty, tz,
@@ -213,7 +284,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 
         // get incident cartesian vector
         float Ix = (tx - d_fx[idx]) / d_Ttd[idx];
-        float Iy = (tx - d_fy[idx]) / d_Ttd[idx];
+        float Iy = (ty - d_fy[idx]) / d_Ttd[idx];
         float Iz = (tz - d_fz[idx]) / d_Ttd[idx];
 
         // incident inclination
@@ -226,6 +297,37 @@ __global__ void compTargetRays(float tx, float ty, float tz,
             dotProduct(Ix, Iy, Iz, d_fux[idx], d_fuy[idx], d_fuz[idx]),
             dotProduct(Ix, Iy, Iz, d_fvx[idx], d_fvy[idx], d_fvz[idx])
         );
+
+        // compute the attenuation distance through all prisms
+        // first iterate over prisms
+        float exponent = 0.0f;
+        float total_atten_dist = 0.0f;
+        
+        for (int p=0; p<nAttenPrisms; p++) {
+
+            // compute the distance in a given prism
+            float atten_dist = prismIntersectionDistance(
+                d_fx[idx], d_fy[idx], d_fz[idx],
+                Ix, Iy, Iz,
+                d_attXmin[p], d_attXmax[p],
+                d_attYmin[p], d_attYmax[p],
+                d_attZmin[p], d_attZmax[p],
+                d_Ttd[idx]
+            );
+
+            // accumulate total attenuation distance and exponent
+            total_atten_dist += atten_dist;
+            exponent += d_alphas[p] * atten_dist;
+
+        }
+
+        // regions not in prisms also attenuate by the background alpha
+        exponent += alpha2 * (d_Ttd[idx] - total_atten_dist);
+        float atten = expf(-2.0 * exponent);
+
+        // apply attenuation to ray weights in and out
+        d_fRefrEI[idx] = atten;
+        d_fRefrEO[idx] = atten;
 
     }    
 
@@ -365,13 +467,13 @@ __global__ void compRefrEnergyIn(
         // now we do similar for phi
         float delta_ph = d_Iph[id] - d_Tph[id];
         // compute facet reradiation
-        d_fRefrEI[id] = facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
 
         // refraction coefficient
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
 
         // signal attenuation
-        d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Ttd[id]);
+        //d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Ttd[id]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Rth[id]))*(ks*cosGPU(d_Rth[id]))));
@@ -398,16 +500,13 @@ __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
         // RrTh is the upward transmitted inclination angle
         float RrTh = snellsLaw(pi - d_Tth[idx], eps_2, eps_1);
 
-        d_fRefrEO[idx] = facetReradiation(d_Itd[idx], RrTh, d_Tph[idx]-d_Iph[idx], lam, fs);
+        d_fRefrEO[idx] *= facetReradiation(d_Itd[idx], RrTh, d_Tph[idx]-d_Iph[idx], lam, fs);
 
         // for transmission coefficient use refraction cofficient from before
         d_fRefrEO[idx] = d_fRefrEO[idx] * d_fRfrC[idx];
 
-        // signal attenuation
-        // first above surface
-        d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha1 * d_Itd[idx]);
-        // then in subsurface
-        d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha2 * d_Ttd[idx]);
+        // signal attenuation in subsurface
+        //d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha2 * d_Ttd[idx]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Tth[idx]))*(ks*cosGPU(d_Tth[idx]))));

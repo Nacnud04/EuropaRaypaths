@@ -59,7 +59,7 @@ vmin  = [-20, None]
 for arr, name, cmap, cbar_label, v in zip(lst, names, cmaps, cbar_labels, vmin):
     plt.imshow(arr, aspect='auto', cmap=cmap, interpolation='nearest', vmin=v,
             extent=[-5, 5, (params["rx_window_offset_m"] + params["rx_window_m"])/1e3, params["rx_window_offset_m"]/1e3])
-    plt.plot(sx/1e3, sltrng/1e3, color="red")
+    #plt.plot(sx/1e3, sltrng/1e3, color="red")
     plt.colorbar(label=cbar_label)
     plt.xlabel("Azimuth [km]")
     plt.ylabel("Range [km]")

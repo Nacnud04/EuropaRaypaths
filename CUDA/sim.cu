@@ -1,5 +1,5 @@
 /******************************************************************************
- * File:        filename.cu
+ * File:        sim.cu
  * Author:      Duncan Byrne
  * Institution: University of Colorado Boulder
  * Department:  Aerospace Engineering Sciences
@@ -13,7 +13,7 @@
  *    nvcc sim.cu -O3 -lineinfo -o sim -lcufft
  * 
  * Run:
- *    ./sim [parameter_file.txt] [facet_file.txt] [output_file_prefix]
+ *    ./sim [parameter_file.json] [facet_file.fct] [target_file.txt] [output_file_prefix]
  *
  * Notes:
  *    Requires cufft library. 
@@ -248,7 +248,6 @@ int main(int argc, const char* argv[])
     cudaMemsetAsync(d_Iph, 0, nfacets * sizeof(float));
     cudaMemsetAsync(d_Ith, 0, nfacets * sizeof(float));
 
-
     // allocate refracted rays
     float* d_Rth; float* d_Rtd;
     cudaMalloc((void**)&d_Rth, nfacets * sizeof(float));
@@ -283,14 +282,14 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_Tth, nfacets * sizeof(float));
 
     // inwards refracted weights
-    float* d_fReflEI;
-    cudaMalloc((void**)&d_fReflEI, nfacets * sizeof(float));
-    cudaMemsetAsync(d_fReflEI, 0, nfacets * sizeof(float));
+    float* d_fRefrEI;
+    cudaMalloc((void**)&d_fRefrEI, nfacets * sizeof(float));
+    cudaMemsetAsync(d_fRefrEI, 0, nfacets * sizeof(float));
 
     // upward transmitted
-    float* d_fReflEO;
-    cudaMalloc((void**)&d_fReflEO, nfacets * sizeof(float));
-    cudaMemsetAsync(d_fReflEO, 0, nfacets * sizeof(float));
+    float* d_fRefrEO;
+    cudaMalloc((void**)&d_fRefrEO, nfacets * sizeof(float));
+    cudaMemsetAsync(d_fRefrEO, 0, nfacets * sizeof(float));
 
     cuFloatComplex* d_refr_phasor;
     cuFloatComplex* d_refl_phasor;
@@ -343,6 +342,58 @@ int main(int argc, const char* argv[])
     cuFloatComplex* d_sig;
     cudaMalloc((void**)&d_sig, par.nr * sizeof(cuFloatComplex));
     cudaMemsetAsync(d_sig, 0, par.nr * sizeof(cuFloatComplex));
+
+    // --- ATTENUATION GEOMETRY SETUP ---
+
+    // attenuation geometry (rectangular prisms)
+    int nAttenPrisms = 1;
+
+    // set up arrays on CPU
+    float* alphas    = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attXmin = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attXmax = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attYmin = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attYmax = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attZmin = (float*)malloc(nAttenPrisms * sizeof(float));
+    float* h_attZmax = (float*)malloc(nAttenPrisms * sizeof(float));
+
+    // some basic geometry for testing
+    // in theory this should attenuate half of the subsurface for the basic example.
+    h_attXmin[0] = -5000.0f; h_attXmax[0] = 0.0f;
+    h_attYmin[0] = -1000.0f; h_attYmax[0] = 1000.0f;
+    h_attZmin[0] = -3000.0f; h_attZmax[0] = 0.0f;
+    alphas[0]    = par.alpha2*10;
+
+    // move to GPU
+    float *d_attXmin, *d_attXmax;
+    float *d_attYmin, *d_attYmax;
+    float *d_attZmin, *d_attZmax; 
+    float *d_alphas;
+    cudaMalloc((void**)&d_attXmin, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_attXmax, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_attYmin, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_attYmax, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_attZmin, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_attZmax, nAttenPrisms * sizeof(float));
+    cudaMalloc((void**)&d_alphas, nAttenPrisms * sizeof(float));
+    cudaMemcpy(d_attXmin, h_attXmin, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attXmax, h_attXmax, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attYmin, h_attYmin, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attYmax, h_attYmax, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attZmin, h_attZmin, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attZmax, h_attZmax, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_alphas, alphas, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
+
+    // print to make sure stuff actually moved onto gpu
+    std::cout << "Attenuation geometry prisms on GPU:" << std::endl;
+    for (int i=0; i<nAttenPrisms; i++) {
+        std::cout << " Prism " << i << ": "
+                  << "Xmin=" << h_attXmin[i] << ", Xmax=" << h_attXmax[i] << ", "
+                  << "Ymin=" << h_attYmin[i] << ", Ymax=" << h_attYmax[i] << ", "
+                  << "Zmin=" << h_attZmin[i] << ", Zmax=" << h_attZmax[i] << std::endl;
+    }
+
+    // --- END ATTENUATION GEOMETRY SETUP --- 
 
     // temp source nadir vector
     float snx, sny, snz;
@@ -486,21 +537,26 @@ int main(int argc, const char* argv[])
         for (int it=0; it<ntargets; it++) {
 
             // --- FORCED RAY TO TARGET COMP ---
-            
+            // this is also when we compute the attenuation
             compTargetRays<<<numBlocks, blockSize>>>(h_tx[it], h_ty[it], h_tz[it],
                                                     d_fx,  d_fy,  d_fz,
                                                     d_fnx, d_fny, d_fnz,
                                                     d_fux, d_fuy, d_fuz,
                                                     d_fvx, d_fvy, d_fvz,
                                                     d_Ttd, d_Tph, d_Tth,
-                                                    valid_facets);
+                                                    valid_facets, 
+                                                    d_attXmin, d_attXmax,
+                                                    d_attYmin, d_attYmax,
+                                                    d_attZmin, d_attZmax,
+                                                    d_alphas, par.alpha2, nAttenPrisms,
+                                                    d_fRefrEI, d_fRefrEO);
             checkCUDAError("compTargetRays kernel");
 
 
             // --- CONSTRUCT REFRACTED WEIGHTS INWARDS ---
             compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rth, d_Itd, d_Iph,
                                                     d_Ttd, d_Tth, d_Tph, d_fRfrC,
-                                                    d_fReflEI, d_fRfrSR,
+                                                    d_fRefrEI, d_fRfrSR,
                                                     par.ks, valid_facets, par.alpha2, par.c_1, par.c_2,
                                                     par.fs, par.P, par.Grefr_lin, par.lam);
             checkCUDAError("compRefrEnergyIn kernel");
@@ -510,7 +566,7 @@ int main(int argc, const char* argv[])
 
             compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
                                                         d_Ttd, d_Tth, d_Tph, 
-                                                        d_fReflEO, d_fRfrC, 
+                                                        d_fRefrEO, d_fRfrC, 
                                                         par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                         par.fs, par.P, par.lam, par.eps_1, par.eps_2);
             checkCUDAError("compRefrEnergyOut kernel");
@@ -521,7 +577,7 @@ int main(int argc, const char* argv[])
                 // --- CONSTRUCT REFRACTED SIGNAL ---
                 // launch with shared memory for per-block accumulation (real+imag floats)
                 refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Ttd, 
-                                d_Rth, d_fReflEI, d_fReflEO,
+                                d_Rth, d_fRefrEI, d_fRefrEO,
                                 d_refr_sig, 
                                 par.rst, par.dr, par.nr, par.c, par.c_2, par.rerad_funct,
                                 par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
@@ -533,7 +589,7 @@ int main(int argc, const char* argv[])
 
                 // generate refracted phasor
                 genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
-                                                        d_fRfrSR, d_fReflEI, d_fReflEO, 
+                                                        d_fRfrSR, d_fRefrEI, d_fRefrEO, 
                                                         d_Rth, d_Ttd, par.rerad_funct,
                                                         par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
                                                         par.rst, par.dr, par.nr, par.c_1, par.c_2);
@@ -619,8 +675,8 @@ int main(int argc, const char* argv[])
     cudaFree(d_fReflE);
     cudaFree(d_refl_sig);
     cudaFree(d_Ttd); cudaFree(d_Tph); cudaFree(d_Tth);
-    cudaFree(d_fReflEI);
-    cudaFree(d_fReflEO);
+    cudaFree(d_fRefrEI);
+    cudaFree(d_fRefrEO);
     cudaFree(d_refr_sig);
     cudaFree(d_sig);
     // temporary buffer used to accumulate per-target convolution outputs
