@@ -57,7 +57,6 @@ struct SimulationParameters {
     float Grefl_lin;    // Surface gain (linear)
     
     // surface parameters
-    float sigma;        // sigma
     float rms_h;        // surface rms height
     float ks;
     float buff;         // buffer for estimated facet count
@@ -88,6 +87,9 @@ struct SimulationParameters {
     // facet parameters
     int nx, ny;
     float fs, ox, oy, oz;
+
+    // subsurface attenuation geometry file
+    std::string atten_geom_path;
 
     // processing parameters
     bool convolution;
@@ -130,7 +132,6 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     // print frequency and wavelength
     std::cout << "Frequency: " << params.f0 / 1e6 << " MHz, Wavelength: " << params.lam << " m" << std::endl;
 
-    params.sigma = j["sigma"];
     params.rms_h = j["rms_height"];
     params.ks = params.k * params.rms_h;
     params.buff = j["buff"];
@@ -185,6 +186,9 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     // target reradiation function
     params.rerad_funct = j["rerad_funct"];
+
+    // attenuation geometry file
+    params.atten_geom_path = j.value("attenuation_geometry_file", std::string("NONE"));
 
     // processing parameters
     params.convolution = j["convolution"];
@@ -283,3 +287,33 @@ __host__ void loadTargetFile(FILE* file, const int nt,
     }
 
 }
+
+
+__host__ void loadAttenPrismFile(FILE* file, const int nPrisms,
+                                 float* h_alphas, 
+                                 float* h_attXmin, float* h_attXmax,
+                                 float* h_attYmin, float* h_attYmax,
+                                 float* h_attZmin, float* h_attZmax) {
+
+    // go through line by line and load attenuation geometry into memory
+    char line[256];
+    int i = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+        // parse line
+        sscanf(line, "%f,%f,%f,%f,%f,%f,%f",
+               &h_alphas[i],
+               &h_attXmin[i], &h_attYmin[i],
+               &h_attZmin[i], &h_attXmax[i],
+               &h_attYmax[i], &h_attZmax[i]);
+        i++;
+
+        // somehow if we are out of memory, break before segfault
+        if (i > nPrisms) {
+            std::cout << "File has more attenuation prisms than memory allocated - stopping read." << std::endl;
+            break;
+        }
+
+    }
+
+}                            

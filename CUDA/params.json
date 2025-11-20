@@ -10,7 +10,6 @@
     "rx_window_m": 10000.0,
     "rx_window_offset_m": 7500.0,
     "rx_sample_rate": 48000000.0,
-    "sigma": 1,
     "rms_height": 0.4,
     "buff": 1.5,
     "eps_1": 1.0,
@@ -31,6 +30,7 @@
     "nx": 2000,
     "ny": 400,
     "rerad_funct": 1,
+    "attenuation_geometry_file": "attenuation.txt",
     "convolution": true,
     "convolution_linear": true
 }

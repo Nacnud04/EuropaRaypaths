@@ -376,7 +376,7 @@ __device__ float radarEq(float P, float G, float fs, float lam, float dist){
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,
-                                    float P, float G, float sigma, float fs, float lam, 
+                                    float P, float G, float fs, float lam, 
                                     float nu1, float nu2, float alpha1, 
                                     float ks, int polarization, int nfacets){
 

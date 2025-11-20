@@ -101,7 +101,6 @@ int main(int argc, const char* argv[])
 
     // first open the target file
     const char* target_filename;
-    //target_filename = par.targetfile;
     target_filename = argv[3];
     FILE *targetFile = fopen(target_filename, "r");
     const int ntargets = count_lines(targetFile);
@@ -345,8 +344,23 @@ int main(int argc, const char* argv[])
 
     // --- ATTENUATION GEOMETRY SETUP ---
 
-    // attenuation geometry (rectangular prisms)
-    int nAttenPrisms = 1;
+    int nAttenPrisms = 0;
+    bool attenuationGeometry = false;
+    if (par.atten_geom_path != "NONE") {
+        attenuationGeometry = true;
+    }
+    
+    // load file
+    FILE *attenPrismFile;
+    if (attenuationGeometry) {
+
+        attenPrismFile = fopen(par.atten_geom_path.c_str(), "r");
+        nAttenPrisms = count_lines(attenPrismFile);
+
+        // report number of attenuation prisms
+        std::cout << "Found " << nAttenPrisms << " attenuation prisms in " << par.atten_geom_path << std::endl;
+    }
+
 
     // set up arrays on CPU
     float* alphas    = (float*)malloc(nAttenPrisms * sizeof(float));
@@ -357,12 +371,14 @@ int main(int argc, const char* argv[])
     float* h_attZmin = (float*)malloc(nAttenPrisms * sizeof(float));
     float* h_attZmax = (float*)malloc(nAttenPrisms * sizeof(float));
 
-    // some basic geometry for testing
-    // in theory this should attenuate half of the subsurface for the basic example.
-    h_attXmin[0] = -5000.0f; h_attXmax[0] = 0.0f;
-    h_attYmin[0] = -1000.0f; h_attYmax[0] = 1000.0f;
-    h_attZmin[0] = -3000.0f; h_attZmax[0] = 0.0f;
-    alphas[0]    = par.alpha2*10;
+    // load attenuation prism file
+    if (attenuationGeometry) {
+        loadAttenPrismFile(attenPrismFile, nAttenPrisms,
+                        alphas,
+                        h_attXmin, h_attXmax,
+                        h_attYmin, h_attYmax,
+                        h_attZmin, h_attZmax);
+    }
 
     // move to GPU
     float *d_attXmin, *d_attXmax;
@@ -494,7 +510,7 @@ int main(int argc, const char* argv[])
 
         compReflectedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
                                                     d_fReflE, d_Rth, d_fRfrC,
-                                                    par.P, par.Grefl_lin, par.sigma, par.fs, par.lam,
+                                                    par.P, par.Grefl_lin, par.fs, par.lam,
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
                                                     par.pol, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
