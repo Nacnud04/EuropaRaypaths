@@ -293,23 +293,36 @@ __host__ void loadAttenPrismFile(FILE* file, const int nPrisms,
                                  float* h_alphas, 
                                  float* h_attXmin, float* h_attXmax,
                                  float* h_attYmin, float* h_attYmax,
-                                 float* h_attZmin, float* h_attZmax) {
+                                 float* h_attZmin, float* h_attZmax,
+                                 SimulationParameters par) {
 
     // go through line by line and load attenuation geometry into memory
     char line[256];
+
+    // conductivity for file read
+    float conductivity;
+    float eps_pp;
+
     int i = 0;
     while (fgets(line, sizeof(line), file)) {
 
         // parse line
         sscanf(line, "%f,%f,%f,%f,%f,%f,%f",
-               &h_alphas[i],
+               &conductivity,
                &h_attXmin[i], &h_attYmin[i],
                &h_attZmin[i], &h_attXmax[i],
                &h_attYmax[i], &h_attZmax[i]);
+
+        // turn the conductivity into the alpha value
+        eps_pp  = conductivity / (2 * 3.14159 * par.f0 * par.eps_0);
+        h_alphas[i]   = sqrt(1 + (eps_pp/par.eps_2)*(eps_pp/par.eps_2)) - 1;
+        h_alphas[i]   = sqrt(0.5 * par.eps_2 * h_alphas[i]);
+        h_alphas[i]   = (h_alphas[i] * 2 * 3.14159) / par.lam;
+
         i++;
 
         // somehow if we are out of memory, break before segfault
-        if (i > nPrisms) {
+        if (i >= nPrisms) {
             std::cout << "File has more attenuation prisms than memory allocated - stopping read." << std::endl;
             break;
         }

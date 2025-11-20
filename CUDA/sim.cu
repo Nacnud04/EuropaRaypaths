@@ -377,7 +377,7 @@ int main(int argc, const char* argv[])
                         alphas,
                         h_attXmin, h_attXmax,
                         h_attYmin, h_attYmax,
-                        h_attZmin, h_attZmax);
+                        h_attZmin, h_attZmax, par);
     }
 
     // move to GPU
