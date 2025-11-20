@@ -4,3 +4,11 @@ __pycache__
 Other
 *.txt
 *.fct
+*-img*.png
+*.pgf
+*.npz
+*.csv
+*.pkl
+*.json
+tmp*
+*.npy

@@ -21,7 +21,6 @@ params = {
     "rx_sample_rate": 48e6,       # receive sample rate [Hz]
 
     # surface parameters
-    "sigma": 1,              # RCS (leave as 1) 
     "rms_height": 0.4,       # surface roughness [m]
     "buff": 1.5,             # buffer for facet estimate
 
@@ -50,6 +49,9 @@ params = {
 
     # target params
     "rerad_funct": 1,  # 1-degree boxcar
+
+    # attenuation geometry file (NOT REQUIRED)
+    "attenuation_geometry_file":"attenuation.txt",
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing
