@@ -397,15 +397,22 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         if (polarization == 0){ 
             rho = (nu2 * cosGPU(d_Ith[idx]) - nu1 * cosGPU(d_Rth[idx])) /
                     (nu2 * cosGPU(d_Ith[idx]) + nu1 * cosGPU(d_Rth[idx]));
+            // set for the refracted coefficient for refracted signal computation
             d_fRfrC[idx] = 1 - (rho * rho);
         } 
         // vertical pol.
         else if (polarization == 1) {
             rho = (nu2 * cosGPU(d_Rth[idx]) - nu1 * cosGPU(d_Ith[idx])) /
                     (nu2 * cosGPU(d_Rth[idx]) + nu1 * cosGPU(d_Ith[idx]));
+            // set for the refracted coefficient for refracted signal computation
             d_fRfrC[idx] = 1 - (rho * rho);
         }
         d_fRe[idx] = d_fRe[idx] * rho * rho;
+
+        // set the refracted coefficient to 0 during total internal reflection
+        if (d_Rth[idx] > 1e3) {
+            d_fRfrC[idx] = 0.0f;
+        }
 
         // signal attenuation
         d_fRe[idx] = d_fRe[idx] * expf(-2.0f * alpha1 * d_Itd[idx]);
