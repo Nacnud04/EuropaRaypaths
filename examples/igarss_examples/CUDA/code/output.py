@@ -26,6 +26,9 @@ from util import mag_to_db
 with open("params/params.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
+params['tx'] = 5e3
+params['tz'] = -1.5e3
+
 params['aspect'] = 0.5
 
 for lbl in ("flat", "ridge"):
@@ -137,11 +140,11 @@ for lbl in ("flat", "ridge"):
 
     im0 = ax[0].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
                     aspect=params['aspect']*0.75, extent=extent,
-                    vmin=-30, vmax=-15)
+                    vmin=-20)
 
     im1 = ax[1].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
                     aspect=params['aspect']*0.75, extent=extent,
-                    vmin=-10, vmax=8)
+                    vmin=0)
 
     # zoomed panel
     s1, s2 = 0.47/0.7, 0.57/0.7
@@ -152,7 +155,7 @@ for lbl in ("flat", "ridge"):
                     2*((params['rx_window_offset_m'] + s1 * params['rx_window_m'])/c1)*10**6)
     im3 = ax[2].imshow(mag_to_db(zoomed), cmap="viridis",
                     aspect=params['aspect']*0.75, extent=zoomed_extent,
-                    vmin=-10, vmax=8)
+                    vmin=0)
 
     # shrink bottom plot to fit
     pos_top = ax[0].get_position()

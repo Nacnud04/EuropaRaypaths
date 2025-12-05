@@ -12,3 +12,4 @@ Other
 *.json
 tmp*
 *.npy
+CUDA/*.png
