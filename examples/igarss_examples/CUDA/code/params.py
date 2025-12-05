@@ -35,7 +35,6 @@ params = {
     "rx_sample_rate": 48e6,        # receive sample rate [Hz]
 
     # surface parameters
-    "sigma": 1,              # sigma [?]
     "rms_height": 0.4,       # surface roughness [m]
     "buff": 1.05,            # buffer on estimated facet count [.]
 
@@ -46,11 +45,6 @@ params = {
     "sig_2": 1e-6,           # conductivity of medium 2 [S/m]
     "mu_1": 1.0,             # permeability of medium 1
     "mu_2": 1.0,             # permeability of medium 2
-
-    # target parameters
-    "tx": 5e3,                # target x location [m]
-    "ty": 0,                # target y location [m]
-    "tz": -1.5e3,            # target z location [m]
 
     # source parameters 
     "sy": 0,                # source y location       [m]
@@ -67,9 +61,12 @@ params = {
     "nx": 6400,
     "ny": 440,
 
+    # target params
+    "rerad_funct": 2,  # 1-degree boxcar
+
     # processing parameters
-    "convolution": 1,   # use convolution-based processing
-    "convolution_linear": 1,  # use linear convolution instead of circular
+    "convolution": True,   # use convolution-based processing
+    "convolution_linear": True,  # use linear convolution instead of circular
 
 }
 
@@ -129,3 +126,29 @@ terrain = Terrain(xmin, xmax, ymin, ymax, params['fs'])
 terrain.gen_from_provided(DEM['Along Track (km)']*1e3, DEM['Surface Height (m)'])
 terrain.show_profile('x', 0, savefig="figures/dem_profile.pgf", shape=(3,1))
 terrain.export("facets/dem.fct")
+
+
+# --- GENERATE TARGET FILE ------------------------------------------
+
+# first create deep point target
+txs, tys, tzs = [5e3], [0], [-1.5e3]
+
+# now generate layer
+#tspace = 200
+#for x in np.arange(params['sx0'], -3e3, tspace):
+#    txs.append(x)
+#    tys.append(0)
+#    tzs.append(-1000)
+
+#for x in np.arange(12.5e3, 20e3, tspace):
+#    txs.append(x)
+#    tys.append(0)
+#    tzs.append(-1000)
+
+# export to file
+with open("params/layer.txt", "w") as f:
+    for i, (x, y, z) in enumerate(zip(txs, tys, tzs)):
+        if i > 0:
+            f.write(f"\n{x}, {y}, {z}")
+        else:
+            f.write(f"{x}, {y}, {z}")

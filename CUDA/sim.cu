@@ -88,7 +88,7 @@ int main(int argc, const char* argv[])
 {
 
     std::cout << "Using parameter file: " << argv[1] << std::endl;
-    std::cout << "Exporting to: " << argv[3] << std::endl;
+    std::cout << "Exporting to: " << argv[4] << std::endl;
 
     // Program-level timer: start
     struct timeval prog_t1, prog_t2;
@@ -102,6 +102,7 @@ int main(int argc, const char* argv[])
     // first open the target file
     const char* target_filename;
     target_filename = argv[3];
+    std::cout << "Using target file: " << argv[3] << std::endl;
     FILE *targetFile = fopen(target_filename, "r");
     const int ntargets = count_lines(targetFile);
     // report number of targets
@@ -551,6 +552,15 @@ int main(int argc, const char* argv[])
         }
 
         for (int it=0; it<ntargets; it++) {
+
+            // LIMIT SIMULATING TARGETS NOT IN APERTURE
+            float th_target = acosf( (par.sz - h_tz[it]) / 
+                                    sqrtf( (sx - h_tx[it])*(sx - h_tx[it]) + 
+                                           (par.sy - h_ty[it])*(par.sy - h_ty[it]) + 
+                                           (par.sz - h_tz[it])*(par.sz - h_tz[it]) ) );
+            if (th_target > (par.aperture*(pi/180.0f))) {
+                continue;
+            }
 
             // --- FORCED RAY TO TARGET COMP ---
             // this is also when we compute the attenuation
