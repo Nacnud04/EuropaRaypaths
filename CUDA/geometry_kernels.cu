@@ -115,8 +115,8 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
         // incident inclination
         // NOTE: this is clamped to -1 to 1 b/c floating point errors can cause perfectly
         // incident facets to return nan
-        d_Ith[idx] = fmaxf(-1.0f, fminf(1.0f, 
-                            slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
+        d_Ith[idx] = slowArcCos(fmaxf(-1.0f, fminf(1.0f, 
+                            dotProduct(-1*Ix, -1*Iy, -1*Iz, 
                             d_fnx[idx], d_fny[idx], d_fnz[idx]))));
 
         // incident azimuth
@@ -288,8 +288,8 @@ __global__ void compTargetRays(float tx, float ty, float tz,
         float Iz = (tz - d_fz[idx]) / d_Ttd[idx];
 
         // incident inclination
-        d_Tth[idx] = fmaxf(-1.0f, fminf(1.0f, 
-                            slowArcCos(dotProduct(-1*Ix, -1*Iy, -1*Iz, 
+        d_Tth[idx] = slowArcCos(fmaxf(-1.0f, fminf(1.0f, 
+                            dotProduct(-1*Ix, -1*Iy, -1*Iz, 
                             d_fnx[idx], d_fny[idx], d_fnz[idx]))));
 
         // incident azimuth
