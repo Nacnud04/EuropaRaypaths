@@ -346,7 +346,7 @@ __device__ float facetReradiation(float dist, float th, float ph,
     cuFloatComplex i_r2_over_lam = make_cuFloatComplex(0.0f, fs*fs / lam);
     // exp(-1j*k*R)/R
     float neg_kR = -1 * k * dist;
-    cuFloatComplex exp_term = make_cuFloatComplex(cosf(neg_kR)/dist, sinf(neg_kR)/dist);
+    cuFloatComplex exp_term = make_cuFloatComplex(cosf(neg_kR), sinf(neg_kR));
     // combine into c
     cuFloatComplex c_val = cuCmulf(i_r2_over_lam, exp_term);
     c_val = cuCmulf(c_val, make_cuFloatComplex(k, 0.0f));

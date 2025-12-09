@@ -22,8 +22,8 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 75,       # Antenna gain [dB]
-    "subsurface_gain": 98,   # Subsurface antenna gain [dB]
+    "surface_gain": 53,       # Antenna gain [dB]
+    "subsurface_gain": 63,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     #"aperture": 5,           # aperture (from nadir->edge) [deg]
