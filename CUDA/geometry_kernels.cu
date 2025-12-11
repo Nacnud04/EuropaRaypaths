@@ -323,7 +323,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 
         // regions not in prisms also attenuate by the background alpha
         exponent += alpha2 * (d_Ttd[idx] - total_atten_dist);
-        float atten = expf(-2.0 * exponent);
+        float atten = expf(-exponent);
 
         // apply attenuation to ray weights in and out
         d_fRefrEI[idx] = atten;
@@ -365,10 +365,9 @@ __device__ float facetReradiation(float dist, float th, float ph,
 
 __device__ float radarEq(float P, float G, float fs, float lam, float dist){
     
-    // Pr = (Pt * G^2 * lam^2 * sigma) / ((4*pi)^3 * R^4)
     // note this is the radar equation using the RCS for a flat incident facet.
-    float num = P * G * G * lam * lam * fs * fs * fs * fs;
-    float denom = pow(4 * 3.14159, 3) * dist * dist * dist * dist; // (4*pi)^3
+    float num = P * G * G * fs * fs * fs * fs;
+    float denom = pow(4 * 3.14159, 2) * dist * dist * dist * dist; // (4*pi)^3
     return (num / denom);
 
 }
@@ -483,7 +482,7 @@ __global__ void compRefrEnergyIn(
         //d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Ttd[id]);
 
         // surface roughness losses
-        float rough_loss = expf(-4*((ks*cosGPU(d_Rth[id]))*(ks*cosGPU(d_Rth[id]))));
+        float rough_loss = expf(-4*((ks*cosGPU(d_Tth[id]))*(ks*cosGPU(d_Tth[id]))));
         d_fRefrEI[id] = d_fRefrEI[id] * rough_loss;
 
         // total travel slant range
