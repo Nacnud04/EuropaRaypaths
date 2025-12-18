@@ -168,15 +168,15 @@ __device__ float rerad_funct(int funcnum, float th1, float th2){
     if (funcnum == 0) {
         return 1;
     } else if (funcnum == 1) {
-        if (th1 < 1 * (pi/180)) {
+        if (th1 * (180/pi) < 1) {
             return 1;
         } else {return 0;}
     } else if (funcnum == 2) {
-        if (th1 < 2 * (pi/180)) {
+        if (th1 * (180/pi) < 2) {
             return 1;
         } else {return 0;}
     } else if (funcnum == 3) {
-        if (th1 < 3 * (pi/180)) {
+        if (th1 * (pi/180) < 3) {
             return 1;
         } else {return 0;}
     } else if (funcnum == 4) {

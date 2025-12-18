@@ -266,16 +266,39 @@ __host__ void loadFacetFile(FILE * file, const int totfacets,
 
 
 __host__ void loadTargetFile(FILE* file, const int nt,
-                            float* h_tx, float* h_ty, float* h_tz) {
+                            float* h_tx, float* h_ty, float* h_tz,
+                            float* h_tnx, float* h_tny, float* h_tnz) {
 
     // go through line by line and load the targets into memory
     char line[256];
     int i = 0;
     while (fgets(line, sizeof(line), file)) {
 
-        // parse line
-        sscanf(line, "%f,%f,%f",
-               &h_tx[i],   &h_ty[i],  &h_tz[i]);
+        // detect if line has 3 or 6 entries
+        int comma_count = 0;
+        for (char* p = line; *p != '\0'; p++) {
+            if (*p == ',') {
+                comma_count++;
+            }
+        }
+
+        // if only 3 entries, set normal vector to default as upward Z
+        if (comma_count == 2) {
+            sscanf(line, "%f,%f,%f",
+                &h_tx[i],   &h_ty[i],  &h_tz[i]);
+            h_tnx[i] = 0.0f;
+            h_tny[i] = 0.0f;
+            h_tnz[i] = 1.0f;
+        }
+        else if (comma_count == 5) {
+            sscanf(line, "%f,%f,%f,%f,%f,%f",
+                &h_tx[i],   &h_ty[i],  &h_tz[i],
+                &h_tnx[i], &h_tny[i], &h_tnz[i]);
+        }
+        else {
+            std::cerr << "Error: Target file line number=" << i+1 << " has incorrect number of entries." << std::endl;
+            break;
+        }
         i++;
 
         // somehow if we are out of memory, break before segfault

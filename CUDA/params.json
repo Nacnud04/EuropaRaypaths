@@ -3,7 +3,7 @@
     "frequency": 9000000.0,
     "bandwidth": 1000000.0,
     "surface_gain": 55,
-    "subsurface_gain": 65,
+    "subsurface_gain": 70,
     "range_resolution": 300,
     "polarization": "HH",
     "aperture": 7,
