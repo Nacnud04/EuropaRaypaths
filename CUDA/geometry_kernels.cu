@@ -262,11 +262,13 @@ __device__ float prismIntersectionDistance(float ox, float oy, float oz,
 
 
 __global__ void compTargetRays(float tx, float ty, float tz,
+                               float tnx, float tny, float tnz,
                                float* d_fx, float* d_fy, float* d_fz,
                                float* d_fnx, float* d_fny, float* d_fnz,
                                float* d_fux, float* d_fuy, float* d_fuz,
                                float* d_fvx, float* d_fvy, float* d_fvz,
                                float* d_Ttd, float* d_Tph, float* d_Tth,
+                               float* d_TargetTh,
                                int nfacets,
                                float* d_attXmin, float* d_attXmax,
                                float* d_attYmin, float* d_attYmax,
@@ -287,12 +289,17 @@ __global__ void compTargetRays(float tx, float ty, float tz,
         float Iy = (ty - d_fy[idx]) / d_Ttd[idx];
         float Iz = (tz - d_fz[idx]) / d_Ttd[idx];
 
-        // incident inclination
+        // inclination relative to facet normal
         d_Tth[idx] = slowArcCos(fmaxf(-1.0f, fminf(1.0f, 
                             dotProduct(-1*Ix, -1*Iy, -1*Iz, 
                             d_fnx[idx], d_fny[idx], d_fnz[idx]))));
 
-        // incident azimuth
+        // inclination relative to target normal
+        d_TargetTh[idx] = slowArcCos(fmaxf(-1.0f, fminf(1.0f,
+                            dotProduct(-1*Ix, -1*Iy, -1*Iz,
+                            tnx, tny, tnz))));
+
+        // azimuth relative to facet orthonormal
         d_Tph[idx] = slowAtan2(
             dotProduct(Ix, Iy, Iz, d_fux[idx], d_fuy[idx], d_fuz[idx]),
             dotProduct(Ix, Iy, Iz, d_fvx[idx], d_fvy[idx], d_fvz[idx])
@@ -337,7 +344,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 __device__ float facetReradiation(float dist, float th, float ph,  
                                   float lam, float fs){
     // NOTE: dist is the observer distance from the facet aperture
-
+    
     // start with k
     float k = 2 * 3.14159265f / lam;
 
@@ -359,7 +366,9 @@ __device__ float facetReradiation(float dist, float th, float ph,
 
     // combine all together
     return cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f)));
-
+    
+    // sinc^2(fs*sin(th)/lam)
+    //return pow(sinc(200 * (sin(th) / lam)), 2);
 }
 
 
@@ -469,17 +478,19 @@ __global__ void compRefrEnergyIn(
 
         // start with facet reradiation
         // we need to get delta theta between refracted and forced ray as follows:
-        float delta_th = (pi - d_Rth[id]) - d_Tth[id];
+        float delta_th = d_Rth[id] - d_Tth[id];
         // now we do similar for phi
         float delta_ph = d_Iph[id] - d_Tph[id];
         // compute facet reradiation
-        d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        float scl = 0.0f;
+        if (abs(delta_th) < 0.01f) {
+            scl = 1.0;
+        }
+        d_fRefrEI[id] *= scl * facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        //d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
 
         // refraction coefficient
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
-
-        // signal attenuation
-        //d_fRefrEI[id] = d_fRefrEI[id] * expf(-2 * alpha2 * d_Ttd[id]);
 
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Tth[id]))*(ks*cosGPU(d_Tth[id]))));

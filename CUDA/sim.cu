@@ -109,13 +109,20 @@ int main(int argc, const char* argv[])
     std::cout << "Found " << ntargets << " targets in " << target_filename << std::endl;
     
     // allocate memory for target arrays
+    // target coordinates
     float* h_tx = (float*)malloc(ntargets * sizeof(float));
     float* h_ty = (float*)malloc(ntargets * sizeof(float));
     float* h_tz = (float*)malloc(ntargets * sizeof(float));
+    // target normal
+    float* h_tnx = (float*)malloc(ntargets * sizeof(float));
+    float* h_tny = (float*)malloc(ntargets * sizeof(float));
+    float* h_tnz = (float*)malloc(ntargets * sizeof(float));
 
     // load target positions into memory
-    loadTargetFile(targetFile, ntargets, h_tx, h_ty, h_tz);
+    loadTargetFile(targetFile, ntargets, 
+                    h_tx, h_ty, h_tz, h_tnx, h_tny, h_tnz);
 
+                    
     // --- LOAD FACETS ---
 
     // first open facet file
@@ -275,11 +282,15 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_refl_sig, par.nr * sizeof(cuFloatComplex));
     cudaMemsetAsync(d_refl_sig, 0, par.nr * sizeof(cuFloatComplex));
 
-    // forced ray
+    // forced ray to target
     float *d_Ttd, *d_Tph, *d_Tth;
     cudaMalloc((void**)&d_Ttd, nfacets * sizeof(float));
     cudaMalloc((void**)&d_Tph, nfacets * sizeof(float));
     cudaMalloc((void**)&d_Tth, nfacets * sizeof(float));
+
+    // inclination relative to target normal
+    float *d_TargetTh;
+    cudaMalloc((void**)&d_TargetTh, nfacets * sizeof(float));
 
     // inwards refracted weights
     float* d_fRefrEI;
@@ -554,6 +565,7 @@ int main(int argc, const char* argv[])
         for (int it=0; it<ntargets; it++) {
 
             // LIMIT SIMULATING TARGETS NOT IN APERTURE
+            
             float th_target = acosf( (par.sz - h_tz[it]) / 
                                     sqrtf( (sx - h_tx[it])*(sx - h_tx[it]) + 
                                            (par.sy - h_ty[it])*(par.sy - h_ty[it]) + 
@@ -565,11 +577,13 @@ int main(int argc, const char* argv[])
             // --- FORCED RAY TO TARGET COMP ---
             // this is also when we compute the attenuation
             compTargetRays<<<numBlocks, blockSize>>>(h_tx[it], h_ty[it], h_tz[it],
+                                                    h_tnx[it], h_tny[it], h_tnz[it],
                                                     d_fx,  d_fy,  d_fz,
                                                     d_fnx, d_fny, d_fnz,
                                                     d_fux, d_fuy, d_fuz,
                                                     d_fvx, d_fvy, d_fvz,
                                                     d_Ttd, d_Tph, d_Tth,
+                                                    d_TargetTh,
                                                     valid_facets, 
                                                     d_attXmin, d_attXmax,
                                                     d_attYmin, d_attYmax,
@@ -601,6 +615,7 @@ int main(int argc, const char* argv[])
             if (!par.convolution) {
 
                 // --- CONSTRUCT REFRACTED SIGNAL ---
+                // NOTE: THIS METHOD DOESN'T SUPPORT NON-(0,0,1) TARGET NORMALS
                 // launch with shared memory for per-block accumulation (real+imag floats)
                 refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Ttd, 
                                 d_Rth, d_fRefrEI, d_fRefrEO,
@@ -612,11 +627,11 @@ int main(int argc, const char* argv[])
             } else {
 
                 // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
-
+                
                 // generate refracted phasor
                 genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
                                                         d_fRfrSR, d_fRefrEI, d_fRefrEO, 
-                                                        d_Rth, d_Ttd, par.rerad_funct,
+                                                        d_TargetTh, d_Ttd, par.rerad_funct,
                                                         par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
                                                         par.rst, par.dr, par.nr, par.c_1, par.c_2);
                 checkCUDAError("genRefrPhasor kernel");
@@ -631,6 +646,7 @@ int main(int argc, const char* argv[])
                 if (!par.convolution_linear) {
                     convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
                     checkCUDAError("convolvePhasorChirp Refracted process");
+                
                 } else {
                     convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
                     checkCUDAError("convolvePhasorChirpLinear Refracted process");
@@ -672,9 +688,10 @@ int main(int argc, const char* argv[])
     gettimeofday(&prog_t2, 0);
     float total_ms = (prog_t2.tv_sec - prog_t1.tv_sec) * 1e3f + (prog_t2.tv_usec - prog_t1.tv_usec) * 1e-3f;
     float total_s = total_ms / 1e3f;
+    float total_min = total_s / 60.0f;
     std::cout << std::endl;
     std::cout << "=== Run summary ===" << std::endl;
-    std::cout << "Total runtime: " << total_ms << " ms (" << total_s << " s)" << std::endl;
+    std::cout << "Total runtime: " << (int)total_min << " min " << (int)(total_s - (int)total_min * 60) << " seconds" << std::endl;
     if (par.ns > 0) {
         float per_source_ms = total_ms / (float)par.ns;
         float per_source_s = per_source_ms / 1e3f;
