@@ -221,7 +221,7 @@ class Terrain():
         with open(filename, 'w') as f:
             for x, y, z, (nx, ny, nz), (ux, uy, uz), (vx, vy, vz) in zip(xx.flatten(), yy.flatten(), zz.flatten(), norms, uvecs, vvecs):
                 if i % 100 == 0:
-                    print(f"Writing out {filename}: {round((100*i+1)/totLines, 2):5.2f} %", end="    \r")
+                    print(f"Writing out {filename}: {round((100*(i+1))/totLines, 2):5.2f} %", end="    \r")
                 f.write(f"{x},{y},{z}:{nx},{ny},{nz}:{ux},{uy},{uz}:{vx},{vy},{vz}\n")
                 i += 1
 

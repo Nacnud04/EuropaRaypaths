@@ -1,9 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-import glob
-import sys
-import pickle
+import glob, sys, pickle
+
+# focusing helper
+sys.path.append("../../src")
+from focus import est_slant_range
 
 # load parameters
 with open("params/params.pkl", "rb") as h:
@@ -24,10 +26,6 @@ for i, f in enumerate(files):
     rdr.append(arr[0] + 1j * arr[1])
 
 rdr = np.array(rdr).T
-
-# focusing helper
-sys.path.append("../../src")
-from focus import est_slant_range
 
 # source locations
 sx = params["sx0"] + params["sdx"] * np.arange(params["ns"])
@@ -59,8 +57,8 @@ def lin_to_db(x):
 
 # quick diagnostic plots
 plots = [
-    (lin_to_db(np.abs(rdr)), "rdrgrmAbs.png",   "viridis",  "Power [dB]", -17)#,
-    #(np.angle(rdr),          "rdrgrmPhase.png", "twilight", "Phase [rad]", None),
+    (lin_to_db(np.abs(rdr)), "rdrgrmAbs.png",   "viridis",  "Power [dB]", -17),
+    (np.angle(rdr),          "rdrgrmPhase.png", "twilight", "Phase [rad]", None),
 ]
 
 extent = [
@@ -104,7 +102,7 @@ rdr_win = rdr_rcmc[:, az_start:az_end]
 Na_win = rdr_win.shape[1]
 
 # -------------------------------
-# Apply Range–Doppler focusing ONLY to the window
+# Apply Range - Doppler focusing ONLY to the window
 # -------------------------------
 
 fft_len = 2 * Na_win
@@ -145,85 +143,4 @@ plt.colorbar(label="Power [dB]")
 plt.xlabel("Azimuth [km]")
 plt.ylabel("Range [us]")
 plt.savefig("plots/focused.png")
-plt.close()
-
-
-
-# -----------------------------------------
-# GENERATE PRODUCTION PLOTS 
-# -----------------------------------------
-
-# load rectangular prism from halfspace.txt
-conductivity = 1e-5
-ex1_xmins = [-5e3];   ex1_xmaxs = [0]
-ex1_ymins = [-2.5e3]; ex1_ymaxs = [2.5e3]
-ex1_zmins = [-7e3];   ex1_zmaxs = [0]
-
-cmap = plt.get_cmap('inferno')
-norm = plt.Normalize(vmin=params['sig_1'], vmax=conductivity)
-
-fig, ax = plt.subplots(3, figsize=((7, 12)), sharex=True)
-
-# set xlim and ylim in km
-ax[0].set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
-ax[0].set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
-
-# plot atmosphere conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = -1*params['rx_window_m'] / 1e3
-ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_1'])), zorder=0))
-
-# plot subsurface conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = params['rx_window_m'] / 1e3
-ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_2'])), zorder=0))
-
-# plot conductivity rectangles
-for xmin, xmax, ymin, ymax, zmin, zmax in zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
-    rect_x = xmin / 1e3
-    rect_y = (params['sz'] + zmax) / 1e3
-    rect_w = (xmax - xmin) / 1e3
-    rect_h = (zmax - zmin) / 1e3
-    ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                           color=cmap(norm(conductivity)), zorder=1))
-
-# add conductivity plot labels
-ax[0].set_title("Attenuation Geometry")
-ax[0].set_ylabel("Range [km]")
-
-# add radargram plot labels
-im1 = ax[1].imshow(lin_to_db(np.abs(rdr)), vmin=-20, extent=range_extent, aspect='auto')
-ax[1].set_title("Radar Image")
-ax[1].set_ylabel("Range [us]")
-
-im2 = ax[2].imshow(lin_to_db(np.abs(focused)), vmin=0, extent=range_extent, aspect='auto')
-ax[2].set_title("Focused Radar Image")
-ax[2].set_xlabel("Azimuth [km]")
-ax[2].set_ylabel("Range [us]")
-
-
-# Colorbar for conductivity (subplot 0)
-cbar0 = fig.colorbar(
-    plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-    ax=ax[0],
-    orientation='vertical',
-    label='Conductivity [S/m]'
-)
-
-# Colorbar for radargram (subplot 1)
-cbar1 = fig.colorbar(im1, ax=ax[1], orientation='vertical')
-cbar1.set_label("Power [dB]")
-
-# Colorbar for focused radargram (subplot 2)
-cbar2 = fig.colorbar(im2, ax=ax[2], orientation='vertical')
-cbar2.set_label("Power [dB]")
-
-plt.tight_layout()
-plt.savefig("plots/halfspace.png")
 plt.close()
