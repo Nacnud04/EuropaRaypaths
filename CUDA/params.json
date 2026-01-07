@@ -30,7 +30,6 @@
     "nx": 2000,
     "ny": 400,
     "rerad_funct": 1,
-    "attenuation_geometry_file": "attenuation.txt",
     "convolution": true,
     "convolution_linear": true
 }

@@ -1,1 +1,1 @@
-nvcc sim.cu -O3 -lineinfo -o sim -lcufft
+nvcc sim.cu -O3 -lineinfo -o sim -lcufft --compiler-bindir=/usr/bin/g++-8 -gencode=arch=compute_30,code=sm_30
