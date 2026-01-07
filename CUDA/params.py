@@ -51,7 +51,7 @@ params = {
     "rerad_funct": 1,  # 1-degree boxcar
 
     # attenuation geometry file (NOT REQUIRED)
-    "attenuation_geometry_file":"attenuation.txt",
+    #"attenuation_geometry_file":"attenuation.txt",
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing

@@ -15,8 +15,8 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 67,       # Antenna gain [dB]
-    "subsurface_gain": 92,    # Subsurface antenna gain [dB]
+    "surface_gain": 55,       # Antenna gain [dB]
+    "subsurface_gain": 70,    # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 7,            # aperture (from nadir->edge) [deg]
@@ -66,9 +66,17 @@ params = {
 }
 
 # export parameters as pickle and json
-with open("params/params.json", "w") as f:
+with open("params/halfspace.json", "w") as f:
     json.dump(params, f, indent=4)
-with open("params/params.pkl", 'wb') as hdl:
+with open("params/halfspace.pkl", 'wb') as hdl:
+    pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
+
+params["attenuation_geometry_file"] = "params/window.txt"
+
+# export parameters as pickle and json
+with open("params/window.json", "w") as f:
+    json.dump(params, f, indent=4)
+with open("params/window.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -110,6 +118,46 @@ with open("params/targets.txt", "w") as f:
             f.write(f"{x}, {y}, {z}")
 
 
+# ---- GENERATE ATTENUATION PLOTS -------------------------------------
+
+def gen_attenuation_plot(conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs, name):
+
+    cmap = plt.get_cmap('inferno')
+    norm = plt.Normalize(vmin=params['sig_1'], vmax=conductivity)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # set xlim and ylim in km
+    ax.set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
+    ax.set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
+
+    # plot atmosphere conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = -1*params['rx_window_m'] / 1e3
+    ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                        color=cmap(norm(params['sig_1'])), zorder=0))
+
+    # plot subsurface conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = params['rx_window_m'] / 1e3
+    ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                        color=cmap(norm(params['sig_2'])), zorder=0))
+
+    # plot conductivity rectangles
+    for xmin, xmax, ymin, ymax, zmin, zmax in zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
+        rect_x = xmin / 1e3
+        rect_y = (params['sz'] + zmax) / 1e3
+        rect_w = (xmax - xmin) / 1e3
+        rect_h = (zmax - zmin) / 1e3
+        ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                            color=cmap(norm(conductivity)), zorder=1))
+
+    plt.savefig(f"plots/{name}.png")
+
 # --- GENERATE ATTENUATION GEOMETRIES -------------------------------
 
 conductivity = 1e-5
@@ -118,11 +166,6 @@ ex1_xmins = [-5e3];   ex1_xmaxs = [0]
 ex1_ymins = [-2.5e3]; ex1_ymaxs = [2.5e3]
 ex1_zmins = [-7e3];   ex1_zmaxs = [0]
 
-
-#ex1_xmins = [-5e3, 1e3];   ex1_xmaxs = [-1e3, 5e3]
-#ex1_ymins = [-2.5e3, -2.5e3]; ex1_ymaxs = [2.5e3, 2.5e3]
-#ex1_zmins = [-0.5e3, -0.5e3];   ex1_zmaxs = [0, 0]
-
 with open("params/halfspace.txt", 'w') as f:
     for i, (xmin, xmax, ymin, ymax, zmin, zmax) in enumerate(zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs)):
         if i > 0:
@@ -130,41 +173,17 @@ with open("params/halfspace.txt", 'w') as f:
         else:
             f.write(f"{conductivity}, {xmin}, {ymin}, {zmin}, {xmax}, {ymax}, {zmax}")
 
+#gen_attenuation_plot(conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs, "halfspace")
 
-# ---- GENERATE ATTENUATION PLOTS -------------------------------------
+ex1_xmins = [-5e3, 1e3];   ex1_xmaxs = [-1e3, 5e3]
+ex1_ymins = [-2.5e3, -2.5e3]; ex1_ymaxs = [2.5e3, 2.5e3]
+ex1_zmins = [-0.5e3, -0.5e3];   ex1_zmaxs = [0, 0]
 
-cmap = plt.get_cmap('inferno')
-norm = plt.Normalize(vmin=params['sig_1'], vmax=conductivity)
+with open("params/window.txt", 'w') as f:
+    for i, (xmin, xmax, ymin, ymax, zmin, zmax) in enumerate(zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs)):
+        if i > 0:
+            f.write(f"\n{conductivity}, {xmin}, {ymin}, {zmin}, {xmax}, {ymax}, {zmax}")
+        else:
+            f.write(f"{conductivity}, {xmin}, {ymin}, {zmin}, {xmax}, {ymax}, {zmax}")
 
-fig, ax = plt.subplots(figsize=(6, 4))
-
-# set xlim and ylim in km
-ax.set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
-ax.set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
-
-# plot atmosphere conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = -1*params['rx_window_m'] / 1e3
-ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_1'])), zorder=0))
-
-# plot subsurface conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = params['rx_window_m'] / 1e3
-ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_2'])), zorder=0))
-
-# plot conductivity rectangles
-for xmin, xmax, ymin, ymax, zmin, zmax in zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
-    rect_x = xmin / 1e3
-    rect_y = (params['sz'] + zmax) / 1e3
-    rect_w = (xmax - xmin) / 1e3
-    rect_h = (zmax - zmin) / 1e3
-    ax.add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                           color=cmap(norm(conductivity)), zorder=1))
-
-plt.savefig("plots/attenuation.png")
+#gen_attenuation_plot(conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs, "window")

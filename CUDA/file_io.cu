@@ -214,10 +214,10 @@ __host__ void saveSignalToFile(const char* filename, cuFloatComplex* d_sig, int 
 
 #define BUF_SIZE 65536
 
-int count_lines(FILE* file)
+int count_lines(FILE* file, int counter_start = 1)
 {
     char buf[BUF_SIZE];
-    int counter = 1;
+    int counter = counter_start;
     for(;;)
     {
         size_t res = fread(buf, 1, BUF_SIZE, file);
@@ -299,13 +299,14 @@ __host__ void loadTargetFile(FILE* file, const int nt,
             std::cerr << "Error: Target file line number=" << i+1 << " has incorrect number of entries." << std::endl;
             break;
         }
-        i++;
 
         // somehow if we are out of memory, break before segfault
         if (i > nt) {
             std::cout << "File has more targets than memory allocated - stopping read." << std::endl;
             break;
         }
+
+        i++;
 
     }
 

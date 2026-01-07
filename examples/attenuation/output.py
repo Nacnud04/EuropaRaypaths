@@ -5,225 +5,203 @@ import glob
 import sys
 import pickle
 
-# load parameters
-with open("params/params.pkl", "rb") as h:
-    params = pickle.load(h)
-
-params["tx"] = 0
-params["ty"] = 0
-params["tz"] = -1500
-
-# load radargram files
-files = sorted(glob.glob("rdrgrm/s*.txt"))
-rdr = []
-
-for i, f in enumerate(files):
-    if i >= params["ns"]:
-        break
-    arr = np.loadtxt(f).T
-    rdr.append(arr[0] + 1j * arr[1])
-
-rdr = np.array(rdr).T
-
 # focusing helper
 sys.path.append("../../src")
 from focus import est_slant_range
 
-# source locations
-sx = params["sx0"] + params["sdx"] * np.arange(params["ns"])
-sy = params["sy"]
-sz = params["sz"]
+paramss = ("halfspace", "window")
+directs = ("rdr_halfspace", "rdr_window")
 
-# propagation speeds
-c0 = 299_792_458
-c_med = c0 / np.sqrt(params["eps_2"])
+for param, direct in zip(paramss, directs):
 
-# window and sample geometry
-rx_win = params["rx_window_m"]
-rx_off = params["rx_window_offset_m"]
-sample_rate = params["rx_sample_rate"]
+    # load parameters
+    with open(f"params/{param}.pkl", "rb") as h:
+        params = pickle.load(h)
 
-rb = int((rx_win / c0) / (1 / sample_rate))
-dm = c0 / sample_rate
+    params["tx"] = 0
+    params["ty"] = 0
+    params["tz"] = -1500
 
-# slant range and matched filter terms
-sl = est_slant_range(sx, sz, params["tx"], params["tz"], c0, c_med)
-sl_us = 2e6 * sl / c0  # microseconds
-sl_rb = ((sl - rx_off) // dm).astype(int)
+    # load radargram files
+    files = sorted(glob.glob(f"{direct}/s*.txt"))
+    rdr = []
 
-k = (2 * np.pi) / (c0 / params["frequency"])
-mf = np.exp(-2j * k * sl)
+    for i, f in enumerate(files):
+        if i >= params["ns"]:
+            break
+        arr = np.loadtxt(f).T
+        rdr.append(arr[0] + 1j * arr[1])
 
-def lin_to_db(x):
-    return 10 * np.log10(x)
+    rdr = np.array(rdr).T
 
-# quick diagnostic plots
-plots = [
-    (lin_to_db(np.abs(rdr)), "rdrgrmAbs.png",   "viridis",  "Power [dB]", -20)#,
-    #(np.angle(rdr),          "rdrgrmPhase.png", "twilight", "Phase [rad]", None),
-]
+    # source locations
+    sx = params["sx0"] + params["sdx"] * np.arange(params["ns"])
+    sy = params["sy"]
+    sz = params["sz"]
 
-extent = [
-    -5, 5,
-    (rx_off + rx_win) / 1e3,
-    rx_off / 1e3
-]
+    # propagation speeds
+    c0 = 299_792_458
+    c_med = c0 / np.sqrt(params["eps_2"])
 
-for arr, name, cmap, cbar, vmin in plots:
-    plt.imshow(arr, aspect="auto", cmap=cmap, interpolation="nearest",
-               vmin=vmin, extent=extent)
-    plt.colorbar(label=cbar)
-    plt.xlabel("Azimuth [km]")
-    plt.ylabel("Range [km]")
-    plt.savefig(f"plots/{name}")
-    plt.close()
+    # window and sample geometry
+    rx_win = params["rx_window_m"]
+    rx_off = params["rx_window_offset_m"]
+    sample_rate = params["rx_sample_rate"]
 
-Nr, Na = rdr.shape
+    rb = int((rx_win / c0) / (1 / sample_rate))
+    dm = c0 / sample_rate
 
-# range cell migration correction
-shifts = sl_rb - sl_rb.min()
-rdr_rcmc = np.column_stack([
-    np.roll(rdr[:, i], -int(shifts[i]))
-    for i in range(Na)
-])
+    # slant range and matched filter terms
+    sl = est_slant_range(sx, sz, params["tx"], params["tz"], c0, c_med)
+    sl_us = 2e6 * sl / c0  # microseconds
+    sl_rb = ((sl - rx_off) // dm).astype(int)
 
-# -------------------------------
-# Selective azimuth focusing window
-# -------------------------------
+    k = (2 * np.pi) / (c0 / params["frequency"])
+    mf = np.exp(-2j * k * sl)
 
-# choose window center and width (in azimuth samples)
-# example: 20% wide window centered in the middle
-az_center = Na // 2
-az_width = Na // 5    # adjust as needed
+    def lin_to_db(x):
+        return 10 * np.log10(x)
 
-az_start = max(0, az_center - az_width // 2)
-az_end   = min(Na, az_center + az_width // 2)
+    Nr, Na = rdr.shape
 
-# extract windowed azimuth data
-rdr_win = rdr_rcmc[:, az_start:az_end]
-Na_win = rdr_win.shape[1]
+    # range cell migration correction
+    shifts = sl_rb - sl_rb.min()
+    rdr_rcmc = np.column_stack([
+        np.roll(rdr[:, i], -int(shifts[i]))
+        for i in range(Na)
+    ])
 
-# -------------------------------
-# Apply Range–Doppler focusing ONLY to the window
-# -------------------------------
+    # -------------------------------
+    # Selective azimuth focusing window
+    # -------------------------------
 
-fft_len = 2 * Na_win
-pad = fft_len - Na_win
+    # choose window center and width (in azimuth samples)
+    # example: 20% wide window centered in the middle
+    az_center = Na // 2
+    az_width = Na // 5    # adjust as needed
 
-# pad data and matched filter to FFT length
-rdr_pad = np.pad(rdr_win, ((0, 0), (0, pad)))
-mf_pad = np.pad(mf[az_start:az_end], (0, pad))
+    az_start = max(0, az_center - az_width // 2)
+    az_end   = min(Na, az_center + az_width // 2)
 
-az_fft = np.fft.fft(rdr_pad, axis=1, n=fft_len)
-H = np.fft.fft(mf_pad, fft_len)
+    # extract windowed azimuth data
+    rdr_win = rdr_rcmc[:, az_start:az_end]
+    Na_win = rdr_win.shape[1]
 
-focused_freq = az_fft * H[np.newaxis, :]
-focused_win = np.fft.ifft(focused_freq, axis=1)
+    # -------------------------------
+    # Apply Range–Doppler focusing ONLY to the window
+    # -------------------------------
 
-# crop back to window size
-start = pad // 2
-end = start + Na_win
-focused_win = focused_win[:, start:end]
+    fft_len = 2 * Na_win
+    pad = fft_len - Na_win
 
-# -------------------------------
-# Combine focused window with unfocused remainder
-# -------------------------------
+    # pad data and matched filter to FFT length
+    rdr_pad = np.pad(rdr_win, ((0, 0), (0, pad)))
+    mf_pad = np.pad(mf[az_start:az_end], (0, pad))
 
-focused = 50*rdr.copy()
-focused[:, az_start:az_end] = focused_win
+    az_fft = np.fft.fft(rdr_pad, axis=1, n=fft_len)
+    H = np.fft.fft(mf_pad, fft_len)
 
-# final plot
-range_extent = [
-    -5, 5,
-    2 * (rx_off + rx_win) / 299.792458,
-    2 * rx_off / 299.792458
-]
+    focused_freq = az_fft * H[np.newaxis, :]
+    focused_win = np.fft.ifft(focused_freq, axis=1)
 
-plt.imshow(lin_to_db(np.abs(focused)), aspect="auto", vmin=0,
-           extent=range_extent)
-plt.colorbar(label="Power [dB]")
-plt.xlabel("Azimuth [km]")
-plt.ylabel("Range [us]")
-plt.savefig("plots/focused.png")
-plt.close()
+    # crop back to window size
+    start = pad // 2
+    end = start + Na_win
+    focused_win = focused_win[:, start:end]
 
+    # -------------------------------
+    # Combine focused window with unfocused remainder
+    # -------------------------------
 
+    focused = 50*rdr.copy()
+    focused[:, az_start:az_end] = focused_win
 
-# -----------------------------------------
-# GENERATE PRODUCTION PLOTS 
-# -----------------------------------------
+    # final plot
+    range_extent = [
+        -5, 5,
+        2 * (rx_off + rx_win) / 299.792458,
+        2 * rx_off / 299.792458
+    ]
 
-# load rectangular prism from halfspace.txt
-conductivity = 1e-5
-ex1_xmins = [-5e3];   ex1_xmaxs = [0]
-ex1_ymins = [-2.5e3]; ex1_ymaxs = [2.5e3]
-ex1_zmins = [-7e3];   ex1_zmaxs = [0]
+    # -----------------------------------------
+    # GENERATE PRODUCTION PLOTS 
+    # -----------------------------------------
 
-cmap = plt.get_cmap('inferno')
-norm = plt.Normalize(vmin=params['sig_1'], vmax=conductivity)
+    conductivity = 1e-5
+    if param == "halfspace":
+        ex1_xmins = [-5e3];   ex1_xmaxs = [0]
+        ex1_ymins = [-2.5e3]; ex1_ymaxs = [2.5e3]
+        ex1_zmins = [-7e3];   ex1_zmaxs = [0]
+    elif param == "window":
+        ex1_xmins = [-5e3, 1e3];   ex1_xmaxs = [-1e3, 5e3]
+        ex1_ymins = [-2.5e3, -2.5e3]; ex1_ymaxs = [2.5e3, 2.5e3]
+        ex1_zmins = [-0.5e3, -0.5e3];   ex1_zmaxs = [0, 0]
 
-fig, ax = plt.subplots(3, figsize=((7, 12)), sharex=True)
+    cmap = plt.get_cmap('inferno')
+    norm = plt.Normalize(vmin=params['sig_1'], vmax=conductivity)
 
-# set xlim and ylim in km
-ax[0].set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
-ax[0].set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
+    fig, ax = plt.subplots(3, figsize=((7, 12)), sharex=True)
 
-# plot atmosphere conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = -1*params['rx_window_m'] / 1e3
-ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_1'])), zorder=0))
+    # set xlim and ylim in km
+    ax[0].set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
+    ax[0].set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
 
-# plot subsurface conductivity
-rect_x = params['sx0'] / 1e3
-rect_y = params['sz'] / 1e3
-rect_w = (params['sdx'] * params['ns']) / 1e3
-rect_h = params['rx_window_m'] / 1e3
-ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                       color=cmap(norm(params['sig_2'])), zorder=0))
-
-# plot conductivity rectangles
-for xmin, xmax, ymin, ymax, zmin, zmax in zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
-    rect_x = xmin / 1e3
-    rect_y = (params['sz'] + zmax) / 1e3
-    rect_w = (xmax - xmin) / 1e3
-    rect_h = (zmax - zmin) / 1e3
+    # plot atmosphere conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = -1*params['rx_window_m'] / 1e3
     ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
-                           color=cmap(norm(conductivity)), zorder=1))
+                        color=cmap(norm(params['sig_1'])), zorder=0))
 
-# add conductivity plot labels
-ax[0].set_title("Attenuation Geometry")
-ax[0].set_ylabel("Range [km]")
+    # plot subsurface conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = params['rx_window_m'] / 1e3
+    ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                        color=cmap(norm(params['sig_2'])), zorder=0))
 
-# add radargram plot labels
-im1 = ax[1].imshow(lin_to_db(np.abs(rdr)), vmin=-20, extent=range_extent, aspect='auto')
-ax[1].set_title("Radar Image")
-ax[1].set_ylabel("Range [us]")
+    # plot conductivity rectangles
+    for xmin, xmax, ymin, ymax, zmin, zmax in zip(ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
+        rect_x = xmin / 1e3
+        rect_y = (params['sz'] + zmax) / 1e3
+        rect_w = (xmax - xmin) / 1e3
+        rect_h = (zmax - zmin) / 1e3
+        ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                            color=cmap(norm(conductivity)), zorder=1))
 
-im2 = ax[2].imshow(lin_to_db(np.abs(focused)), vmin=0, extent=range_extent, aspect='auto')
-ax[2].set_title("Focused Radar Image")
-ax[2].set_xlabel("Azimuth [km]")
-ax[2].set_ylabel("Range [us]")
+    # add conductivity plot labels
+    ax[0].set_title("Attenuation Geometry")
+    ax[0].set_ylabel("Range [km]")
+
+    # add radargram plot labels
+    im1 = ax[1].imshow(lin_to_db(np.abs(rdr)), vmin=-20, extent=range_extent, aspect='auto')
+    ax[1].set_title("Radar Image")
+    ax[1].set_ylabel("Range [us]")
+
+    im2 = ax[2].imshow(lin_to_db(np.abs(focused)), vmin=0, extent=range_extent, aspect='auto')
+    ax[2].set_title("Focused Radar Image")
+    ax[2].set_xlabel("Azimuth [km]")
+    ax[2].set_ylabel("Range [us]")
 
 
-# Colorbar for conductivity (subplot 0)
-cbar0 = fig.colorbar(
-    plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-    ax=ax[0],
-    orientation='vertical',
-    label='Conductivity [S/m]'
-)
+    # Colorbar for conductivity (subplot 0)
+    cbar0 = fig.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax[0],
+        orientation='vertical',
+        label='Conductivity [S/m]'
+    )
 
-# Colorbar for radargram (subplot 1)
-cbar1 = fig.colorbar(im1, ax=ax[1], orientation='vertical')
-cbar1.set_label("Power [dB]")
+    # Colorbar for radargram (subplot 1)
+    cbar1 = fig.colorbar(im1, ax=ax[1], orientation='vertical')
+    cbar1.set_label("Power [dB]")
 
-# Colorbar for focused radargram (subplot 2)
-cbar2 = fig.colorbar(im2, ax=ax[2], orientation='vertical')
-cbar2.set_label("Power [dB]")
+    # Colorbar for focused radargram (subplot 2)
+    cbar2 = fig.colorbar(im2, ax=ax[2], orientation='vertical')
+    cbar2.set_label("Power [dB]")
 
-plt.tight_layout()
-plt.savefig("plots/halfspace.png")
-plt.close()
+    plt.tight_layout()
+    plt.savefig(f"plots/{param}.png")
+    plt.close()
