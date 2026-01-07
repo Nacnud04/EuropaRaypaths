@@ -14,6 +14,8 @@
  *    - parseSimulationParameters: Reads parameters from a JSON file
  *    - saveSignalToFile: saves a complex signal from device to a text file
  *    - loadFacetFile: loads facet data from a text file into host arrays
+ *    - checkFileExists: checks if a file exists. if not throws an exception
+ *    - checkDirectoryExists: checks if a directory exists and isnt a file
  *
  * Usage:
  *    #include "file_io.cu"
@@ -25,6 +27,9 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <iostream>
+#include <sys/stat.h>
+#include <stdexcept>
+#include <string>
 
 using json = nlohmann::json;
 
@@ -195,6 +200,38 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.convolution_linear = j["convolution_linear"];
     
     return params;
+}
+
+
+__host__ void checkFileExists(const char* filename)
+{
+    struct stat sb;
+
+    if (stat(filename, &sb) != 0) {
+        throw std::invalid_argument(std::string("File not found: ") + filename);
+    }
+
+    if (!S_ISREG(sb.st_mode)) {
+        throw std::invalid_argument(std::string("Not a regular file: ") + filename);
+    }
+}
+
+
+__host__ void checkDirectoryExists(const char* path)
+{
+    struct stat sb;
+
+    if (stat(path, &sb) != 0) {
+        throw std::invalid_argument(
+            std::string("Directory not found: ") + path
+        );
+    }
+
+    if (!S_ISDIR(sb.st_mode)) {
+        throw std::invalid_argument(
+            std::string("Path is not a directory: ") + path
+        );
+    }
 }
 
 

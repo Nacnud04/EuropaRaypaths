@@ -16,7 +16,7 @@ params = {
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
     "surface_gain": 55,       # Antenna gain [dB]
-    "subsurface_gain": 57,    # Subsurface antenna gain [dB]
+    "subsurface_gain": 62,    # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 12,            # aperture (from nadir->edge) [deg]
@@ -56,7 +56,7 @@ params = {
     # target params
     "rerad_funct": 1,  # 1-degree boxcar
 
-    # attenuation geometry file (NOT REQUIRED)
+    # attenuation geometry file (not used here)
     #"attenuation_geometry_file":"params/halfspace.txt",
 
     # processing parameters (BOOLEAN)
@@ -91,7 +91,7 @@ terrain.export("facets/facets.fct")
 tdx = 50
 xspace = np.arange(xmin, xmax, tdx)
 l1zmin = -3e3
-l1zmax = -2.0e3
+l1zmax = -2.5e3
 zspace = np.linspace(l1zmin, l1zmax, len(xspace))
 
 # generate normals for each target

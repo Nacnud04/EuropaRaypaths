@@ -89,12 +89,14 @@ int main(int argc, const char* argv[])
 
     std::cout << "Using parameter file: " << argv[1] << std::endl;
     std::cout << "Exporting to: " << argv[4] << std::endl;
+    checkDirectoryExists(argv[4]);
 
     // Program-level timer: start
     struct timeval prog_t1, prog_t2;
     gettimeofday(&prog_t1, 0);
 
     SimulationParameters par;
+    checkFileExists(argv[1]);
     par = parseSimulationParameters(argv[1]);
 
     // --- LOAD TARGETS ---
@@ -103,6 +105,7 @@ int main(int argc, const char* argv[])
     const char* target_filename;
     target_filename = argv[3];
     std::cout << "Using target file: " << argv[3] << std::endl;
+    checkFileExists(target_filename);
     FILE *targetFile = fopen(target_filename, "r");
     const int ntargets = count_lines(targetFile);
     // report number of targets
@@ -131,6 +134,7 @@ int main(int argc, const char* argv[])
     std::cout << "Using facet file:     " << argv[2] << std::endl;
 
     // load file and count facets
+    checkFileExists(filename);
     FILE *facetFile = fopen(filename, "r");
     const int totFacets = count_lines(facetFile);
     std::cout << "Found " << totFacets << " in " << filename << std::endl;
@@ -366,6 +370,7 @@ int main(int argc, const char* argv[])
     FILE *attenPrismFile;
     if (attenuationGeometry) {
 
+        checkFileExists(par.atten_geom_path.c_str());
         attenPrismFile = fopen(par.atten_geom_path.c_str(), "r");
         nAttenPrisms = count_lines(attenPrismFile);
 
@@ -413,7 +418,9 @@ int main(int argc, const char* argv[])
     cudaMemcpy(d_alphas, alphas, nAttenPrisms * sizeof(float), cudaMemcpyHostToDevice);
 
     // print to make sure stuff actually moved onto gpu
-    std::cout << "Attenuation geometry prisms on GPU:" << std::endl;
+    if (nAttenPrisms > 0) {
+        std::cout << "Attenuation geometry prisms on GPU:" << std::endl;
+    }
     for (int i=0; i<nAttenPrisms; i++) {
         std::cout << " Prism " << i << ": "
                   << "Xmin=" << h_attXmin[i] << ", Xmax=" << h_attXmax[i] << ", "
@@ -670,7 +677,6 @@ int main(int argc, const char* argv[])
 
         char* filename = (char*)malloc(64 * sizeof(char));
         sprintf(filename, "%s/s%06d.txt", argv[4], is);
-        //saveSignalToFile(filename, d_sig, par.nr);
         saveSignalToFile(filename, d_sig, par.nr);
         free(filename);
 
