@@ -1,4 +1,5 @@
-# REASON & RHYME Raypath Simulator
+# Vector Raypath Simulator
+This is a high performance GPU-enabled radar sounder simulator designed for planetary scale simulatiom of flybys over complex subsurface targets.
 
 ---
 
