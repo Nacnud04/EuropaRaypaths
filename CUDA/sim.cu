@@ -625,7 +625,7 @@ int main(int argc, const char* argv[])
                 // NOTE: THIS METHOD DOESN'T SUPPORT NON-(0,0,1) TARGET NORMALS
                 // launch with shared memory for per-block accumulation (real+imag floats)
                 refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Ttd, 
-                                d_Rth, d_fRefrEI, d_fRefrEO,
+                                d_Tth, d_fRefrEI, d_fRefrEO,
                                 d_refr_sig, 
                                 par.rst, par.dr, par.nr, par.c, par.c_2, par.rerad_funct,
                                 par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);

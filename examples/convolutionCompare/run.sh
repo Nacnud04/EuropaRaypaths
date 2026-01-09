@@ -4,19 +4,19 @@ echo "=============================="
 echo " Running No Convolution Case "
 echo "=============================="
 
-./../../CUDA/sim "NoConv.json" "facets.fct" "targets.txt" "NoConv"
+./../../CUDA/sim "inputs/NoConv.json" "inputs/facets.fct" "inputs/targets.txt" "NoConv"
 
-echo "=============================="
+echo "==================================="
 echo " Running Circular Convolution Case "
-echo "=============================="
+echo "==================================="
 
-./../../CUDA/sim "CircConv.json" "facets.fct" "targets.txt" "CircConv"
+./../../CUDA/sim "inputs/CircConv.json" "inputs/facets.fct" "inputs/targets.txt" "CircConv"
 
-echo "=============================="
+echo "================================="
 echo " Running Linear Convolution Case "
-echo "=============================="
+echo "================================="
 
-./../../CUDA/sim "LinConv.json" "facets.fct" "targets.txt" "LinConv"
+./../../CUDA/sim "inputs/LinConv.json" "inputs/facets.fct" "inputs/targets.txt" "LinConv"
 
 python "assimilate.py"
 

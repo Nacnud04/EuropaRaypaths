@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import glob, sys, pickle, os
 
 import matplotlib
@@ -19,28 +18,23 @@ matplotlib.rcParams.update({
 
 
 # try to focus the radargram
-sys.path.append("../../../src")
+sys.path.append("../../archive/src")
 from focus import est_slant_range
 from util import mag_to_db
-from terrain import Terrain
 
 # load parameters from pickle
-with open("params/dem.pkl", 'rb') as hdl:
+with open("params/params.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
+
+params['tx'] = 5e3
+params['tz'] = -1.5e3
 
 params['aspect'] = 0.5
 
-# generate terrain again for the profile
-xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
-ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
-# import DEM csv
-DEM = pd.read_csv("facets/dem_profile.csv")
-terrain = Terrain(xmin, xmax, ymin, ymax, params['fs'])
-terrain.gen_from_provided(DEM['Along Track (km)']*1e3, DEM['Surface Height (m)'])
+lbl = "flat"
 
-lbl="dem"
-
-filenames = glob.glob(f"rdrgrm/{lbl}/s*.txt")
+path = f"rdrgrm/{lbl}/s*.txt"
+filenames = glob.glob(path)
 
 # sort filenames to ensure correct order
 filenames.sort()
@@ -56,6 +50,7 @@ for i, f in enumerate(filenames):
         rdrgrm.append(trc)
 
 rdrgrm = np.array(rdrgrm).T
+print(f"Radargram shape: {rdrgrm.shape}")
 
 sx = params['sx0'] + params['sdx'] * np.arange(params['ns']) # source x locations [m]
 sy = params['sy']                          # source y locations [m]
@@ -67,7 +62,7 @@ c2 = c1 / np.sqrt(params["eps_2"])
 rb = int((params["rx_window_m"] / c1) / (1 / params["rx_sample_rate"]))
 dm = c1 / params["rx_sample_rate"]
 
-sltrng   = est_slant_range(sx, sz, params["tx"], params["tz"], c1, c2, trim=False)
+sltrng   = est_slant_range(sx, sz, params["tx"], params["tz"], c1, c2, trim=True)
 sltrng_t = 2 * 10**6 * sltrng / c1  # in microseconds
 
 # compute sample-bin indices (meters -> samples)
@@ -97,16 +92,8 @@ for arr, name, cmap, cbar_label, v in zip(lst, names, cmaps, cbar_labels, vmin):
 
 Nr, Na = rdrgrm.shape
 
-# some buffer on each side for which we don't roll or apply filter
-buffer = 2000
-
 # --- 2. Range Cell Migration Correction (RCMC) ---
 shift_amounts = slt_rb - np.min(slt_rb)
-
-# get rid of shift outside of center region
-shift_amounts[:buffer] = 0
-shift_amounts[-buffer:] = 0
-
 rolled_matrix = np.array([
     np.roll(rdrgrm[:, i], -int(shift_amounts[i]))
     for i in range(rdrgrm.shape[1])
@@ -124,10 +111,6 @@ pad = fft_len - Na
 rolled_matrix = np.pad(rolled_matrix, ((0, 0), (0, pad)), mode='constant')
 match_filter = np.pad(match_filter, (0, pad), mode='constant')
 
-# 0 match filter outside of center region
-match_filter[:buffer] = 0
-match_filter[-buffer:] = 0
-
 # FFT along azimuth
 az_fft = np.fft.fft(rolled_matrix, axis=1, n=fft_len)
 H_az = np.fft.fft(match_filter, n=fft_len)
@@ -143,8 +126,6 @@ start = pad // 2
 end = start + Na
 focused = focused[:, start:end]
 
-params['aspect'] *= 2
-
 
 plt.imshow(lin_to_db(np.abs(focused)), aspect='auto', vmin=-10, 
         extent=[-5, 5, 2*(params["rx_window_offset_m"] + params["rx_window_m"])/299.792458, 2*params["rx_window_offset_m"]/299.792458])
@@ -154,70 +135,60 @@ plt.ylabel("Range [us]")
 plt.savefig(f"figures/{lbl}-focused.png")
 plt.close()
 
-extent = (-30, 30, 2*((params['rx_window_offset_m'] + params['rx_window_m'])/c1)*10**6,
+extent = (-10, 20, 2*((params['rx_window_offset_m'] + params['rx_window_m'])/c1)*10**6,
         2*(params['rx_window_offset_m']/c1)*10**6)
 
-fig, ax = plt.subplots(4, 1, figsize=(3.555, 8), constrained_layout=True, dpi=300)
+fig, ax = plt.subplots(3, 1, figsize=(4, 6), constrained_layout=True, dpi=300)
 
-# add profile to axis
-terrain.add_profile_to_axis(ax[0], 'x', 0)
-
-# shrink top plot
-pos = ax[0].get_position()
-new_height = pos.height * 0.5  # Reduce height to 50% (adjust as needed)
-new_y = pos.y0 + pos.height - new_height  # Shift upward to preserve spacing
-ax[0].set_position([pos.x0+0.052, new_y, pos.width, new_height])
-
-im0 = ax[1].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
+im0 = ax[0].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
-                vmin=-30, vmax=-15)
+                vmin=-20)
 
-im1 = ax[2].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
+im1 = ax[1].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
-                vmin=-10, vmax=8)
+                vmin=0)
 
 # zoomed panel
-s1, s2 = 0.49/0.7, 0.59/0.7
+s1, s2 = 0.47/0.7, 0.57/0.7
 zoomed = np.abs(focused[int(s1*rb):int(s2*rb),
                         int(0.4*focused.shape[1]):int(0.6*focused.shape[1])])
-zoomed_extent = (-30 + 60 * 0.4, -30 + 60 * 0.6,
+zoomed_extent = (-10 + 30 * 0.4, -10 + 30 * 0.6,
                 2*((params['rx_window_offset_m'] + s2 * params['rx_window_m'])/c1)*10**6,
                 2*((params['rx_window_offset_m'] + s1 * params['rx_window_m'])/c1)*10**6)
-im3 = ax[3].imshow(mag_to_db(zoomed), cmap="viridis",
+im3 = ax[2].imshow(mag_to_db(zoomed), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=zoomed_extent,
-                vmin=-10, vmax=8)
+                vmin=0)
 
 # shrink bottom plot to fit
-pos_top = ax[1].get_position()
-pos_bottom = ax[3].get_position()
+pos_top = ax[0].get_position()
+pos_bottom = ax[2].get_position()
 new_width = pos_top.width
 new_x = 0.05 + pos_bottom.x0 + (pos_bottom.width - new_width) / 2  # center it
-ax[3].set_position([new_x, pos_bottom.y0-0.02, new_width, pos_bottom.height])
+ax[2].set_position([new_x, pos_bottom.y0, new_width, pos_bottom.height])
 
 # add rectangle
 rect = Rectangle((zoomed_extent[0], zoomed_extent[2]),
                 zoomed_extent[1]-zoomed_extent[0],
                 zoomed_extent[3]-zoomed_extent[2],
                 linewidth=1, edgecolor="red", facecolor="none")
-ax[2].add_patch(rect)
+ax[1].add_patch(rect)
 
 # labels and text
-labels = ["(a)","(b)", "(c) Focused", "(d) Focused"]
-fontsizes = (11, 11, 11, 9)
+labels = ["(a)", "(b) Focused", "(c) Focused"]
+fontsizes = (11, 11, 9)
 for a, label, fs in zip(ax, labels, fontsizes):
-    
+    a.set_ylabel("Range [µs]", fontsize=11)
     a.tick_params(axis="both", which="major", labelsize=9, direction="out")
     a.tick_params(axis="both", which="minor", direction="out")
     a.text(0.02, 0.95, label, transform=a.transAxes, fontsize=fs,
         fontweight="bold", va="top", ha="left", color="black",
         bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
 
-ax[3].set_xlabel("Azimuth [km]", fontsize=11)
+ax[2].set_xlabel("Azimuth [km]", fontsize=11)
 
 # colorbars
 ims = [im0, im1, im3]
-for a, im in zip(ax[1:], ims):
-    a.set_ylabel("Range [µs]", fontsize=11)
+for a, im in zip(ax, ims):
     cax = inset_axes(a, width="3%", height="100%",
                     loc='center right', borderpad=-2)  # negative pad pushes it outward
     cbar = fig.colorbar(im, cax=cax, orientation="vertical")

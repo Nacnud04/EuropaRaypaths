@@ -19,31 +19,28 @@ matplotlib.rcParams.update({
 
 
 # try to focus the radargram
-sys.path.append("../../../src")
+sys.path.append("../../archive/src")
 from focus import est_slant_range
 from util import mag_to_db
 from terrain import Terrain
 
 # load parameters from pickle
-with open("params/params.pkl", 'rb') as hdl:
+with open("params/dem.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
 params['aspect'] = 0.5
-
-params['tx'] = 5e3
-params['tz'] = -1.5e3
+params['tx'] = 0
+params['tz'] = -3000
 
 # generate terrain again for the profile
 xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
 ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
+# import DEM csv
+DEM = pd.read_csv("facets/dem_profile.csv")
 terrain = Terrain(xmin, xmax, ymin, ymax, params['fs'])
-amp       = 300     # amplitude [m]
-peak_dist = 6e3     # peak distance [m]
-ridge_wid = 4e3     # ridge width [m]
-x_offset  = 5e3     # x offset [m]
-terrain.double_ridge(amp, amp, peak_dist, ridge_wid, x_offset)
+terrain.gen_from_provided(DEM['Along Track (km)']*1e3, DEM['Surface Height (m)'])
 
-lbl="ridge"
+lbl="dem"
 
 filenames = glob.glob(f"rdrgrm/{lbl}/s*.txt")
 
@@ -72,7 +69,7 @@ c2 = c1 / np.sqrt(params["eps_2"])
 rb = int((params["rx_window_m"] / c1) / (1 / params["rx_sample_rate"]))
 dm = c1 / params["rx_sample_rate"]
 
-sltrng   = est_slant_range(sx, sz, params["tx"], params["tz"], c1, c2, trim=True)
+sltrng   = est_slant_range(sx, sz, params["tx"], params["tz"], c1, c2, trim=False)
 sltrng_t = 2 * 10**6 * sltrng / c1  # in microseconds
 
 # compute sample-bin indices (meters -> samples)
@@ -102,8 +99,16 @@ for arr, name, cmap, cbar_label, v in zip(lst, names, cmaps, cbar_labels, vmin):
 
 Nr, Na = rdrgrm.shape
 
+# some buffer on each side for which we don't roll or apply filter
+buffer = 2000
+
 # --- 2. Range Cell Migration Correction (RCMC) ---
 shift_amounts = slt_rb - np.min(slt_rb)
+
+# get rid of shift outside of center region
+shift_amounts[:buffer] = 0
+shift_amounts[-buffer:] = 0
+
 rolled_matrix = np.array([
     np.roll(rdrgrm[:, i], -int(shift_amounts[i]))
     for i in range(rdrgrm.shape[1])
@@ -121,6 +126,10 @@ pad = fft_len - Na
 rolled_matrix = np.pad(rolled_matrix, ((0, 0), (0, pad)), mode='constant')
 match_filter = np.pad(match_filter, (0, pad), mode='constant')
 
+# 0 match filter outside of center region
+match_filter[:buffer] = 0
+match_filter[-buffer:] = 0
+
 # FFT along azimuth
 az_fft = np.fft.fft(rolled_matrix, axis=1, n=fft_len)
 H_az = np.fft.fft(match_filter, n=fft_len)
@@ -136,6 +145,9 @@ start = pad // 2
 end = start + Na
 focused = focused[:, start:end]
 
+params['aspect'] *= 2
+
+
 plt.imshow(lin_to_db(np.abs(focused)), aspect='auto', vmin=-10, 
         extent=[-5, 5, 2*(params["rx_window_offset_m"] + params["rx_window_m"])/299.792458, 2*params["rx_window_offset_m"]/299.792458])
 plt.colorbar(label='Power [dB]')
@@ -144,7 +156,7 @@ plt.ylabel("Range [us]")
 plt.savefig(f"figures/{lbl}-focused.png")
 plt.close()
 
-extent = (-10, 20, 2*((params['rx_window_offset_m'] + params['rx_window_m'])/c1)*10**6,
+extent = (-30, 30, 2*((params['rx_window_offset_m'] + params['rx_window_m'])/c1)*10**6,
         2*(params['rx_window_offset_m']/c1)*10**6)
 
 fig, ax = plt.subplots(4, 1, figsize=(3.555, 8), constrained_layout=True, dpi=300)
@@ -160,22 +172,22 @@ ax[0].set_position([pos.x0+0.052, new_y, pos.width, new_height])
 
 im0 = ax[1].imshow(mag_to_db(np.abs(rdrgrm)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
-                vmin=-20)
+                vmin=-10, vmax=4)
 
 im1 = ax[2].imshow(mag_to_db(np.abs(focused)), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=extent,
-                vmin=0)
+                vmin=5, vmax=25)
 
 # zoomed panel
 s1, s2 = 0.49/0.7, 0.59/0.7
 zoomed = np.abs(focused[int(s1*rb):int(s2*rb),
                         int(0.4*focused.shape[1]):int(0.6*focused.shape[1])])
-zoomed_extent = (-10 + 30 * 0.4, -10 + 30 * 0.6,
+zoomed_extent = (-30 + 60 * 0.4, -30 + 60 * 0.6,
                 2*((params['rx_window_offset_m'] + s2 * params['rx_window_m'])/c1)*10**6,
                 2*((params['rx_window_offset_m'] + s1 * params['rx_window_m'])/c1)*10**6)
 im3 = ax[3].imshow(mag_to_db(zoomed), cmap="viridis",
                 aspect=params['aspect']*0.75, extent=zoomed_extent,
-                vmin=0)
+                vmin=5, vmax=25)
 
 # shrink bottom plot to fit
 pos_top = ax[1].get_position()

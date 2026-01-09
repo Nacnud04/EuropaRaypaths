@@ -22,12 +22,12 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 53,       # Antenna gain [dB]
-    "subsurface_gain": 63,   # Subsurface antenna gain [dB]
+    "surface_gain": 65,       # Antenna gain [dB]
+    "subsurface_gain": 75,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     #"aperture": 5,           # aperture (from nadir->edge) [deg]
-    "aperture": 8,           # aperture (from nadir->edge) [deg]
+    "aperture": 7,           # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m": 7e3,            # receive window length [m]
@@ -62,7 +62,7 @@ params = {
     "ny": 440,
 
     # target params
-    "rerad_funct": 2,  # 1-degree boxcar
+    "rerad_funct": 1,  # 1-degree boxcar
 
     # processing parameters
     "convolution": True,   # use convolution-based processing
@@ -78,7 +78,7 @@ with open("params/params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
 # --- MAKE FACET FILE
-sys.path.append("../../../src")
+sys.path.append("../../archive/src")
 from terrain import Terrain
 
 xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
@@ -108,6 +108,8 @@ xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
 params['sx0'] = -30e3
 params['ns']  = 6000
 
+params['subsurface_gain'] = 80
+
 # move target to new center
 params['tx'] = 0
 
@@ -133,20 +135,20 @@ terrain.export("facets/dem.fct")
 # first create deep point target
 txs, tys, tzs = [5e3], [0], [-1.5e3]
 
-# now generate layer
-#tspace = 200
-#for x in np.arange(params['sx0'], -3e3, tspace):
-#    txs.append(x)
-#    tys.append(0)
-#    tzs.append(-1000)
+# export to file
+with open("params/target.txt", "w") as f:
+    for i, (x, y, z) in enumerate(zip(txs, tys, tzs)):
+        if i > 0:
+            f.write(f"\n{x}, {y}, {z}")
+        else:
+            f.write(f"{x}, {y}, {z}")
 
-#for x in np.arange(12.5e3, 20e3, tspace):
-#    txs.append(x)
-#    tys.append(0)
-#    tzs.append(-1000)
+
+# generate target for DEM example
+txs, tys, tzs = [0], [0], [-1.5e3]
 
 # export to file
-with open("params/layer.txt", "w") as f:
+with open("params/dem_target.txt", "w") as f:
     for i, (x, y, z) in enumerate(zip(txs, tys, tzs)):
         if i > 0:
             f.write(f"\n{x}, {y}, {z}")

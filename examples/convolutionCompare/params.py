@@ -9,8 +9,8 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 50,       # Antenna gain [dB]
-    "subsurface_gain": 60,   # Subsurface antenna gain [dB]
+    "surface_gain": 55,       # Antenna gain [dB]
+    "subsurface_gain": 65,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 7,           # aperture (from nadir->edge) [deg]
@@ -68,13 +68,13 @@ convs = [ (False, False), (True, False), (True, True) ]
 for mode, (conv, conv_lin) in zip(modes, convs):
     params["convolution"] = conv
     params["convolution_linear"] = conv_lin
-    with open(f"{mode}.json", "w") as f:
+    with open(f"inputs/{mode}.json", "w") as f:
         json.dump(params, f, indent=4)
-    with open(f"{mode}.pkl", 'wb') as hdl:
+    with open(f"inputs/{mode}.pkl", 'wb') as hdl:
         pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
 # --- MAKE FACET FILE
-sys.path.append("../../src")
+sys.path.append("../../archive/src")
 from terrain import Terrain
 
 xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
@@ -82,4 +82,9 @@ ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
 
 terrain = Terrain(xmin, xmax, ymin, ymax, params["fs"])
 terrain.gen_flat(0)
-terrain.export("facets.fct")
+terrain.export("inputs/facets.fct")
+
+# --- MAKE TARGET FILE
+target_filename = "inputs/targets.txt"
+with open(target_filename, 'w') as f:
+    f.write(f"{params['tx']},{params['ty']},{params['tz']}")

@@ -198,7 +198,7 @@ __device__ int reradiate_index(int id0)
 // Tile size reuse for refracted signal
 #define REFR_TILE_NR 128
 
-__global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Rth, 
+__global__ void refrRadarSignal(float* d_SltRng, float* d_Ttd, float* d_Tth, 
                                 float* d_fReflEI, float* d_fReflEO,
                                 cuFloatComplex* refr_sig, 
                                 float r0, float dr, int nr, float c, float c2, int target_fun,
@@ -238,11 +238,11 @@ __global__ void refrRadarSignal(float* d_SltRng, float* d_Rtd, float* d_Rth,
 
                 float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
                 
-                float reradConst = rerad_funct(target_fun, d_Rth[fid], d_Rth[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
+                float reradConst = rerad_funct(target_fun, d_Tth[fid], d_Tth[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
                 reradConst = reradConst * radarEq(P, G, fs, lam, sltrng);
 
                 // slantrange equivalent time
-                float rngt = (sltrng - d_Rtd[fid]) + d_Rtd[fid] * (c / c2); 
+                float rngt = (sltrng - d_Ttd[fid]) + d_Ttd[fid] * (c / c2); 
 
                 float r = r0 + ir * dr;
                 float delta_r = (r - (rngt)) / range_res;

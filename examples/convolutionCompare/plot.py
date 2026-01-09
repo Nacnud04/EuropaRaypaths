@@ -7,7 +7,7 @@ unfocused_files = ["NoConv_raw.npz", "CircConv_raw.npz", "LinConv_raw.npz"]
 focused_files   = ["NoConv_focused.npz", "CircConv_focused.npz", "LinConv_focused.npz"]
 names           = ["Original", "Circular Convolution", "Linear Convolution"]
 
-with open("NoConv.pkl", 'rb') as hdl:
+with open("inputs/NoConv.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
 # 5 rows: 3 methods + 2 diff rows, 2 columns: unfocused and focused

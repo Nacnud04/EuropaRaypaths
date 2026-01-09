@@ -2,14 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob, sys, pickle
 
-sys.path.append("../../src")
+sys.path.append("../../archive/src")
 from focus import est_slant_range
 
 names = ["NoConv", "CircConv", "LinConv"]
 
 for n in names:
 
-    with open(f"{n}.pkl", 'rb') as hdl:
+    with open(f"inputs/{n}.pkl", 'rb') as hdl:
         params = pickle.load(hdl)
 
     filenames = glob.glob(f"{n}/s*.txt")
@@ -25,7 +25,6 @@ for n in names:
             rdrgrm.append(arr[0] + 1j * arr[1])
 
     rdrgrm = np.array(rdrgrm).T
-    print(rdrgrm.shape)
 
     # try to focus the radargram
 
