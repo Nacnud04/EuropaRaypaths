@@ -6,7 +6,7 @@ import sys
 import pickle
 
 # focusing helper
-sys.path.append("../../src")
+sys.path.append("../../archive/src")
 from focus import est_slant_range
 
 paramss = ("halfspace", "window")
