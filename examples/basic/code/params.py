@@ -34,10 +34,10 @@ params = {
 
     # source parameters 
     "sy": 0,                # source y location       [m]
-    "sz": 10e3,#25e3,       # source z location       [m]
+    "sz": 10e3,             # source z location       [m]
     "sdx": 10,              # source x discretization [m]
     "sx0": -5e3,            # source x origin         [m]
-    "ns": 1000,              # source count            [.]
+    "ns": 1000,             # source count            [.]
 
     # facet array params
     "ox": -5e3,
@@ -59,14 +59,14 @@ params = {
 
 }
 
-with open("params.json", "w") as f:
+with open("inputs/params.json", "w") as f:
     json.dump(params, f, indent=4)
 
-with open("params.pkl", 'wb') as hdl:
+with open("inputs/params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
 # --- MAKE FACET FILE
-sys.path.append("../src")
+sys.path.append("../../archive/src")
 from terrain import Terrain
 
 xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
@@ -74,12 +74,6 @@ ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
 
 terrain = Terrain(xmin, xmax, ymin, ymax, params["fs"])
 terrain.gen_flat(0)
-# make double ridge
-#amp       = 300     # amplitude [m]
-#peak_dist = 6e3     # peak distance [m]
-#ridge_wid = 4e3     # ridge width [m]
-#x_offset  = 0       # x offset [m]
-#terrain.double_ridge(amp, amp, peak_dist, ridge_wid, x_offset)
 
 # write output facet data
-terrain.export("facets.fct")
+terrain.export("inputs/facets.fct")
