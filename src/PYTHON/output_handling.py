@@ -35,3 +35,26 @@ def load_params(param_path, target_path):
     params['tz'] = targets[2]
 
     return params
+
+def load_attenuation_geom(filepath):
+
+    # example file contents:
+    # 1e-05, -5000.0, -2500.0, -500.0, -1000.0, 2500.0, 0
+    # 1e-05, 1000.0, -2500.0, -500.0, 5000.0, 2500.0, 0
+    # cond, xmin, xmax, ymin, ymax, zmin, zmax
+
+    xmins, xmaxs, ymins, ymaxs, zmins, zmaxs = [], [], [], [], [], []
+    conductivities = []
+
+    with open(filepath, 'r') as f:
+        for line in f:
+            vals = line.strip().split(',')
+            conductivities.append(float(vals[0]))
+            xmins.append(float(vals[1]))
+            ymins.append(float(vals[2]))
+            zmins.append(float(vals[3]))
+            xmaxs.append(float(vals[4]))
+            ymaxs.append(float(vals[5]))
+            zmaxs.append(float(vals[6]))
+
+    return (conductivities, xmins, xmaxs, ymins, ymaxs, zmins, zmaxs)

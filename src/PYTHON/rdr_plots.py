@@ -8,6 +8,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import numpy as np
 
 import unit_convs as uc
+import output_handling as oh
 
 # matplotlib configuration for LaTeX
 os.environ["PATH"] += os.pathsep + '/usr/share/texlive/texmf-dist/tex/xelatex'
@@ -201,4 +202,89 @@ def IGARSS2026_rdrgrm_focused_profile(rdrgrm, focused, terrain, par, az_s1, az_s
 
     plt.savefig(f"{filename}.png", dpi=300, bbox_inches="tight")
     plt.savefig(f"{filename}.pgf", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_rdr_attenuation_prof(rdr, focused, attenuation_file, params, savefig):
+
+    range_extent = [
+        -5, 5,
+        2 * (params["rx_window_offset_m"] + params["rx_window_m"]) / 299.792458,
+        2 * params["rx_window_offset_m"] / 299.792458
+    ]
+
+    conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs = oh.load_attenuation_geom(attenuation_file)
+
+    # debug (print attenuation boundaries)
+    print("Attenuation boundaries:")
+    for c, xmin, xmax, ymin, ymax, zmin, zmax in zip(conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
+        print(f"  Conductivity: {c}, X: [{xmin}, {xmax}], Y: [{ymin}, {ymax}], Z: [{zmin}, {zmax}]")
+
+    cmap = plt.get_cmap('inferno')
+    norm = plt.Normalize(vmin=params['sig_1'], vmax=np.max(conductivity))
+
+    fig, ax = plt.subplots(3, figsize=((7, 12)), sharex=True)
+
+    # set xlim and ylim in km
+    ax[0].set_ylim((params['rx_window_offset_m']+params['rx_window_m'])/1e3, params['rx_window_offset_m']/1e3)
+    ax[0].set_xlim(params['sx0']/1e3, (params['sx0']+params['sdx']*params['ns'])/1e3)
+
+    # plot atmosphere conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = -1*params['rx_window_m'] / 1e3
+    ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                        color=cmap(norm(params['sig_1'])), zorder=0))
+
+    # plot subsurface conductivity
+    rect_x = params['sx0'] / 1e3
+    rect_y = params['sz'] / 1e3
+    rect_w = (params['sdx'] * params['ns']) / 1e3
+    rect_h = params['rx_window_m'] / 1e3
+    ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                        color=cmap(norm(params['sig_2'])), zorder=0))
+
+    # plot conductivity rectangles
+    for c, xmin, xmax, ymin, ymax, zmin, zmax in zip(conductivity, ex1_xmins, ex1_xmaxs, ex1_ymins, ex1_ymaxs, ex1_zmins, ex1_zmaxs):
+        rect_x = xmin / 1e3
+        rect_y = (params['sz'] + zmax) / 1e3
+        rect_w = (xmax - xmin) / 1e3
+        rect_h = (zmax - zmin) / 1e3
+        ax[0].add_patch(Rectangle((rect_x, rect_y), rect_w, rect_h,
+                            color=cmap(norm(c)), zorder=1))
+
+    # add conductivity plot labels
+    ax[0].set_title("Attenuation Geometry")
+    ax[0].set_ylabel("Range [km]")
+
+    # add radargram plot labels
+    im1 = ax[1].imshow(uc.lin_to_db(np.abs(rdr)), vmin=-20, extent=range_extent, aspect='auto')
+    ax[1].set_title("Radar Image")
+    ax[1].set_ylabel("Range [us]")
+
+    im2 = ax[2].imshow(uc.lin_to_db(np.abs(focused)), vmin=0, extent=range_extent, aspect='auto')
+    ax[2].set_title("Focused Radar Image")
+    ax[2].set_xlabel("Azimuth [km]")
+    ax[2].set_ylabel("Range [us]")
+
+
+    # Colorbar for conductivity (subplot 0)
+    cbar0 = fig.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax[0],
+        orientation='vertical',
+        label='Conductivity [S/m]'
+    )
+
+    # Colorbar for radargram (subplot 1)
+    cbar1 = fig.colorbar(im1, ax=ax[1], orientation='vertical')
+    cbar1.set_label("Power [dB]")
+
+    # Colorbar for focused radargram (subplot 2)
+    cbar2 = fig.colorbar(im2, ax=ax[2], orientation='vertical')
+    cbar2.set_label("Power [dB]")
+
+    plt.tight_layout()
+    plt.savefig(savefig)
     plt.close()
