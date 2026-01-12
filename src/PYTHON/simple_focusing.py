@@ -121,3 +121,64 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
     focused = focused[:, start:end]
 
     return focused
+
+
+def focus_middle_only(rdrgrm, par, buffer, c1=299792458, sx_linspace=True):
+
+    if sx_linspace:
+        sx = par['sx0'] + par['sdx'] * np.arange(par['ns'])
+    else:
+        raise NotImplementedError("Irregular source spacing is not yet supported.")
+
+    Nr, Na = rdrgrm.shape
+
+    # speed of light in subsurface
+    c2 = uc.c2(par, c1=c1)
+
+    # get the slant range
+    sltrng    = est_slant_range(sx, par['sz'], par['tx'], par['tz'], c1, c2)
+    sltrng_t  = uc.slantrange_to_twoway_us(sltrng, c1=c1)
+    sltrng_rb = uc.slantrange_to_rangebin(sltrng, par, c1=c1)
+
+    # turn into matched filter
+    match_filter = uc.match_filter(sltrng, par, c1=c1)
+
+    # range cell migration correction
+    shift_amounts = sltrng_rb - np.min(sltrng_rb)
+    
+    # 0 shift outside of center region
+    shift_amounts[:buffer] = 0
+    shift_amounts[-buffer:] = 0
+    
+    # roll radargram
+    rolled_matrix = np.array([
+        np.roll(rdrgrm[:, i], -int(shift_amounts[i]))
+        for i in range(rdrgrm.shape[1])
+    ]).T
+
+    # fft along azimuth
+    fft_len = int(2 * Na)
+    pad = fft_len - Na
+
+    # pad at end
+    rolled_matrix = np.pad(rolled_matrix, ((0, 0), (0, pad)), mode='constant')
+    match_filter = np.pad(match_filter, (0, pad), mode='constant')
+    match_filter[:buffer] = 0
+    match_filter[-buffer:] = 0
+
+    # actually do fft
+    az_fft = np.fft.fft(rolled_matrix, axis=1, n=fft_len)
+    H_az = np.fft.fft(match_filter, n=fft_len)
+
+    # apply matched filter
+    focused_freq = az_fft * H_az[np.newaxis, :]
+
+    # IFFT to turn into the focused image
+    focused = np.fft.ifft(focused_freq, axis=1)
+
+    # crop to original size
+    start = pad // 2
+    end = start + Na
+    focused = focused[:, start:end]
+
+    return focused
