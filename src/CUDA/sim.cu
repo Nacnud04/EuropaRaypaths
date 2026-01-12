@@ -99,6 +99,47 @@ int main(int argc, const char* argv[])
     checkFileExists(argv[1]);
     par = parseSimulationParameters(argv[1]);
 
+
+    // --- LOAD SOURCES ---
+
+    bool sourceFileProvided = false;
+
+    float  *h_sx,  *h_sy,  *h_sz;
+    float *h_snx, *h_sny, *h_snz;
+
+    if (par.source_path_file != "NONE") {
+
+        sourceFileProvided = true;
+
+        // first open the source file
+        const char* source_filename;
+        source_filename = par.source_path_file.c_str();
+        std::cout << "Using source file: " << source_filename << std::endl;
+        checkFileExists(source_filename);
+        FILE *sourceFile = fopen(source_filename, "r");
+        
+        // report number of sources
+        par.ns = count_lines(sourceFile);
+        std::cout << "Found " << par.ns << " sources in " << source_filename << std::endl;
+        
+        // allocate memory for source arrays
+        // source coordinates
+        h_sx = (float*)malloc(par.ns * sizeof(float));
+        h_sy = (float*)malloc(par.ns * sizeof(float));
+        h_sz = (float*)malloc(par.ns * sizeof(float));
+
+        // source normal
+        h_snx = (float*)malloc(par.ns * sizeof(float));
+        h_sny = (float*)malloc(par.ns * sizeof(float));
+        h_snz = (float*)malloc(par.ns * sizeof(float));
+
+        // load source positions into memory
+        loadSourceFile(sourceFile, par.ns, 
+                        h_sx, h_sy, h_sz, h_snx, h_sny, h_snz);
+
+    }
+
+
     // --- LOAD TARGETS ---
 
     // first open the target file
@@ -164,8 +205,19 @@ int main(int argc, const char* argv[])
     reportTime("Loading facets and their bases");
 
     // estimate the number of illuminated facets
-    int nfacets = nIlluminatedFacets(par.sz, 0, par.fs, par.aperture, par.buff);
-    
+    int nfacets;
+    if (!sourceFileProvided) {
+        nfacets = nIlluminatedFacets(par.sz, 0, par.fs, par.aperture, par.buff);
+    } else {
+        // if a source file is provided, use the altitude parameter for estimation
+        if (par.altitude != 0.0f) {
+            nfacets = nIlluminatedFacets(par.altitude, 0, par.fs, par.aperture, par.buff);
+        } else {
+            std::cout << "WARNING: No altitude parameter provided; using total facet count" << std::endl;
+            nfacets = totFacets;
+        }
+    }
+
     // you cannot have more facets illuminated than exist
     if (nfacets > totFacets) {
         nfacets = totFacets;
@@ -428,11 +480,14 @@ int main(int argc, const char* argv[])
                   << "Zmin=" << h_attZmin[i] << ", Zmax=" << h_attZmax[i] << std::endl;
     }
 
-    // --- END ATTENUATION GEOMETRY SETUP --- 
-
-    // temp source nadir vector
     float snx, sny, snz;
-    snx = 0; sny = 0; snz = 1;
+    float  sx,  sy,  sz;
+    // use a fixed source normal if no source file is provided
+    if (!sourceFileProvided) {
+        snx = 0; sny = 0; snz = 1 * par.source_normal_multiplier;
+        sy = par.sy;
+        sz = par.sz;
+    }
 
     float runtime = 0; // run time in seconds
 
@@ -453,8 +508,17 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
-        // update source position
-        float sx = par.sx0 + is * par.sdx;
+        // if the source file is not provided, use linear solution
+        if (!sourceFileProvided) {
+            sx = par.sx0 + is * par.sdx;
+        } else {
+            sx  = h_sx[is];
+            sy  = h_sy[is];
+            sz  = h_sz[is];
+            snx = h_snx[is] * par.source_normal_multiplier;
+            sny = h_sny[is] * par.source_normal_multiplier;
+            snz = h_snz[is] * par.source_normal_multiplier;
+        }
 
         startTimer();
 
@@ -471,7 +535,7 @@ int main(int argc, const char* argv[])
         // --- GET INCLINATION OF EACH RAY RELATIVE TO SOURCE ---
         // compute incident rays for the full facet set (totFacets)
         int numBlocksAll = (totFacets + blockSize - 1) / blockSize;
-        compSourceInclination<<<numBlocksAll, blockSize>>>(sx, par.sy, par.sz,
+        compSourceInclination<<<numBlocksAll, blockSize>>>(sx, sy, sz,
                             d_Ffx, d_Ffy, d_Ffz,
                             snx, sny, snz,
                             d_FItd, d_FSth, totFacets);
@@ -505,7 +569,7 @@ int main(int argc, const char* argv[])
         int numBlocks = (nfacets + blockSize - 1) / blockSize;
 
         // --- COMP INCIDENT RAYS ---
-        compIncidentRays<<<numBlocks, blockSize>>>(sx, par.sy, par.sz,
+        compIncidentRays<<<numBlocks, blockSize>>>(sx, sy, sz,
                             d_fx,  d_fy,   d_fz,
                             d_fnx, d_fny, d_fnz,
                             d_fux, d_fuy, d_fuz,
@@ -573,10 +637,10 @@ int main(int argc, const char* argv[])
 
             // LIMIT SIMULATING TARGETS NOT IN APERTURE
             
-            float th_target = acosf( (par.sz - h_tz[it]) / 
+            float th_target = acosf( (sz - h_tz[it]) / 
                                     sqrtf( (sx - h_tx[it])*(sx - h_tx[it]) + 
-                                           (par.sy - h_ty[it])*(par.sy - h_ty[it]) + 
-                                           (par.sz - h_tz[it])*(par.sz - h_tz[it]) ) );
+                                           (sy - h_ty[it])*(sy - h_ty[it]) + 
+                                           (sz - h_tz[it])*(sz - h_tz[it]) ) );
             if (th_target > (par.aperture*(pi/180.0f))) {
                 continue;
             }

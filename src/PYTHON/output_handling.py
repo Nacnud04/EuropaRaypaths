@@ -19,7 +19,7 @@ def compile_rdrgrm(path, par):
 
     return rdrgrm
 
-def load_params(param_path, target_path):
+def load_params(param_path, target_path, source_path=None):
 
     with open(param_path, 'rb') as hdl:
         params = pickle.load(hdl)
@@ -33,6 +33,11 @@ def load_params(param_path, target_path):
     params['tx'] = targets[0]
     params['ty'] = targets[1]
     params['tz'] = targets[2]
+
+    if source_path:
+        # load source path and count number of sources
+        source_coords = np.genfromtxt(source_path, delimiter=',')
+        params['ns'] = source_coords.shape[0]
 
     return params
 

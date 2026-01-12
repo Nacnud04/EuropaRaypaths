@@ -41,6 +41,11 @@ struct SimulationParameters {
     float pi = 3.14159265f;
 
     // source geometry
+    std::string source_path_file; // source path file
+    float source_normal_multiplier = 1.0f; // multiplier to source normal vector
+    float altitude;
+    
+    // there can also be evenly spaced sources over X 
     float sy, sz;   // Source position
     float sx0, sdx;
     int ns;
@@ -90,8 +95,7 @@ struct SimulationParameters {
     float smpl;         // Sampling rate (Hz)
 
     // facet parameters
-    int nx, ny;
-    float fs, ox, oy, oz;
+    float fs;
 
     // subsurface attenuation geometry file
     std::string atten_geom_path;
@@ -114,11 +118,22 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     SimulationParameters params;
 
     // load source geometry
-    params.sy = j["sy"];
-    params.sz = j["sz"];
-    params.sx0 = j["sx0"];
-    params.sdx = j["sdx"];
-    params.ns  = j["ns"];
+    params.source_path_file = j.value("source_path_file", std::string("NONE"));
+
+    if (params.source_path_file == "NONE") {
+        std::cout << "No source geometry file found, using linear source spacing along x." << std::endl;
+        params.sy = j["sy"];
+        params.sz = j["sz"];
+        params.sx0 = j["sx0"];
+        params.sdx = j["sdx"];
+        params.ns  = j["ns"];
+    }
+
+    // multiplier to source normal vector (if exists)
+    params.source_normal_multiplier = j.value("source_normal_multiplier", 1.0f);
+
+    // source altitude (used for facet memory allocation)
+    params.altitude = j.value("altitude", 0.0f);
 
     // source function params
     params.f0 = j["frequency"];
@@ -179,13 +194,6 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << params.nr << " samples at " << params.smpl << " Hz" << std::endl;
 
     // load facet params
-    params.ox = j["ox"];
-    params.oy = j["oy"];
-    params.oz = j["oz"];
-    std::cout << "Terrain origin: (" << params.ox << "," << params.oy << "," << params.oz << ") " << std::endl;
-    params.nx = j["nx"];
-    params.ny = j["ny"];
-    std::cout << "Surface facet dimensions: (" << params.nx << "," << params.ny << ") " << std::endl;
     params.fs = j["fs"];
     std::cout << "Facet size: " << params.fs << std::endl;
 
@@ -340,6 +348,54 @@ __host__ void loadTargetFile(FILE* file, const int nt,
         // somehow if we are out of memory, break before segfault
         if (i > nt) {
             std::cout << "File has more targets than memory allocated - stopping read." << std::endl;
+            break;
+        }
+
+        i++;
+
+    }
+
+}
+
+
+__host__ void loadSourceFile(FILE* file, const int ns,
+                             float* h_sx, float* h_sy, float* h_sz,
+                             float* h_snx, float* h_sny, float* h_snz) {
+
+    // go through line by line and load the sources into memory
+    char line[256];
+    int i = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+        // detect if line has 3 or 6 entries
+        int comma_count = 0;
+        for (char* p = line; *p != '\0'; p++) {
+            if (*p == ',') {
+                comma_count++;
+            }
+        }
+
+        // if only 3 entries, set normal vector to default as upward Z
+        if (comma_count == 2) {
+            sscanf(line, "%f,%f,%f",
+                &h_sx[i],   &h_sy[i],  &h_sz[i]);
+            h_snx[i] = 0.0f;
+            h_sny[i] = 0.0f;
+            h_snz[i] = 1.0f;
+        }
+        else if (comma_count == 5) {
+            sscanf(line, "%f,%f,%f,%f,%f,%f",
+                &h_sx[i],   &h_sy[i],  &h_sz[i],
+                &h_snx[i], &h_sny[i], &h_snz[i]);
+        }
+        else {
+            std::cerr << "Error: Source file line number=" << i+1 << " has incorrect number of entries." << std::endl;
+            break;
+        }
+
+        // somehow if we are out of memory, break before segfault
+        if (i > ns) {
+            std::cout << "File has more sources than memory allocated - stopping read." << std::endl;
             break;
         }
 
