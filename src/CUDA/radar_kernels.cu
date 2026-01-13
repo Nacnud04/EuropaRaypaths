@@ -490,14 +490,13 @@ __global__ void genCenteredChirpPadded(float* d_chirp, float rst, float dr, int 
     if (i < paddedNr) {
 
         int kernel_center = nr / 2; // where the original kernel center sits in the padded buffer
-        // chirp center in meters
-        float chirp_cen = rst + (nr / 2) * dr;
 
         // offset (in bins) from the chirp center for this padded index
         float offset_bins = (float)(i - kernel_center);
         float offset_range = offset_bins * dr;
 
         d_chirp[i] = sinc(offset_range / range_res);
+        
     }
 }
 

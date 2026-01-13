@@ -34,10 +34,6 @@
 #include "radar_kernels.cu"
 #include "file_io.cu"
 
-const float c     = 299792458.0f; // speed of light [m/s]
-const float eps_0 = 8.85e-12;
-const float nu0 = 376.7;
-
 // timing
 struct timeval t1, t2;
 void startTimer() { gettimeofday(&t1, 0); }
@@ -141,6 +137,11 @@ int main(int argc, const char* argv[])
 
 
     // --- LOAD TARGETS ---
+
+    // variables for aperture calculation
+    float tvc_x, tvc_y, tvc_z;
+    float tvc_mag;
+    float th_target;
 
     // first open the target file
     const char* target_filename;
@@ -485,6 +486,7 @@ int main(int argc, const char* argv[])
     // use a fixed source normal if no source file is provided
     if (!sourceFileProvided) {
         snx = 0; sny = 0; snz = 1 * par.source_normal_multiplier;
+        std::cout << "Using fixed source normal: (" << snx << ", " << sny << ", " << snz << ")" << std::endl;
         sy = par.sy;
         sz = par.sz;
     }
@@ -635,12 +637,22 @@ int main(int argc, const char* argv[])
 
         for (int it=0; it<ntargets; it++) {
 
-            // LIMIT SIMULATING TARGETS NOT IN APERTURE
-            
-            float th_target = acosf( (sz - h_tz[it]) / 
-                                    sqrtf( (sx - h_tx[it])*(sx - h_tx[it]) + 
-                                           (sy - h_ty[it])*(sy - h_ty[it]) + 
-                                           (sz - h_tz[it])*(sz - h_tz[it]) ) );
+            // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
+            // should probably be offloaded to GPU at some point
+            tvc_x = h_tx[it] - sx;
+            tvc_y = h_ty[it] - sy;
+            tvc_z = h_tz[it] - sz;
+            tvc_mag = vectorMagnitudeHost(tvc_x, tvc_y, tvc_z);
+
+            tvc_x /= tvc_mag;
+            tvc_y /= tvc_mag;
+            tvc_z /= tvc_mag;
+            // NOTE: we need to reverse the direction of the source normal as the 
+            //       normal points "up" while the target is "down" relative to the
+            //       spacecraft
+            th_target = angleSourceNormTargetPosHost(-1*snx, -1*sny, -1*snz,
+                                                      tvc_x,  tvc_y,  tvc_z);
+
             if (th_target > (par.aperture*(pi/180.0f))) {
                 continue;
             }

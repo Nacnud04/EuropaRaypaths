@@ -471,8 +471,6 @@ __global__ void compRefrEnergyIn(
                     float ks, int nfacets, float alpha2, float c1, float c2,
                     float fs, float P, float G, float lam) {
 
-    float c = 299792458.0f; // speed of light in m/s
-
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < nfacets) {
 

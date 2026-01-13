@@ -131,9 +131,11 @@ __device__ void dotProductBulk(float* x1, float* y1, float* z1,
 }
 __device__ float dotProduct(float x1, float y1, float z1, 
                             float x2, float y2, float z2) {
-
     return x1 * x2 + y1 * y2 + z1 * z2;
-    
+}
+__host__ float dotProductHost(float x1, float y1, float z1,
+                              float x2, float y2, float z2) {
+    return x1 * x2 + y1 * y2 + z1 * z2;
 }
 
 // dot product of two 3D vector arrays with negate option
@@ -150,3 +152,16 @@ __device__ void dotProductNegateBulk(float* x1, float* y1, float* z1,
     }
 }
 
+// magnitude of 3D vector
+__host__ float vectorMagnitudeHost(float x, float y, float z) {
+    return sqrtf(x * x + y * y + z * z);
+}
+
+// find angle between normalized source and target vectors
+__host__ float angleSourceNormTargetPosHost(float snx, float sny, float snz,
+                                            float  tx, float  ty, float  tz) {
+    // NOTE: This function requires normalized target position vector
+    float dp = dotProductHost(snx, sny, snz, tx, ty, tz);
+    float theta = acosf(dp);
+    return theta;
+}
