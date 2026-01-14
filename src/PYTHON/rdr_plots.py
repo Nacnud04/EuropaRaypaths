@@ -21,7 +21,7 @@ matplotlib.rcParams.update({
     'pgf.rcfonts': False,
 })
 
-def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None):
+def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=None):
 
     if linspace:
         xmin = par['sx0']
@@ -29,7 +29,7 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None):
     else:
         raise NotImplementedError("Cannot handle uneven source spacing yet.")
 
-    plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, 
+    plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, vmax=vmax,
            extent=[xmin/1e3, xmax/1e3, 2*(par["rx_window_offset_m"] + par["rx_window_m"])/299.792458, 2*par["rx_window_offset_m"]/299.792458])
     plt.colorbar(label='Power [dB]')
     plt.xlabel("Azimuth [km]")

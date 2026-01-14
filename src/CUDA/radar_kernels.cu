@@ -484,7 +484,7 @@ __global__ void genCenteredChirp(float* d_chirp, float rst, float dr, int nr, fl
 // center at index `kernel_center = nr/2` inside the padded buffer so that
 // downstream extraction (starting at kernel_center) matches the original
 // "same" extraction convention used by convolvePhasorChirpLinear.
-__global__ void genCenteredChirpPadded(float* d_chirp, float rst, float dr, int nr, int paddedNr, float range_res){
+__global__ void genCenteredChirpPadded(float* d_chirp, float dr, int nr, int paddedNr, float range_res){
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < paddedNr) {

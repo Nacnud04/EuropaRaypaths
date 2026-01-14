@@ -20,3 +20,9 @@ def wav_k(params, c1=299792458):
 def match_filter(sltrng, params, c1=299792458):
     k = wav_k(params)
     return np.exp(-2j * k * sltrng)
+
+def m_to_km(*inpts):
+    return [inpt/1e3 for inpt in inpts]
+
+def km_to_m(*inpts):
+    return [inpt*1e3 for inpt in inpts]

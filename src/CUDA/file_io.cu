@@ -90,9 +90,10 @@ struct SimulationParameters {
     float tx, ty, tz;   // Target position
 
     // range window params
-    float rst, ren, dr;
+    float rst, dr;
     int nr;
     float smpl;         // Sampling rate (Hz)
+    std::string rxWindowPositionFile;
 
     // facet parameters
     float fs;
@@ -184,13 +185,17 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     params.smpl = j["rx_sample_rate"];
 
-    params.rst = j["rx_window_offset_m"];
-    params.ren = float(j["rx_window_offset_m"]) + float(j["rx_window_m"]);
+    params.rxWindowPositionFile = j.value("rx_window_position_file", std::string("NONE"));
+
+    if (params.source_path_file == "NONE") {
+        params.rst = j["rx_window_offset_m"];
+    }
+
     params.nr  = (float(j["rx_window_m"]) / 299792480.0f) * params.smpl;
     params.dr  = float(j["rx_window_m"]) / float(params.nr);
 
     // report sampling window
-    std::cout << "Sampling window: " << params.rst << " to " << params.ren << " m, ";
+    std::cout << "Sampling window: " << params.rst << " to " << float(j["rx_window_offset_m"]) + float(j["rx_window_m"]) << " m, ";
     std::cout << params.nr << " samples at " << params.smpl << " Hz" << std::endl;
 
     // load facet params
@@ -447,3 +452,37 @@ __host__ void loadAttenPrismFile(FILE* file, const int nPrisms,
     }
 
 }                            
+
+
+__host__ void loadRxWindowPositions(FILE* file,
+                                    const int ns,
+                                    float* h_rx_window_positions)
+{
+    char line[256];
+    int i = 0;
+
+    while (fgets(line, sizeof(line), file)) {
+
+        // too many entries
+        if (i >= ns) {
+            std::cerr << "Error: rx_window_positions file has MORE entries than sources (ns = "
+                      << ns << ")" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        if (sscanf(line, "%f", &h_rx_window_positions[i]) != 1) {
+            std::cerr << "Error: Invalid float on line " << i + 1 << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        i++;
+    }
+
+    // too few entries
+    if (i != ns) {
+        std::cerr << "Error: rx_window_positions file has "
+                  << i << " entries, but expected exactly "
+                  << ns << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}

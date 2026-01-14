@@ -491,24 +491,63 @@ int main(int argc, const char* argv[])
         sz = par.sz;
     }
 
-    float runtime = 0; // run time in seconds
+    
+    // load in rx window position file if it exists
+    bool rxWindowPositionFileProvided = false;
+    float* rx_window_pos = nullptr;
+    
+    // if the file exists, load it
+    if (par.rxWindowPositionFile != "NONE") {
 
+        rxWindowPositionFileProvided = true;
+
+        // allocate memory
+        rx_window_pos = (float*)malloc(par.ns * sizeof(float));
+
+        // load file
+        const char* rxWindowPosFilename;
+        rxWindowPosFilename = par.rxWindowPositionFile.c_str();
+        std::cout << "Using rx window position file: " << rxWindowPosFilename << std::endl;
+        checkFileExists(rxWindowPosFilename);
+        FILE *sourceFile = fopen(rxWindowPosFilename, "r");
+
+        // read in data to memory
+        loadRxWindowPositions(sourceFile, par.ns, rx_window_pos);
+
+    }
+        
+    float runtime = 0; // run time in seconds
     int blockSize = 256;
 
     // --- GENERATE CHIRP IF FAST METHOD ENABLED ---
+    // we can only pre-generate the chirp for the linear convolution (not circular)
     if (par.convolution) {
 
-        if (!par.convolution_linear) {
+        // for circular convolution we can pregenerate the chirp when not varying the rx window
+        if (!par.convolution_linear && !rxWindowPositionFileProvided) {
             genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
             checkCUDAError("genChirp kernel");
-        } else {
+        } 
+        // for linear convolution we always pregenerate the chirp
+        else {
             int paddedNr = 2 * par.nr;
-            genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, paddedNr, par.rng_res);
+            genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
             checkCUDAError("genCenteredChirpPadded kernel");
         }
     }
 
     for (int is=0; is<par.ns; is++) {
+
+        // update par.rst
+        if (rxWindowPositionFileProvided) {
+            par.rst = rx_window_pos[is];
+        }
+
+        // generate the chirp if using circular convolution and variable rx opening windows
+        if (par.convolution && !par.convolution_linear && rxWindowPositionFileProvided) {
+            genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
+            checkCUDAError("genChirp kernel");
+        }
 
         // if the source file is not provided, use linear solution
         if (!sourceFileProvided) {

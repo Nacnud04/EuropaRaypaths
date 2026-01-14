@@ -63,3 +63,5 @@ def load_attenuation_geom(filepath):
             zmaxs.append(float(vals[6]))
 
     return (conductivities, xmins, xmaxs, ymins, ymaxs, zmins, zmaxs)
+
+
