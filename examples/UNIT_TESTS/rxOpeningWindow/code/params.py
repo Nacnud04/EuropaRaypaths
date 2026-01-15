@@ -35,13 +35,13 @@ params = {
 
     # source parameters 
     "sy": 0,                # source y location       [m]
-    "sz": 270e3,             # source z location       [m]
-    "sdx": 25,             # source x discretization [m]
+    "sz": 270e3,            # source z location       [m]
+    "sdx": 25,              # source x discretization [m]
     "sx0": -50e3,           # source x origin         [m]
     "ns": 4000,             # source count            [.]
 
     # facet params
-    "fs": 250,              # facet size [m]
+    "fs": 125,              # facet size [m]
 
     # target params
     "rerad_funct": 1,  # 1-degree boxcar
@@ -66,8 +66,8 @@ from terrain import Terrain
 ox = -50e3
 oy = -10e3
 oz = 0
-nx = 400
-ny = 80
+nx = 800
+ny = 160
 
 xmin, xmax = ox, ox+nx*params['fs']
 ymin, ymax = oy, oy+ny*params['fs']

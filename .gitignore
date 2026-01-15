@@ -12,4 +12,10 @@ Other
 *.json
 tmp*
 *.npy
+*.img
+*.xml
+*.hdr
+*.obj
+*.tif
+*.tab
 CUDA/*.png

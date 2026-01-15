@@ -344,7 +344,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 __device__ float facetReradiation(float dist, float th, float ph,  
                                   float lam, float fs){
     // NOTE: dist is the observer distance from the facet aperture
-    
+
     // start with k
     float k = 2 * 3.14159265f / lam;
 
@@ -367,8 +367,6 @@ __device__ float facetReradiation(float dist, float th, float ph,
     // combine all together
     return cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f)));
     
-    // sinc^2(fs*sin(th)/lam)
-    //return pow(sinc(200 * (sin(th) / lam)), 2);
 }
 
 
