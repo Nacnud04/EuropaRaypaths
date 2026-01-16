@@ -7,6 +7,7 @@ import matplotlib.colors as colors
 import sys
 sys.path.append("/storage/School/GradSchool/Repostories/EuropaRaypaths/src/PYTHON")
 import kutil as ku
+import unit_convs as uc
 
 # path to mars radius DEM
 path = r"data/MOLA/RCropped.tif"
@@ -14,46 +15,10 @@ path = r"data/MOLA/RCropped.tif"
 # mars radius offset
 MARS_RADIUS = 3396000
 
-"""
-# load tiff
-with tifffile.TiffFile(path) as tif:
-    page = tif.pages[0]
-    data = page.asarray()  # raw Int16 image
-
-    tags = page.tags
-    model_tiepoint = tags["ModelTiepointTag"].value
-    model_pixelscale = tags["ModelPixelScaleTag"].value
-
-# find tiff origin
-tpar['tpnt_lat'] = model_tiepoint[4]
-tpar['tpnt_lon'] = model_tiepoint[3]
-print(f"Longitude tiepoint: {tpar['tpnt_lon']:6.3f}")
-print(f"Latitude  tiepoint: {tpar['tpnt_lat']:6.3f}")
-
-# get pixel scale
-lat_scale, lon_scale = model_pixelscale[:2]
-lat_scale *= -1
-tpar['scl_latr'] = np.radians(lat_scale)
-tpar['scl_lonr'] = np.radians(lon_scale)
-print(f"Latitude scale: {lat_scale}")
-print(f"Longitude scale: {lon_scale}")
-
-# get image coverage/dimensions
-tpar['rows'], tpar['cols'] = data.shape
-print(f"TIFF Shape: {tpar['rows']}, {tpar['cols']}")
-tpar['lonmin'], tpar['lonmax'] = tpar['tpnt_lon'], tpar['tpnt_lon'] + tpar['cols'] * lon_scale
-tpar['latmax'], tpar['latmin'] = tpar['tpnt_lat'], tpar['tpnt_lat'] + tpar['rows'] * lat_scale
-tpar['lats'] = np.arange(tpar['rows']) * lat_scale + tpar['tpnt_lat']
-tpar['lons'] = np.arange(tpar['cols']) * lon_scale + tpar['tpnt_lon']
-ltpar['lons'], ltpar['lats'] = np.meshgrid(tpar['lons'], tpar['lats'])
-
-tpar['extent'] = (tpar['lonmin'], tpar['lonmax'], tpar['latmin'], tpar['latmax'])
-"""
-
 data, tpar = ku.load_cropped_mola_tif(path)
 
 # compute the resolution in meters along latitude to get the square side of each pixel
-resolution = np.radians(np.abs(tpar['scl_lat'])) * MARS_RADIUS
+resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)#np.radians(np.abs(tpar['scl_lat'])) * MARS_RADIUS
 print(f"Latitude resolution: {resolution} m")
 
 # --- VECTORIZED NORMAL COMPUTATION ---

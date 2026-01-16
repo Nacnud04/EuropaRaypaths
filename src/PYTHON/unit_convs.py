@@ -26,3 +26,6 @@ def m_to_km(*inpts):
 
 def km_to_m(*inpts):
     return [inpt*1e3 for inpt in inpts]
+
+def dLat_to_m(lat_delta, radius):
+    return np.radians(np.abs(lat_delta)) * radius

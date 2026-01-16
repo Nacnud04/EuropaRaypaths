@@ -11,7 +11,6 @@ params = {
     "bandwidth": 10e6,        # Radar bandwidth [Hz]
     "surface_gain": 20,       # Antenna gain [dB]
     "subsurface_gain": 10,    # Subsurface antenna gain [dB]
-    "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 2,            # aperture (from nadir->edge) [deg]
 
@@ -41,7 +40,7 @@ params = {
     "ns": 4000,             # source count            [.]
 
     # facet params
-    "fs": 125,              # facet size [m]
+    "fs": 250,              # facet size [m]
 
     # target params
     "rerad_funct": 1,  # 1-degree boxcar
@@ -66,8 +65,8 @@ from terrain import Terrain
 ox = -50e3
 oy = -10e3
 oz = 0
-nx = 800
-ny = 160
+nx = 400
+ny = 80
 
 xmin, xmax = ox, ox+nx*params['fs']
 ymin, ymax = oy, oy+ny*params['fs']

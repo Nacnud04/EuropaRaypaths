@@ -22,6 +22,9 @@ def load_sharad_orbit(DIRECTORY, OBS):
     col_names = ["COL", "TIME", "LAT", "LON", "MRAD", "SRAD", "RVEL", "TVEL", "SZA", "PHSE"]
     geometry = pd.read_csv(filename, header=None, names=col_names)
     print(f"Found {len(geometry)} observations in {filename}")
+    
+    altitude = geometry['SRAD'] - geometry['MRAD']
+    print(f"Average altitude of {np.mean(altitude):3.2f} km")
 
     return geometry
 
