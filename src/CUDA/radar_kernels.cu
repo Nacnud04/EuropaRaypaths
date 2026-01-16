@@ -172,7 +172,7 @@ __device__ float rerad_funct(int funcnum, float th1, float th2){
             return 1;
         } else {return 0;}
     } else if (funcnum == 2) {
-        if (th1 * (180/pi) < 2) {
+        if (th1 * (180/pi) < 0.5) {
             return 1;
         } else {return 0;}
     } else if (funcnum == 3) {
@@ -239,7 +239,7 @@ __global__ void refrRadarSignal(float* d_SltRng, float* d_Ttd, float* d_Tth,
                 float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
                 
                 float reradConst = rerad_funct(target_fun, d_Tth[fid], d_Tth[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
-                reradConst = reradConst * radarEq(P, G, fs, lam, sltrng);
+                reradConst = reradConst * radarEq(P, G, fs, lam, sltrng, nfacets);
 
                 // slantrange equivalent time
                 float rngt = (sltrng - d_Ttd[fid]) + d_Ttd[fid] * (c / c2); 
@@ -365,7 +365,7 @@ __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
         // compute reradiation constant based on target reradiation function,
         // the radar equation, and other losses in fReflEI and fReflEO
         float reradConst = rerad_funct(target_fun, d_Tth[id], d_Tth[id1]) * d_fReflEI[id] * d_fReflEO[id1];
-              reradConst = reradConst * radarEq(P, G, fs, lam, sltrng);
+              reradConst = reradConst * radarEq(P, G, fs, lam, sltrng, nfacets);
 
         // compute slant range equivalent time
         float rngt = (sltrng - d_Ttd[id]) + d_Ttd[id] * (c / c2);

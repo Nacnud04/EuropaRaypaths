@@ -370,12 +370,12 @@ __device__ float facetReradiation(float dist, float th, float ph,
 }
 
 
-__device__ float radarEq(float P, float G, float fs, float lam, float dist){
+__device__ float radarEq(float P, float G, float fs, float lam, float dist, int nfacets){
     
     // note this is the radar equation using the RCS for a flat incident facet.
     float num = P * G * G * fs * fs * fs * fs;
     float denom = pow(4 * 3.14159, 2) * dist * dist * dist * dist; // (4*pi)^3
-    return (num / denom);
+    return nfacets * (num / denom);
 
 }
 
@@ -395,7 +395,10 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], lam, fs);
 
         // losses from radar equation
-        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, fs, lam, d_Itd[idx]);
+        // since we are working with coherent energy we need to square the number of
+        // illuminated facets. We can do this by multiplying the radar equation by
+        // nfacets
+        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, fs, lam, d_Itd[idx], nfacets);
 
         // reflection coefficient
         // horizontal pol.

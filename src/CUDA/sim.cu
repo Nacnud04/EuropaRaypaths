@@ -603,8 +603,9 @@ int main(int argc, const char* argv[])
         // If no facets are illuminated, skip per-facet kernels to avoid
         // operating on uninitialised memory which can produce NaNs.
         if (valid_facets == 0) {
-            std::cout << "No illuminated facets for source " << is << ", skipping." << std::endl;
-            continue;
+            //std::cout << "No illuminated facets for source " << is << ", skipping." << std::endl;
+            printf("\rNo illuminated facets for source %d, skipping.", is);
+	    continue;
         }
 
         int numBlocks = (nfacets + blockSize - 1) / blockSize;
@@ -812,7 +813,7 @@ int main(int argc, const char* argv[])
     float total_min = total_s / 60.0f;
     std::cout << std::endl;
     std::cout << "=== Run summary ===" << std::endl;
-    std::cout << "Total runtime: " << (int)total_min << " min " << (int)(total_s - (int)total_min * 60) << " seconds" << std::endl;
+    std::cout << "Total runtime: " << (int)total_min << " min " << (int)(total_s - (int)total_min * 60) << " seconds " << (int)(total_ms - ((int)total_s)*1e3f) << " milliseconds" << std::endl;
     if (par.ns > 0) {
         float per_source_ms = total_ms / (float)par.ns;
         float per_source_s = per_source_ms / 1e3f;

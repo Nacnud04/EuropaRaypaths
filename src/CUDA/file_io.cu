@@ -142,8 +142,11 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.P = j["power"];
     params.Grefr = j["subsurface_gain"];
     params.Grefl = j["surface_gain"];
-    params.rng_res = j["range_resolution"];
+    //params.rng_res = j["range_resolution"];
     params.aperture = j["aperture"];
+
+    // compute the range resolution from bandwidth
+    params.rng_res = params.c / params.B;
 
     params.lam = params.c / params.f0;
     params.k = 2 * params.pi / params.lam;
@@ -187,8 +190,8 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     params.rxWindowPositionFile = j.value("rx_window_position_file", std::string("NONE"));
 
-    if (params.source_path_file == "NONE") {
-        params.rst = j["rx_window_offset_m"];
+    if (params.rxWindowPositionFile == "NONE") {
+        params.rst = float(j["rx_window_offset_m"]);
     }
 
     params.nr  = (float(j["rx_window_m"]) / 299792480.0f) * params.smpl;
