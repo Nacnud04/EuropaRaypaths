@@ -6,8 +6,9 @@ import warnings, functools
 from math import ceil, floor
 
 nGPU = int(os.getenv("nGPU"))
+HAS_CUPY = int(os.getenv("HAS_CUPY"))
 
-if nGPU > 0:
+if nGPU > 0 and HAS_CUPY == 1:
     print(f"GPU's detected. Enabling CUDA compute")
     import cupy as cp
 

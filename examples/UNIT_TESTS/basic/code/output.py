@@ -9,8 +9,8 @@ params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
 
-rp.simple_rdrgrm(rdrgrm, params, "figures/rdrgrm.png", title="Very basic radargram", vmin=-20)
+rp.simple_rdrgrm(rdrgrm, params, "figures/rdrgrm.png", title="Very basic radargram", vmin=-10)
 
 focused = sf.full_focus_at_center(rdrgrm, params)
 
-rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=0)
+rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=10)
