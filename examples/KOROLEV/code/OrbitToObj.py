@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.append("/storage/School/GradSchool/Repostories/EuropaRaypaths/src/PYTHON")
+sys.path.append("../../src/PYTHON")
 import kutil as ku
 import output_handling as oh
 import unit_convs as uc
@@ -20,6 +20,9 @@ geometry = geometry[(geometry['COL'] > mincol) * (geometry['COL'] < maxcol)]
 
 # convert the satellite location into x, y, z
 sat_x, sat_y, sat_z = ku.planetocentric_to_cartesian(geometry['SRAD'], geometry['LAT'], geometry['LON'])
+
+# interpolate
+sat_x, sat_y, sat_z = uc.interpolate_sources(2000, sat_x, sat_y, sat_z)
 
 # convert from KM into M
 sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)

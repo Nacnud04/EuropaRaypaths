@@ -29,3 +29,15 @@ def km_to_m(*inpts):
 
 def dLat_to_m(lat_delta, radius):
     return np.radians(np.abs(lat_delta)) * radius
+
+def interpolate_sources(ns, sat_x, sat_y, sat_z):
+
+    interp_rng = np.linspace(0, 1, ns)
+    orig_rng = np.linspace(0, 1, len(sat_x))
+
+    sats = []
+    for sat in (sat_x, sat_y, sat_z):
+        sat = np.interp(interp_rng, orig_rng, sat)
+        sats.append(sat)
+        
+    return sats

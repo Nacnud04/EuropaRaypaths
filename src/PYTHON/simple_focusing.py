@@ -4,6 +4,8 @@ from scipy.optimize import root_scalar
 
 import unit_convs as uc
 
+import matplotlib.pyplot as plt
+
 
 def snell_intersection(xA, zA, xB, zB, v1, v2):
     """
@@ -42,15 +44,20 @@ def snell_intersection(xA, zA, xB, zB, v1, v2):
 
 
 
-def est_slant_range(sx, sz, tx, tz, c1, c2, trim=True):
+def est_slant_range(sx, sz, tx, tz, c1, c2, trim=True, clutter=False):
 
     # cast lists into numpy arrays
     for s in (sx, sz):
         if type(s) == list:
             s = np.array(s)
+
+    sltrng_ests = []
+    # if target is above the surface there is no need for snell intersection
+    if tz > 0 or clutter == True:
+        sltrng_ests = np.sqrt((sx-tx)**2+(sz-tz)**2)
+        return sltrng_ests
     
     # find the surface intersection location
-    sltrng_ests = []
     for x in sx:
         # estimate surface intersections
         ix = snell_intersection(x, sz, tx, tz, c1, c2)
@@ -242,3 +249,119 @@ def focus_window(rdrgrm, par, win_center, win_width, c1=299792458, sx_linspace=T
     focused[:, az_start:az_end] = focused_win
 
     return focused
+
+
+# function to focus entire image with a given aperture
+def focus_rdrgrm(rdrgrm, par):
+
+    # NOTE: This function requires some additional parameters. Such as:
+    # spacing: approximate spacing between sources
+    # altitude: approximate altitude of the source in meters
+
+    # Nr = # of range bins
+    # Na = # of azimuth traces
+    Nr, Na = rdrgrm.shape 
+
+    rdr_f = np.zeros_like(rdrgrm)
+
+    # first we need to iterate over each row. 
+    for i in range(Nr):
+
+        if i < 1600 or i > 2250:
+            continue
+
+        # get the range assuming no media change
+        rng = par['rx_window_m'] * (i / Nr) + par['rx_window_offset_m']
+
+        # given satellite aperture how wide should half the SAR aperture be?
+        apt_m = rng * np.sin(np.radians(par['aperture']))
+        # convert that into approximate number of traces
+        apt_smpl = int(2*apt_m / par["spacing"])
+        apt_hsmpl = int(apt_m / par["spacing"])
+
+        # compute a slant range which would work for anything at a given range bin
+        # NOTE: This should eventually be made to work for varying surface topography
+        sx = np.linspace(-1*apt_m, 1*apt_m, apt_smpl)
+        sz = par["altitude"]
+        tx = 0
+        tz = par["altitude"] - rng
+        sltrng = est_slant_range(sx, sz, tx, tz, par["eps_1"], par["eps_2"], trim=False, clutter=True)
+        sltrng_rb = uc.slantrange_to_rangebin(sltrng, par)
+
+        # turn slant range into matched filter
+        mth_filt = uc.match_filter(sltrng, par)
+
+        """
+        plt.plot(sx, np.real(mth_filt), color="red", label="real")
+        plt.plot(sx, np.imag(mth_filt), color="blue", label="imag")
+        plt.legend()
+        plt.savefig("match_filter.png")
+        plt.close()
+        
+        plt.plot(sx, sltrng)
+        plt.savefig("Slantrange.pdf")
+        plt.close()
+        """
+
+        # iterate over every single trace
+        for j in range(Na):
+
+            # get window of data within aperture
+            az_st = max(0, j-apt_hsmpl)
+            az_en = min(Na, j+apt_hsmpl)
+            window = rdrgrm[:, az_st:az_en]
+
+            # range correction
+            # NOTE: to be proper I should crop the slantrange array to work for edges
+            shift_amounts = sltrng_rb - i
+            rdr_rcmc = np.array([
+                np.roll(window[:, k], -int(shift_amounts[k]))
+                for k in range(window.shape[1])
+            ]).T
+
+            """
+            plt.imshow(uc.lin_to_db(np.abs(rdr_rcmc)), vmin=-10, vmax=5)
+            plt.ylim(2250, 1750)
+            plt.savefig("rdr_rcmc.png")
+            plt.close()
+            """
+
+            # get single row we care about and do fft
+            fft_len = int(2*apt_smpl)
+            pad = fft_len - (az_en - az_st)
+
+            # first we need to pad things
+            row_pad = np.pad(rdr_rcmc[i,:], (0, pad), mode="constant")
+
+            # now we pad the matched filter
+            filt_pad = np.pad(mth_filt, (0, pad), mode="constant")
+
+            # do fft
+            az_fft = np.fft.fft(row_pad, n=fft_len)
+            ft_fft = np.fft.fft(filt_pad, n=fft_len)
+
+            # apply matched filter
+            focused_freq = az_fft * ft_fft
+
+            # IFFT to focused image
+            focused_row = np.fft.ifft(focused_freq)
+
+            # get the pixel we care about
+            rdr_f[i, j] = focused_row[(j - az_st) + pad // 2]
+
+        # overlay on rdrgrm to make sure things match
+        """
+        extent = [
+            0, (Na * par['spacing'])/1e3,
+            (par['rx_window_offset_m']+par['rx_window_m'])/1e3, (par['rx_window_offset_m'])/1e3,
+        ]
+        plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), extent=extent, vmin=-10, vmax=5, aspect=50)
+        plt.plot((sx/1e3)+118, sltrng/1e3, color="red", linewidth=1)
+        plt.ylim(317.5, 312.5)
+        plt.savefig("SltrngRdr.pdf")
+        plt.close()
+        """
+
+        print(f"{i}/{Nr}", end="       \r")
+
+    return rdr_f
