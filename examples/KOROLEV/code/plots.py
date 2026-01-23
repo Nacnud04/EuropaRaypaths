@@ -7,6 +7,12 @@ import rdr_plots       as rp
 import unit_convs      as uc
 import output_handling as oh
 import rdr_plots       as rp
+import kutil           as ku
+
+# FIRST LOAD REAL DATA 
+sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
+
+ku.load_CoSHARPS(sharad_data_path)
 
 par = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 par['ns'] = 2000

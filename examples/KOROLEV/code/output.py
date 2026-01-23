@@ -12,7 +12,8 @@ import unit_convs      as uc
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 2000
 
-rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
+rdrgrm = oh.compile_rdrgrm("rdrgrm", params, exp_len = None)
+print(f"Radargram shape: {rdrgrm.shape}")
 
 np.save("output/rdrgrm.npy", rdrgrm)
 

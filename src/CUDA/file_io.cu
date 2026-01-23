@@ -191,6 +191,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.rxWindowPositionFile = j.value("rx_window_position_file", std::string("NONE"));
 
     if (params.rxWindowPositionFile == "NONE") {
+        std::cout << "No Rx window position file found, using static offset." << std::endl;
         params.rst = float(j["rx_window_offset_m"]);
     }
 

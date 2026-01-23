@@ -20,6 +20,8 @@ geometry = geometry[(geometry['COL'] > mincol) * (geometry['COL'] < maxcol)]
 
 # convert the satellite location into x, y, z
 sat_x, sat_y, sat_z = ku.planetocentric_to_cartesian(geometry['SRAD'], geometry['LAT'], geometry['LON'])
+print(np.min(geometry["LAT"]))
+print(np.max(geometry["LAT"]))
 
 # interpolate
 sat_x, sat_y, sat_z = uc.interpolate_sources(2000, sat_x, sat_y, sat_z)

@@ -18,7 +18,7 @@ MARS_RADIUS = 3396000
 data, tpar = ku.load_cropped_mola_tif(path)
 
 # compute the resolution in meters along latitude to get the square side of each pixel
-resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)#np.radians(np.abs(tpar['scl_lat'])) * MARS_RADIUS
+resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)
 print(f"Latitude resolution: {resolution} m")
 
 # --- VECTORIZED NORMAL COMPUTATION ---

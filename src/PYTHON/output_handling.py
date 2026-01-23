@@ -1,7 +1,7 @@
 import numpy as np
 import glob, pickle
 
-def compile_rdrgrm(path, par):
+def compile_rdrgrm(path, par, exp_len=None):
 
     filenames = glob.glob(f"{path}/s*.txt")
 
@@ -13,7 +13,12 @@ def compile_rdrgrm(path, par):
     for i, f in enumerate(filenames):
         if i < par['ns']:
             arr = np.loadtxt(f).T
-            rdrgrm.append(arr[0] + 1j * arr[1])
+            col = arr[0] + 1j * arr[1]
+            if exp_len != None:
+                if len(col) != exp_len:
+                    print(f"ERROR: trace {i} has length {len(col)} compared to the expected {exp_len}")
+                col = col[:exp_len]
+            rdrgrm.append(col)
 
     rdrgrm = np.array(rdrgrm).T
 

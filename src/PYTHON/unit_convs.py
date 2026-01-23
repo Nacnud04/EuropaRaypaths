@@ -41,3 +41,10 @@ def interpolate_sources(ns, sat_x, sat_y, sat_z):
         sats.append(sat)
         
     return sats
+
+def upsample(n, data):
+
+    interp_rng = np.linspace(0, 1, n)
+    orig_rng = np.linspace(0, 1, len(data))
+
+    return np.interp(interp_rng, orig_rng, data)

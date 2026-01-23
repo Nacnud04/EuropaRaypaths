@@ -15,6 +15,8 @@ import numpy  as np
 import pandas as pd
 import tifffile
 
+import unit_convs as uc
+
 # load sharad orbit from file
 def load_sharad_orbit(DIRECTORY, OBS):
    
@@ -193,3 +195,182 @@ def load_cropped_mola_tif(filename):
     }
 
     return data, tiff_par
+
+
+rdr_dtype = np.dtype([
+    ("SCET_BLOCK_WHOLE", "<u4"),
+    ("SCET_BLOCK_FRAC", "<u2"),
+    ("TLM_COUNTER", "<u4"),
+    ("FMT_LENGTH", "<u2"),
+    ("SCET_OST_WHOLE", "<u4"),
+    ("SCET_OST_FRAC", "<u2"),
+    ("OST_LINE_NUMBER", "<u1"),
+    ("PULSE_REPETITION_INTERVAL", "<u1"),
+    ("PHASE_COMPENSATION_TYPE", "<u1"),
+    ("DATA_TAKE_LENGTH", "<u4"),
+    ("OPERATIVE_MODE", "<u1"),
+    ("MANUAL_GAIN_CONTROL", "<u1"),
+    ("COMPRESSION_SELECTION", "<u1"),
+    ("CLOSED_LOOP_TRACKING", "<u1"),
+    ("TRACKING_DATA_STORAGE", "<u1"),
+    ("TRACKING_PRE_SUMMING", "<u1"),
+    ("TRACKING_LOGIC_SELECTION", "<u1"),
+    ("THRESHOLD_LOGIC_SELECTION", "<u1"),
+    ("SAMPLE_NUMBER", "<u1"),
+    ("ALPHA_BETA", "<u1"),
+    ("REFERENCE_BIT", "<u1"),
+    ("THRESHOLD", "<u1"),
+    ("THRESHOLD_INCREMENT", "<u1"),
+    ("INITIAL_ECHO_VALUE", "<u1"),
+    ("EXPECTED_ECHO_SHIFT", "<u1"),
+    ("WINDOW_LEFT_SHIFT", "<u1"),
+    ("WINDOW_RIGHT_SHIFT", "<u1"),
+    ("DATA_BLOCK_ID", "<u4"),
+    ("SCIENCE_DATA_SOURCE_COUNTER", "<u2"),
+    ("SCIENTIFIC_DATA_TYPE", "<u1"),
+    ("SEGMENTATION_FLAG", "<u1"),
+    ("DMA_ERROR", "<u1"),
+    ("TC_OVERRUN", "<u1"),
+    ("FIFO_FULL", "<u1"),
+    ("TEST", "<u1"),
+    ("DATA_BLOCK_FIRST_PRI", "<u4"),
+    ("TIME_DATA_BLOCK_WHOLE", "<u4"),
+    ("TIME_DATA_BLOCK_FRAC", "<u2"),
+    ("SDI_BIT_FIELD", "<u2"),
+    ("TIME_N", "<f4"),
+    ("RADIUS_N", "<f4"),
+    ("TANGENTIAL_VELOCITY_N", "<f4"),
+    ("RADIAL_VELOCITY_N", "<f4"),
+    ("TLP", "<f4"),
+    ("TIME_WPF", "<f4"),
+    ("DELTA_TIME", "<f4"),
+    ("TLP_INTERPOLATE", "<f4"),
+    ("RADIUS_INTERPOLATE", "<f4"),
+    ("TANGENTIAL_VELOCITY_INTERPOLATE", "<f4"),
+    ("RADIAL_VELOCITY_INTERPOLATE", "<f4"),
+    ("END_TLP", "<f4"),
+    ("S_COEFFS", "<f4", (8,)),
+    ("C_COEFFS", "<f4", (7,)),
+    ("SLOPE", "<f4"),
+    ("TOPOGRAPHY", "<f4"),
+    ("PHASE_COMPENSATION_STEP", "<f4"),
+    ("RECEIVE_WINDOW_OPENING_TIME", "<f4"),
+    ("ANTENNA_RELATIVE_GAIN", "<f4"),
+    ("ECHO_SAMPLES_REAL", "<f4", (667,)),
+    ("ECHO_SAMPLES_IMAG", "<f4", (667,)),
+    ("N_PRE", "<u2"),
+    ("BLOCK_NR", "<u2"),
+    ("BLOCK_ROWS", "<u2"),
+    ("DOPPLER_BW", "<f4"),
+    ("DOPPLER_CENTROID", "<f4"),
+    ("AZ_TIME_SPACING", "<f4"),
+    ("AZ_RES", "<f4"),
+    ("T_INT", "<f4"),
+    ("AVG_TAN_VELOCITY", "<f4"),
+    ("RANGE_SHIFT", "<i2"),
+    ("EPHEMERIS_TIME", "<f8"),
+    ("GEOMETRY_EPOCH", "S23"),
+    ("SOLAR_LONGITUDE", "<f8"),
+    ("ORBIT_NUMBER", "<i4"),
+    ("MARS_SC_POSITION_VECTOR", "<f8", (3,)),
+    ("SPACECRAFT_ALTITUDE", "<f8"),
+    ("SUB_SC_EAST_LONGITUDE", "<f8"),
+    ("SUB_SC_PLANETOCENTRIC_LATITUDE", "<f8"),
+    ("SUB_SC_PLANETOGRAPHIC_LATITUDE", "<f8"),
+    ("MARS_SC_VELOCITY_VECTOR", "<f8", (3,)),
+    ("MARS_SC_RADIAL_VELOCITY", "<f8"),
+    ("MARS_SC_TANGENTIAL_VELOCITY", "<f8"),
+    ("LOCAL_TRUE_SOLAR_TIME", "<f8"),
+    ("SOLAR_ZENITH_ANGLE", "<f8"),
+    ("SC_PITCH_ANGLE", "<f8"),
+    ("SC_YAW_ANGLE", "<f8"),
+    ("SC_ROLL_ANGLE", "<f8"),
+    ("MRO_SAMX_INNER_GIMBAL_ANGLE", "<f8"),
+    ("MRO_SAMX_OUTER_GIMBAL_ANGLE", "<f8"),
+    ("MRO_SAPX_INNER_GIMBAL_ANGLE", "<f8"),
+    ("MRO_SAPX_OUTER_GIMBAL_ANGLE", "<f8"),
+    ("MRO_HGA_INNER_GIMBAL_ANGLE", "<f8"),
+    ("MRO_HGA_OUTER_GIMBAL_ANGLE", "<f8"),
+    ("DES_TEMP", "<f4"),
+    ("DES_5V", "<f4"),
+    ("DES_12V", "<f4"),
+    ("DES_2V5", "<f4"),
+    ("RX_TEMP", "<f4"),
+    ("TX_TEMP", "<f4"),
+    ("TX_LEV", "<f4"),
+    ("TX_CURR", "<f4"),
+    ("QUALITY_CODE", "<u1"),
+])
+
+RADARGRAM_RETURN_INTERVAL = {
+    "0554201":312041,
+}
+
+ADC_SAMP_INT = 0.0375e-6
+RDR_RETR_INT = 0.075e-6
+RNG_BIN_INT  = 0.075e-6
+c = 299792458
+
+def load_CoSHARPS(filename):
+
+    st, en = 18000, 30000
+
+    data = np.fromfile(filename, dtype=rdr_dtype)
+    
+    # now that we have read in the data we need to find the exact radius and distance
+    # from the spacecraft that the RADARGRAM RETURN INTERVAL cooresponds to
+    return_interval_mars_radius = (RADARGRAM_RETURN_INTERVAL["0554201"] * RNG_BIN_INT * c) / 2
+
+    min_rx_win = np.min(data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6) * c / 2
+
+    data = data[st:en]
+
+    rx_win = data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6
+    rx_win_dist = rx_win * c / 2
+    rx_win_rb_offset = (rx_win_dist - np.max(rx_win_dist)) // (RNG_BIN_INT * c / 2)
+
+    rdrgrm = data["ECHO_SAMPLES_REAL"] + 1j * data["ECHO_SAMPLES_IMAG"]
+
+    range_shift = (data["RANGE_SHIFT"] * RDR_RETR_INT) / 2
+    range_shift_rb = range_shift // RNG_BIN_INT    
+
+    # correct radargram
+    NoOffset = np.zeros_like(rdrgrm)
+    for i, shift in enumerate(range_shift_rb):
+        NoOffset[i, :] = np.roll(rdrgrm[i, :], -1*shift)# - rx_win_rb_offset[i])
+
+    import matplotlib.pyplot as plt
+    ymin = np.min(rx_win_dist / 1e3)
+    ymax = np.min(rx_win_dist / 1e3) + (667 * RNG_BIN_INT * c / 2) / 1e3
+    #ymin = min_rx_win / 1e3
+    #ymax = min_rx_win / 1e3 + (667 * RNG_BIN_INT * c / 2) / 1e3
+    extent = [0, NoOffset.shape[0], ymax, ymin]
+    fig, ax = plt.subplots(1, 1, figsize=(14, 6))
+    im1 = ax.imshow(np.abs(NoOffset).T, aspect=7e2, vmax=8, vmin=0, extent=extent)
+    plt.title("SHARAD 0554201 - Raw")
+    plt.colorbar(im1)
+    plt.savefig("figures/0554201-NoOffset.png")
+    plt.close()
+
+    # gen rx opening window file for sim
+    # crop data output
+    latmin = 70.7608
+    latmax = 74.2075
+    
+    data = data[
+        (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] > latmin) *\
+        (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] < latmax)
+    ]
+
+    rx_win = data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6
+    rx_win_dist = rx_win * c / 2
+    rx_win_upsample = uc.upsample(2000, rx_win_dist)
+
+    with open("data/rx_window_positions.txt", 'w') as f:
+        for pos in rx_win_upsample:
+            f.write(f"{round(pos)}\n")
+
+    # correct radargram
+    #NoOffset = np.zeros_like(rdrgrm)
+    #for i, shift in enumerate(range_shift_rb):
+    #    NoOffset[i, :] = np.roll(rdrgrm[i, :], -1*shift)
