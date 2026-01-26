@@ -15,10 +15,10 @@ params = {
     "aperture": 1,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
-    "rx_window_m":  20e3,         # receive window length [m]
+    "rx_window_m":  7.5e3,         # receive window length [m]
     "rx_window_offset_m": 300e3,  # receive window offset [m]
     "rx_sample_rate": 40e6,       # receive sample rate [Hz]
-    #"rx_window_position_file": "data/rx_window_positions.txt",
+    "rx_window_position_file": "data/rx_window_positions.txt",
 
     # surface parameters
     "rms_height": 0.4,       # surface roughness [m]

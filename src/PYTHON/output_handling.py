@@ -1,7 +1,7 @@
 import numpy as np
 import glob, pickle
 
-def compile_rdrgrm(path, par, exp_len=None):
+def compile_rdrgrm(path, par, debug=False):
 
     filenames = glob.glob(f"{path}/s*.txt")
 
@@ -9,16 +9,22 @@ def compile_rdrgrm(path, par, exp_len=None):
     filenames.sort()
 
     rdrgrm = []
-
+    lengths = []
     for i, f in enumerate(filenames):
         if i < par['ns']:
+            print(f"Compiling radargram... {i}/{par['ns']}", end="           \r")
             arr = np.loadtxt(f).T
             col = arr[0] + 1j * arr[1]
-            if exp_len != None:
-                if len(col) != exp_len:
-                    print(f"ERROR: trace {i} has length {len(col)} compared to the expected {exp_len}")
-                col = col[:exp_len]
+            if debug:
+                lengths.append(len(col))
             rdrgrm.append(col)
+
+    print("",end='\n')
+
+    if debug:
+        print(f"=== Samples by trace: ===")
+        print(lengths)
+        print(f"=========================")
 
     rdrgrm = np.array(rdrgrm).T
 

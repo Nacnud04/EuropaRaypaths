@@ -536,6 +536,11 @@ int main(int argc, const char* argv[])
         }
     }
 
+    // Wipe write direcory
+    // this happens at the last minute as in case we cancel a process before
+    // the main simulation begins not all data is lost
+    remove_s_txt_files(argv[4]);
+
     for (int is=0; is<par.ns; is++) {
 
         // update par.rst

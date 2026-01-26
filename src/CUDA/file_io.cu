@@ -490,3 +490,31 @@ __host__ void loadRxWindowPositions(FILE* file,
         std::exit(EXIT_FAILURE);
     }
 }
+
+
+__host__ void remove_s_txt_files(const std::filesystem::path& dir)
+{
+    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
+        std::cerr << "Invalid directory\n";
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        if (!entry.is_regular_file())
+            continue;
+
+        const auto& path = entry.path();
+        const std::string filename = path.filename().string();
+
+        // Match: s*.txt
+        if (filename.size() >= 5 &&
+            filename[0] == 's' &&
+            path.extension() == ".txt")
+        {
+            std::filesystem::remove(path);
+            std::cout << "Clearing write directory... Removed: " << path << "         \r";
+        }
+    }
+
+    std::cout << "\n" << std::endl;
+}

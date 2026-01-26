@@ -12,10 +12,27 @@ import unit_convs      as uc
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 2000
 
-rdrgrm = oh.compile_rdrgrm("rdrgrm", params, exp_len = None)
+rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
 print(f"Radargram shape: {rdrgrm.shape}")
 
 np.save("output/rdrgrm.npy", rdrgrm)
+
+print(sys.argv)
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == "plot":
+
+        print("Plotting only no focusing...")
+
+        rdr_db = uc.lin_to_db(np.abs(rdrgrm))
+
+        fig, ax = plt.subplots(1, 1, figsize=(4, 12))
+        im = ax.imshow(rdr_db, vmin=-20, vmax=-4, cmap="viridis", aspect=3)
+        plt.colorbar(im)
+        plt.savefig("figures/rdrgrm.png")
+        plt.close()
+        
+        sys.exit()
 
 # TMP LOAD ORBIT
 DIRECTORY = "data/Observation"
