@@ -3,6 +3,11 @@ import pickle
 import numpy as np
 import json
 
+sys.path.append("../../src/PYTHON")
+import kutil           as ku
+import output_handling as oh
+import unit_convs as uc
+
 params = {
 
     # radar parameters
@@ -53,4 +58,44 @@ with open("data/params.json", "w") as f:
 with open("data/params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
+# --- EXPORT RX OPENING WINDOW ---
 
+NS = 2000
+sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
+data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
+ku.rxOpenWindow(data, "data/rx_window_positions", NS)
+
+
+
+# --- GENERATE SOURCE FILE ---
+
+DIRECTORY = "data/Observation/rdrgrm"
+OBS       = "00554201"
+
+# load in dataset
+geometry = ku.load_sharad_orbit_MOLA(DIRECTORY, OBS)
+
+# restrict to part of radargram within interest
+mincol = 750
+maxcol = 1200
+geometry = geometry[(geometry['COL'] > mincol) * (geometry['COL'] < maxcol)]
+
+# save geometry as a pickle
+with open(f'data/Observation/rdrgrm/s_{OBS}_sources.pkl', 'wb') as file:
+    pickle.dump(geometry, file)
+
+# convert the satellite location into x, y, z
+sat_x, sat_y, sat_z = ku.planetocentric_to_cartesian(geometry['SRAD'], geometry['LAT'], geometry['LON'])
+
+# interpolate
+sat_x, sat_y, sat_z = uc.interpolate_sources(NS, sat_x, sat_y, sat_z)
+
+# convert from KM into M
+sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
+
+# compute a normal vector for each observation
+n_hat = ku.sharad_normal(sat_x, sat_y, sat_z, nmult=1)
+
+# export as source file and obj
+ku.sources_norms_to_file(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2]) 
+ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])

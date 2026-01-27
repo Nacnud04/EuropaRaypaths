@@ -1,12 +1,17 @@
 import numpy as np
 import glob, pickle
 
-def compile_rdrgrm(path, par, debug=False):
+def compile_rdrgrm(path, par, debug=False, rx_win_file=None):
 
     filenames = glob.glob(f"{path}/s*.txt")
 
     # sort filenames to ensure correct order
     filenames.sort()
+
+    if rx_win_file:
+        rx_win_adj = np.load(rx_win_file)
+        rx_win_adj_rb = (rx_win_adj - np.min(rx_win_adj)) // ((1/par["rx_sample_rate"]) * 299792458)
+        print(rx_win_adj_rb)
 
     rdrgrm = []
     lengths = []
@@ -17,6 +22,9 @@ def compile_rdrgrm(path, par, debug=False):
             col = arr[0] + 1j * arr[1]
             if debug:
                 lengths.append(len(col))
+            if rx_win_file:
+                index = int(f.split("/")[-1][1:-4])
+                col = np.roll(col, rx_win_adj_rb[index])
             rdrgrm.append(col)
 
     print("",end='\n')

@@ -13,9 +13,11 @@ Contact:     duncan.byrne@colorado.edu
 
 import numpy  as np
 import pandas as pd
-import tifffile
+import tifffile, pickle
 
 import unit_convs as uc
+
+import matplotlib.pyplot as plt
 
 # load sharad orbit from file
 def load_sharad_orbit(DIRECTORY, OBS):
@@ -29,6 +31,59 @@ def load_sharad_orbit(DIRECTORY, OBS):
     print(f"Average altitude of {np.mean(altitude):3.2f} km")
 
     return geometry
+
+def load_sharad_orbit_MOLA(DIRECTORY, OBS):
+
+    filename = f"{DIRECTORY}/s_{OBS}_geom_MOLA.csv"
+    col_names = ["COL", "TIME", "LAT", "LON", "MRAD", "SRAD", "RVEL", "TVEL", "SZA", "PHSE", "TOPO"]
+    geometry = pd.read_csv(filename, header=None, names=col_names, skiprows=1)
+    print(f"Found {len(geometry)} observations in {filename}")
+    
+    altitude = geometry['SRAD'] - geometry['MRAD']
+    print(f"Average altitude of {np.mean(altitude):3.2f} km")
+
+    geometry["TOPO"] += 3396e3
+    
+    # range from spacecraft to surface
+    geometry["SRANGE"] = geometry['SRAD'] * 1e3 - geometry["TOPO"]
+
+    return geometry
+
+def load_sharad_orbit_AEROID(DIRECTORY, OBS):
+
+    filename = f"{DIRECTORY}/s_{OBS}_geom_AEROID.csv"
+    col_names = ["COL", "TIME", "LAT", "LON", "MRAD", "SRAD", "RVEL", "TVEL", "SZA", "PHSE", "AEROID"]
+    geometry = pd.read_csv(filename, header=None, names=col_names, skiprows=1)
+    print(f"Found {len(geometry)} observations in {filename}")
+    
+    altitude = geometry['SRAD'] - geometry['MRAD']
+    print(f"Average altitude of {np.mean(altitude):3.2f} km")
+
+    geometry["AEROID"] += 3396e3
+
+    return geometry
+
+
+def load_sharad_orbit_PKL(DIRECTORY, OBS):
+
+    filename = f'{DIRECTORY}/s_{OBS}_sources.pkl'
+    with open(filename, 'rb') as file:
+        geometry = pickle.load(file)
+
+    return geometry
+
+
+def load_COSHARPS_rdrgrm(DIRECTORY, OBS):
+
+    lines = 3600
+    samples = 2656
+    dtype = np.float32
+
+    img = np.fromfile(f'{DIRECTORY}/s_{OBS}_rgram.img', dtype=dtype)
+
+    img = img.reshape((lines, samples))
+
+    return img
 
 
 # convert from planetocentric to martian cartesian
@@ -311,22 +366,45 @@ RDR_RETR_INT = 0.075e-6
 RNG_BIN_INT  = 0.075e-6
 c = 299792458
 
-def load_CoSHARPS(filename):
-
-    st, en = 18000, 30000
+def load_SHARAD_RDR(filename, st=None, en=None, latmin=None, latmax=None):
 
     data = np.fromfile(filename, dtype=rdr_dtype)
     
     # now that we have read in the data we need to find the exact radius and distance
     # from the spacecraft that the RADARGRAM RETURN INTERVAL cooresponds to
-    return_interval_mars_radius = (RADARGRAM_RETURN_INTERVAL["0554201"] * RNG_BIN_INT * c) / 2
+    #return_interval_mars_radius = (RADARGRAM_RETURN_INTERVAL["0554201"] * RNG_BIN_INT * c) / 2
 
-    min_rx_win = np.min(data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6) * c / 2
+    if st and en:
 
-    data = data[st:en]
+        data = data[st:en]
+
+    if latmin and latmax:
+    
+        data = data[
+            (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] > latmin) *\
+            (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] < latmax)
+        ]
+
+    return data
+
+def rxOpenWindow(data, filename, ns):
 
     rx_win = data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6
     rx_win_dist = rx_win * c / 2
+    rx_win_upsample = uc.upsample(ns, rx_win_dist)
+
+    # save as npy
+    np.save(f"{filename}.npy", rx_win_upsample)
+
+    with open(f"{filename}.txt", 'w') as f:
+        for pos in rx_win_upsample:
+            f.write(f"{round(pos)}\n")
+    
+def plot_SHARAD_RDR(data, geometry):
+
+    rx_win = data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6
+    rx_win_dist = rx_win * c / 2
+    min_rx_win = np.min(rx_win_dist)
     rx_win_rb_offset = (rx_win_dist - np.max(rx_win_dist)) // (RNG_BIN_INT * c / 2)
 
     rdrgrm = data["ECHO_SAMPLES_REAL"] + 1j * data["ECHO_SAMPLES_IMAG"]
@@ -339,38 +417,31 @@ def load_CoSHARPS(filename):
     for i, shift in enumerate(range_shift_rb):
         NoOffset[i, :] = np.roll(rdrgrm[i, :], -1*shift)# - rx_win_rb_offset[i])
 
-    import matplotlib.pyplot as plt
-    ymin = np.min(rx_win_dist / 1e3)
-    ymax = np.min(rx_win_dist / 1e3) + (667 * RNG_BIN_INT * c / 2) / 1e3
-    #ymin = min_rx_win / 1e3
-    #ymax = min_rx_win / 1e3 + (667 * RNG_BIN_INT * c / 2) / 1e3
+    ymin = min_rx_win / 1e3
+    ymax = min_rx_win / 1e3 + (667 * RNG_BIN_INT * c / 2) / 1e3
     extent = [0, NoOffset.shape[0], ymax, ymin]
     fig, ax = plt.subplots(1, 1, figsize=(14, 6))
     im1 = ax.imshow(np.abs(NoOffset).T, aspect=7e2, vmax=8, vmin=0, extent=extent)
+
+    # interpolate mola topography
+    geometry_intp = geometry.sort_values('LAT')
+    srange = np.interp(data['SUB_SC_PLANETOCENTRIC_LATITUDE'], geometry_intp['LAT'], geometry_intp["SRANGE"]/1e3)
+    plt.plot(srange, color="red", linewidth=1)
+
     plt.title("SHARAD 0554201 - Raw")
     plt.colorbar(im1)
     plt.savefig("figures/0554201-NoOffset.png")
     plt.close()
 
-    # gen rx opening window file for sim
-    # crop data output
-    latmin = 70.7608
-    latmax = 74.2075
-    
-    data = data[
-        (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] > latmin) *\
-        (data['SUB_SC_PLANETOCENTRIC_LATITUDE'] < latmax)
-    ]
 
-    rx_win = data['RECEIVE_WINDOW_OPENING_TIME'] * (3/80e6) - 11.98e-6 + 1428e-6
-    rx_win_dist = rx_win * c / 2
-    rx_win_upsample = uc.upsample(2000, rx_win_dist)
+def read_COSHARPS_GEOM(filepath, latmin=None, latmax=None):
 
-    with open("data/rx_window_positions.txt", 'w') as f:
-        for pos in rx_win_upsample:
-            f.write(f"{round(pos)}\n")
+    cols = ["COL", "TIME", "LAT", "LON", "MRAD", "SRAD", "RV", "TV", "SZA", "PHASE"]
 
-    # correct radargram
-    #NoOffset = np.zeros_like(rdrgrm)
-    #for i, shift in enumerate(range_shift_rb):
-    #    NoOffset[i, :] = np.roll(rdrgrm[i, :], -1*shift)
+    cosharps = pd.read_csv(filepath, header=None, names=cols)
+
+    cosharps = cosharps[(cosharps["LAT"]>70.768)*(cosharps["LAT"]<74.2075)]
+
+    plt.plot(cosharps["MRAD"])
+    plt.savefig("tmp.png")
+    plt.show()

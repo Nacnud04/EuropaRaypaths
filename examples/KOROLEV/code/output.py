@@ -12,12 +12,10 @@ import unit_convs      as uc
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 2000
 
-rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
+rdrgrm = oh.compile_rdrgrm("rdrgrm", params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
 
 np.save("output/rdrgrm.npy", rdrgrm)
-
-print(sys.argv)
 
 if len(sys.argv) > 1:
     if sys.argv[1] == "plot":
@@ -64,6 +62,6 @@ print(f"Spacing={spacing} m")
 params['spacing'] = spacing
 params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
 
-focused = sf.focus_rdrgrm(rdrgrm, params)
+focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=650)
 
 np.save("output/focused.npy", focused)

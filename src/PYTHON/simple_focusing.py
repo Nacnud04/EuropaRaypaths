@@ -252,7 +252,7 @@ def focus_window(rdrgrm, par, win_center, win_width, c1=299792458, sx_linspace=T
 
 
 # function to focus entire image with a given aperture
-def focus_rdrgrm(rdrgrm, par):
+def focus_rdrgrm(rdrgrm, par, st=None, en=None):
 
     # NOTE: This function requires some additional parameters. Such as:
     # spacing: approximate spacing between sources
@@ -267,8 +267,9 @@ def focus_rdrgrm(rdrgrm, par):
     # first we need to iterate over each row. 
     for i in range(Nr):
 
-        if i < 1600 or i > 2250:
-            continue
+        if st and en:
+            if i < st or i > en:
+                continue
 
         # get the range assuming no media change
         rng = par['rx_window_m'] * (i / Nr) + par['rx_window_offset_m']
