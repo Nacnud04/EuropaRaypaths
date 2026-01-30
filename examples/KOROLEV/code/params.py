@@ -80,6 +80,8 @@ mincol = 750
 maxcol = 1200
 geometry = geometry[(geometry['COL'] > mincol) * (geometry['COL'] < maxcol)]
 
+geometry = uc.upsample_df(NS, geometry)
+
 # save geometry as a pickle
 with open(f'data/Observation/rdrgrm/s_{OBS}_sources.pkl', 'wb') as file:
     pickle.dump(geometry, file)

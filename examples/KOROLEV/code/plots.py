@@ -68,25 +68,62 @@ rx_win = np.load("data/rx_window_positions.npy")
 Nr, Na = rdrgrm.shape
 
 rdr_db = uc.lin_to_db(np.abs(rdrgrm))
+foc_db = uc.lin_to_db(np.abs(focused))
+
+# interpolate to match
+sim_st, sim_en = 55, 1628
+geom_crop = geometry.iloc[sim_st:sim_en]
+intrp_st, intrp_en = geom_crop.index[0], geom_crop.index[-1]+1
+
+sltrng = 4e3
+samples = int(sltrng // (RNG_BIN_INT*c/2))
+foc_rng_st = np.min(rx_win)
+foc_rng_en = np.min(rx_win) + 7.5e3
+foc_rng    = np.linspace(foc_rng_st, foc_rng_en, focused.shape[0])
+rea_rng_st = 314e3
+rea_rng_en = 318e3
+rea_rng    = np.linspace(rea_rng_st, rea_rng_en, samples)
+
+# interpolate (iterate over traces)
+xst = 750; xen = 1200
+foc_intrp = np.zeros((samples, xen - xst))
+for t in range(xen - xst):
+
+    t_full = t + 750
+    
+    # stack traces
+    trace_ids = [i-intrp_st for i, c in geom_crop.iterrows() if int(c['COL']) == t_full]
+    trace_stack = np.zeros_like(foc_db[:,0])
+    if len(trace_ids) == 0:
+        print(f"Warning: No traces found for trace {t_full}")
+    for tid in trace_ids:
+        clean = foc_db[:, tid]
+        clean[np.isnan(clean)] = np.nanmin(clean)
+        trace_stack += clean
+    trace_stack /= len(trace_ids)
+
+    # interpolate
+    foc_intrp[:, t] = np.interp(rea_rng, foc_rng, trace_stack)
 
 extent_syn = [
-    0, Na,
-    np.min(rx_win) + 7.5e3, np.min(rx_win),
+    xst, xen,
+    rea_rng_en, rea_rng_st,
 ]
-
-#print(srad - mola[750:1200])
-#print(geometry['SRAD'] geometry['TOPO'])
 
 mola_interp = np.interp(np.linspace(0, 1, 2000), np.linspace(0, 1, 1200-750), aeroid['SRAD'][750:1200] * 1e3 - mola[750:1200])
 
+# crop no offset
+rbCROP_st = int((rea_rng_st - ymax) // (RNG_BIN_INT*c/2))
+rbCROP_en = int((rea_rng_en - ymax) // (RNG_BIN_INT*c/2))
+NoOffset_crop = NoOffset[rbCROP_st:rbCROP_en-1, xst:xen]
+
 fig, ax = plt.subplots(2, 1, figsize=(11, 15))
-ax[0].imshow(NoOffset, vmax=0.01, extent=extent_real, aspect=0.1)
+ax[0].imshow(NoOffset_crop, vmax=0.01, extent=extent_syn, aspect=0.1)
 ax[0].plot(aeroid['SRAD'][750:1200]*1e3 - mola, color="red", linewidth=1)
-ax[0].set_xlim(750, 1200)
+ax[0].set_xlim(xst,xen)
 ax[0].set_ylim(318e3, 314e3)
-ax[1].imshow(uc.lin_to_db(np.abs(focused)), extent=extent_syn, vmin=-5, vmax=10, aspect=0.35)
-ax[1].plot(mola_interp[55:1550], color="red", linewidth=1)
-ax[1].set_ylim(318e3, 314e3)
+ax[1].imshow(foc_intrp, vmin=-5, vmax=10, extent=extent_syn, aspect=0.1)
+ax[1].plot(aeroid['SRAD'][750:1200]*1e3 - mola, color="red", linewidth=1)
 plt.savefig("tmp.png")
 plt.close()
 
