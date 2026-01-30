@@ -21,7 +21,7 @@ mola = ku.load_sharad_orbit_MOLA(DIRECTORY, OBS)['TOPO']
 
 c = 299792458
 RNG_BIN_INT = 0.0375e-6
-rollpar = aeroid['AEROID']+aeroid['SRAD']
+rollpar = aeroid['AEROID']-aeroid['SRAD']*1e3
 roll = (rollpar - np.min(rollpar)) // (RNG_BIN_INT * c / 2)
 
 rdrgrm = ku.load_COSHARPS_rdrgrm(DIRECTORY, OBS)
@@ -35,19 +35,21 @@ for i, shift in enumerate(roll):
 #          np.min(RX_WIN_OPEN)]
 
 RX_WIN_OPEN -= 3396e3
-extent = [0, rdrgrm.shape[1], 
-          np.min(RX_WIN_OPEN)-rdrgrm.shape[0]*RNG_BIN_INT*c/2,
-          np.min(RX_WIN_OPEN)]
 
-correction = 10150
+MRAD = 3396e3
+srad = np.max(aeroid['SRAD'][750:1200]) * 1e3
 
-fig, ax = plt.subplots(1, 1, figsize=(11, 8))
-plt.imshow(NoOffset, vmax=0.01, extent=extent, aspect=0.1)
-plt.plot(mola-3396e3-correction, color="red", linewidth=1)
-plt.savefig("tmp.png")
-plt.close()
+ymin = np.min(RX_WIN_OPEN)-rdrgrm.shape[0]*RNG_BIN_INT*c/2
+ymax = np.min(RX_WIN_OPEN)
 
-sys.exit()
+# correction factor
+correction = 9650
+ymin = srad - (ymin + correction + MRAD)
+ymax = srad - (ymax + correction + MRAD)
+
+# correct for spacecraft altitude
+extent_real = [0, rdrgrm.shape[1], 
+         ymin, ymax]
 
 # FIRST LOAD REAL DATA 
 sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
@@ -66,6 +68,29 @@ rx_win = np.load("data/rx_window_positions.npy")
 Nr, Na = rdrgrm.shape
 
 rdr_db = uc.lin_to_db(np.abs(rdrgrm))
+
+extent_syn = [
+    0, Na,
+    np.min(rx_win) + 7.5e3, np.min(rx_win),
+]
+
+#print(srad - mola[750:1200])
+#print(geometry['SRAD'] geometry['TOPO'])
+
+mola_interp = np.interp(np.linspace(0, 1, 2000), np.linspace(0, 1, 1200-750), aeroid['SRAD'][750:1200] * 1e3 - mola[750:1200])
+
+fig, ax = plt.subplots(2, 1, figsize=(11, 15))
+ax[0].imshow(NoOffset, vmax=0.01, extent=extent_real, aspect=0.1)
+ax[0].plot(aeroid['SRAD'][750:1200]*1e3 - mola, color="red", linewidth=1)
+ax[0].set_xlim(750, 1200)
+ax[0].set_ylim(318e3, 314e3)
+ax[1].imshow(uc.lin_to_db(np.abs(focused)), extent=extent_syn, vmin=-5, vmax=10, aspect=0.35)
+ax[1].plot(mola_interp[55:1550], color="red", linewidth=1)
+ax[1].set_ylim(318e3, 314e3)
+plt.savefig("tmp.png")
+plt.close()
+
+sys.exit()
 
 fig, ax = plt.subplots(1, 1, figsize=(4, 12))
 im = ax.imshow(rdr_db, vmin=-20, vmax=-4, cmap="viridis", aspect=3)
