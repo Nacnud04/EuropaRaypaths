@@ -1,7 +1,7 @@
 import numpy as np
 import glob, pickle
 
-def compile_rdrgrm(path, par, debug=False, rx_win_file=None):
+def compile_rdrgrm(path, par, rx_win_file=None):
 
     filenames = glob.glob(f"{path}/s*.txt")
 
@@ -11,28 +11,19 @@ def compile_rdrgrm(path, par, debug=False, rx_win_file=None):
     if rx_win_file:
         rx_win_adj = np.load(rx_win_file)
         rx_win_adj_rb = (rx_win_adj - np.min(rx_win_adj)) // ((1/par["rx_sample_rate"]) * 299792458)
-        print(rx_win_adj_rb)
 
     rdrgrm = []
-    lengths = []
     for i, f in enumerate(filenames):
         if i < par['ns']:
             print(f"Compiling radargram... {i}/{par['ns']}", end="           \r")
             arr = np.loadtxt(f).T
             col = arr[0] + 1j * arr[1]
-            if debug:
-                lengths.append(len(col))
             if rx_win_file:
                 index = int(f.split("/")[-1][1:-4])
                 col = np.roll(col, rx_win_adj_rb[index])
             rdrgrm.append(col)
 
     print("",end='\n')
-
-    if debug:
-        print(f"=== Samples by trace: ===")
-        print(lengths)
-        print(f"=========================")
 
     rdrgrm = np.array(rdrgrm).T
 

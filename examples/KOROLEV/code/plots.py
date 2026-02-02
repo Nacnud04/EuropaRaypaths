@@ -1,6 +1,8 @@
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 sys.path.append("../../src/PYTHON")
 import rdr_plots       as rp
@@ -43,7 +45,7 @@ ymin = np.min(RX_WIN_OPEN)-rdrgrm.shape[0]*RNG_BIN_INT*c/2
 ymax = np.min(RX_WIN_OPEN)
 
 # correction factor
-correction = 9650
+correction = 9675
 ymin = srad - (ymin + correction + MRAD)
 ymax = srad - (ymax + correction + MRAD)
 
@@ -105,6 +107,10 @@ for t in range(xen - xst):
     # interpolate
     foc_intrp[:, t] = np.interp(rea_rng, foc_rng, trace_stack)
 
+# clean up infs and nans
+foc_intrp[np.isinf(foc_intrp)] = np.nanmin(foc_intrp[np.isfinite(foc_intrp)])
+foc_intrp[np.isnan(foc_intrp)] = np.nanmin(foc_intrp[np.isfinite(foc_intrp)])
+
 extent_syn = [
     xst, xen,
     rea_rng_en, rea_rng_st,
@@ -117,38 +123,117 @@ rbCROP_st = int((rea_rng_st - ymax) // (RNG_BIN_INT*c/2))
 rbCROP_en = int((rea_rng_en - ymax) // (RNG_BIN_INT*c/2))
 NoOffset_crop = NoOffset[rbCROP_st:rbCROP_en-1, xst:xen]
 
-fig, ax = plt.subplots(2, 1, figsize=(11, 15))
-ax[0].imshow(NoOffset_crop, vmax=0.01, extent=extent_syn, aspect=0.1)
-ax[0].plot(aeroid['SRAD'][750:1200]*1e3 - mola, color="red", linewidth=1)
-ax[0].set_xlim(xst,xen)
-ax[0].set_ylim(318e3, 314e3)
-ax[1].imshow(foc_intrp, vmin=-5, vmax=10, extent=extent_syn, aspect=0.1)
-ax[1].plot(aeroid['SRAD'][750:1200]*1e3 - mola, color="red", linewidth=1)
-plt.savefig("tmp.png")
+# adjust if necessary
+if NoOffset_crop.shape[1] > foc_intrp.shape[1]:
+    NoOffset_crop = NoOffset_crop[:, :foc_intrp.shape[1]]
+if foc_intrp.shape[0] > NoOffset_crop.shape[0]:
+    foc_intrp = foc_intrp[:NoOffset_crop.shape[0], :]
+
+# scale rdr images
+rea_scl = uc.scale_range(NoOffset_crop, np.min(NoOffset_crop), 0.001)
+syn_min, syn_max = 35, 45
+foc_scl = uc.scale_range(foc_intrp, syn_min, syn_max)
+
+print(np.min(rea_scl), np.max(rea_scl))
+print(np.min(foc_scl), np.max(foc_scl))
+
+# rgb color scale
+rea_clr = np.array([0xFF, 0x00, 0x80])
+foc_clr = np.array([0x00, 0xFF, 0x80])
+
+# create rgb images
+rgb = np.zeros((rea_scl.shape[0], rea_scl.shape[1], 3))
+
+for i in range(3):
+    rgb[:, :, i] += rea_scl * rea_clr[i]
+    rgb[:, :, i] += foc_scl * foc_clr[i]
+
+# blue channel can wrap over so lets fix that
+rgb[:, :, 2][rgb[:, :, 2] > 255] = 255
+
+# export
+plt.imsave("figures/rdr_comparison.png", rgb.astype(np.uint8))
+
+
+
+fig, ax = plt.subplots(figsize=(8, 9))
+
+extent_syn = [
+    np.max(aeroid['LAT']),
+    np.min(aeroid["LAT"]),
+    rea_rng_en/1e3,
+    rea_rng_st/1e3,
+]
+
+im = ax.imshow(rgb.astype(np.uint8), extent=extent_syn, aspect="auto")
+
+# --- COLORBARS -----------------------------------------------------
+
+divider = make_axes_locatable(ax)
+
+# Place both bars close to the image
+cax1 = divider.append_axes("right", size="3%", pad=0.05)
+cax2 = divider.append_axes("right", size="3%", pad=0.4)
+
+# Build exact colormaps
+rea_clr = np.array([255, 0, 128]) / 255
+foc_clr = np.array([0, 255, 128]) / 255
+
+cmap_rea = mcolors.LinearSegmentedColormap.from_list("rea_map", [(0,0,0), rea_clr])
+cmap_foc = mcolors.LinearSegmentedColormap.from_list("foc_map", [(0,0,0), foc_clr])
+
+mappable_rea = plt.cm.ScalarMappable(
+    norm=plt.Normalize(vmin=np.min(rea_scl), vmax=np.max(rea_scl)),
+    cmap=cmap_rea
+)
+mappable_rea.set_array([])
+
+mappable_foc = plt.cm.ScalarMappable(
+    norm=plt.Normalize(vmin=np.min(foc_scl), vmax=np.max(foc_scl)),
+    cmap=cmap_foc
+)
+mappable_foc.set_array([])
+
+# Create colorbars
+cbar1 = fig.colorbar(mappable_foc, cax=cax1)
+cbar1.set_label("Synthetic Power [dB]", rotation=270, labelpad=-6)
+
+cbar2 = fig.colorbar(mappable_rea, cax=cax2)
+cbar2.set_label("Real Power [?]", rotation=270, labelpad=-6)
+
+ticklocs = [0, 0.25, 0.75, 1.0]
+cbar1.set_ticks(ticklocs)
+cbar1.set_ticklabels([f"{t * (syn_max - syn_min) + syn_min:.1f}" for t in ticklocs], fontsize=8)
+
+cbar2.set_ticks(ticklocs)
+cbar2.set_ticklabels([f"{t:.1f}" for t in ticklocs], fontsize=8)
+
+# --- LABELS --------------------------------------------------------
+
+ax.set_xlabel("Latitude [deg]")
+ax.set_ylabel("Range [km]")
+ax.set_title("SHARAD Obs. 0554201", fontsize=18, fontweight="bold")
+
+plt.savefig("figures/KOROLEV.png", dpi=300, bbox_inches="tight")
 plt.close()
 
-sys.exit()
 
-fig, ax = plt.subplots(1, 1, figsize=(4, 12))
-im = ax.imshow(rdr_db, vmin=-20, vmax=-4, cmap="viridis", aspect=3)
-plt.colorbar(im)
-plt.savefig("figures/rdrgrm.png")
-plt.close()
+
 
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
 
 extent = [
-    0, Na, #(Na * par['spacing'])/1e3,
+    0, Na,
     np.min(rx_win)/1e3 + 7.5, np.min(rx_win)/1e3,
 ]
 
 fig, ax = plt.subplots(2, 1, figsize=(8, 8), sharey=True)
 
 # rdrgrms
-im1 = ax[0].imshow(rdr_db, vmin=-20, vmax=-4, cmap="viridis", aspect=250, extent=extent)
+im1 = ax[0].imshow(rdr_db, vmin=22, vmax=35, cmap="viridis", aspect=250, extent=extent)
 plt.colorbar(im1, label="dB", shrink=0.9)
-im2 = ax[1].imshow(uc.lin_to_db(np.abs(focused)), extent=extent, vmin=-5, vmax=10, aspect=250)
+im2 = ax[1].imshow(uc.lin_to_db(np.abs(focused)), extent=extent, vmin=35, vmax=45, aspect=250)
 plt.colorbar(im2, label="dB", shrink=0.9)
 
 # labels

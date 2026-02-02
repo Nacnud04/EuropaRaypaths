@@ -48,7 +48,7 @@ def upsample(n, data):
     orig_rng = np.linspace(0, 1, len(data))
 
     return np.interp(interp_rng, orig_rng, data)
-    
+
 def upsample_df(n, df):
     interp_rng = np.linspace(0, 1, n)
     orig_rng = np.linspace(0, 1, len(df))
@@ -57,3 +57,9 @@ def upsample_df(n, df):
 
     return numeric_df.apply(lambda col: np.interp(interp_rng, orig_rng, col))
 
+def scale_range(data, vmin, vmax):
+
+    dat_clip = np.clip(data, vmin, vmax)
+    scaled = (dat_clip - vmin) / (vmax - vmin)
+
+    return scaled

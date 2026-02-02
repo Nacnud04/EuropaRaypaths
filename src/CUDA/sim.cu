@@ -806,7 +806,7 @@ int main(int argc, const char* argv[])
         float time_remain = (((par.ns-is))*((runtime*1e-3)/is));
         int min_remain = time_remain / 60;
         float sec_remain = time_remain - min_remain * 60;
-        printf("\rCompleted source %d of %d in %.1f ms. Remaining: %d min %.1f sec         ", is+1, par.ns, reportTimeNum(), min_remain, sec_remain);
+        printf("\rCompleted source %d of %d in %5.1f ms. Remaining: %d min %.1f sec         ", is+1, par.ns, reportTimeNum(), min_remain, sec_remain);
         fflush(stdout);
 
     }

@@ -365,7 +365,8 @@ __device__ float facetReradiation(float dist, float th, float ph,
     float sinc2 = sinc((fs / lam) * sinGPU(th) * sinGPU(ph));
 
     // combine all together
-    return cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f)));
+    // note it is squared to convert from field strength to power
+    return pow(cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f))), 2);
     
 }
 
@@ -375,6 +376,8 @@ __device__ float radarEq(float P, float G, float fs, float lam, float dist, int 
     // note this is the radar equation using the RCS for a flat incident facet.
     float num = P * G * G * fs * fs * fs * fs;
     float denom = pow(4 * 3.14159, 2) * dist * dist * dist * dist; // (4*pi)^3
+    // note here we multiply by nfacets to account for coherent summation of facets
+    // where the RCS scales by nfacets^2 instead of nfacets
     return nfacets * (num / denom);
 
 }
