@@ -1,7 +1,12 @@
 import numpy as np
 
+c = 299792458
 
-def lin_to_db(x):
+def lin_to_db(x, warning=False):
+    if np.any(x <= 0):
+        if warning:
+            print("Warning: Found non-positive values in input to lin_to_db")
+        x = np.maximum(x, np.min(x[x>0]))  # Avoid log(0)
     return 10 * np.log10(x)
 
 def c2(params, c1=299792458):
@@ -63,3 +68,13 @@ def scale_range(data, vmin, vmax):
     scaled = (dat_clip - vmin) / (vmax - vmin)
 
     return scaled
+
+def estimate_spacing(sat_x, sat_y, sat_z):
+
+    dx = sat_x - np.roll(sat_x, 1)
+    dy = sat_y - np.roll(sat_y, 1)
+    dz = sat_z - np.roll(sat_z, 1)
+    d = np.sqrt(dx**2 + dy**2 + dz**2)
+    spacing = np.nanmedian(d)
+
+    return spacing

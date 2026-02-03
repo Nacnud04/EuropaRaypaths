@@ -292,18 +292,6 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None):
         # turn slant range into matched filter
         mth_filt = uc.match_filter(sltrng, par)
 
-        """
-        plt.plot(sx, np.real(mth_filt), color="red", label="real")
-        plt.plot(sx, np.imag(mth_filt), color="blue", label="imag")
-        plt.legend()
-        plt.savefig("match_filter.png")
-        plt.close()
-        
-        plt.plot(sx, sltrng)
-        plt.savefig("Slantrange.pdf")
-        plt.close()
-        """
-
         # iterate over every single trace
         for j in range(Na):
 
@@ -319,13 +307,6 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None):
                 np.roll(window[:, k], -int(shift_amounts[k]))
                 for k in range(window.shape[1])
             ]).T
-
-            """
-            plt.imshow(uc.lin_to_db(np.abs(rdr_rcmc)), vmin=-10, vmax=5)
-            plt.ylim(2250, 1750)
-            plt.savefig("rdr_rcmc.png")
-            plt.close()
-            """
 
             # get single row we care about and do fft
             fft_len = int(2*apt_smpl)
@@ -349,19 +330,6 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None):
 
             # get the pixel we care about
             rdr_f[i, j] = focused_row[(j - az_st) + pad // 2]
-
-        # overlay on rdrgrm to make sure things match
-        """
-        extent = [
-            0, (Na * par['spacing'])/1e3,
-            (par['rx_window_offset_m']+par['rx_window_m'])/1e3, (par['rx_window_offset_m'])/1e3,
-        ]
-        plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), extent=extent, vmin=-10, vmax=5, aspect=50)
-        plt.plot((sx/1e3)+118, sltrng/1e3, color="red", linewidth=1)
-        plt.ylim(317.5, 312.5)
-        plt.savefig("SltrngRdr.pdf")
-        plt.close()
-        """
 
         print(f"{i}/{Nr}", end="       \r")
 

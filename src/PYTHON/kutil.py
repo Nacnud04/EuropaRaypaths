@@ -16,7 +16,7 @@ import pandas as pd
 import tifffile, pickle
 
 import unit_convs as uc
-
+import output_handling as oh
 import matplotlib.pyplot as plt
 
 # load sharad orbit from file
@@ -445,3 +445,27 @@ def read_COSHARPS_GEOM(filepath, latmin=None, latmax=None):
     plt.plot(cosharps["MRAD"])
     plt.savefig("tmp.png")
     plt.show()
+
+
+def correct_rdrgrm(rdrgrm, aeroid):
+
+    rollpar = aeroid['AEROID'] - aeroid['SRAD'] * 1e3
+    roll = (rollpar - np.min(rollpar)) // (ADC_SAMP_INT * c / 2)
+
+    return oh.roll_rdrgrm(rdrgrm, roll)
+
+
+def corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction):
+
+    RX_WIN_OPEN = aeroid['MRAD']*1e3 - 3396e3
+    srad = np.max(aeroid['SRAD'][trc_st:trc_en]) * 1e3
+
+    ymin = np.min(RX_WIN_OPEN) - rdrgrm.shape[0]*ADC_SAMP_INT*c/2
+    ymax = np.min(RX_WIN_OPEN)
+
+    # account for correction factor
+    MRAD = 3396e3
+    ymin = srad - (ymin + correction + MRAD)
+    ymax = srad - (ymax + correction + MRAD)
+
+    return ymin, ymax 

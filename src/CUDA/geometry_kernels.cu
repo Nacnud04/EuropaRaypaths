@@ -366,8 +366,9 @@ __device__ float facetReradiation(float dist, float th, float ph,
 
     // combine all together
     // note it is squared to convert from field strength to power
-    return pow(cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f))), 2);
-    
+    //return pow(cuCabsf(cuCmulf(c_val, make_cuFloatComplex(sinc1 * sinc2, 0.0f))), 2);
+    return pow((fs*fs/lam) * sinc1 * sinc2, 2);
+
 }
 
 
