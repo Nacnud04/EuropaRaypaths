@@ -5,12 +5,13 @@ import matplotlib
 import matplotlib.colors as colors
 
 import sys
-sys.path.append("/storage/School/GradSchool/Repostories/EuropaRaypaths/src/PYTHON")
+sys.path.append("../../src/PYTHON")
 import kutil as ku
 import unit_convs as uc
 
 # path to mars radius DEM
 path = r"data/MOLA/RCropped.tif"
+#path = r"data/MOLA/MOLA_R_KOROLEV.tif"
 
 # mars radius offset
 MARS_RADIUS = 3396000
