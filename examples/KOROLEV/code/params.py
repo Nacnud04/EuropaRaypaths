@@ -65,7 +65,13 @@ sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
 data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
 ku.rxOpenWindow(data, "data/rx_window_positions", NS)
 
-
+# estimate the effective PRF
+duration = data['EPHEMERIS_TIME'][-1] - data['EPHEMERIS_TIME'][0]
+print(f"Duration of observation is {duration} seconds")
+prf = NS / duration
+print(f"Therefore the PRF is {prf} Hz")
+prf_data = len(data) / duration
+print(f"The input (RDR) data has an approximate prf of {prf_data} Hz")
 
 # --- GENERATE SOURCE FILE ---
 
@@ -79,6 +85,9 @@ geometry = ku.load_sharad_orbit_MOLA(DIRECTORY, OBS)
 mincol = 750
 maxcol = 1200
 geometry = geometry[(geometry['COL'] > mincol) * (geometry['COL'] < maxcol)]
+
+prf_data = len(geometry) / duration
+print(f"The input (Co-SHARPS) data has an approximate prf of {prf_data} Hz")
 
 geometry = uc.upsample_df(NS, geometry)
 
