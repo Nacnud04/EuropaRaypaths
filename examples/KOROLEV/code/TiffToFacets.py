@@ -10,8 +10,8 @@ import kutil as ku
 import unit_convs as uc
 
 # path to mars radius DEM
-path = r"data/MOLA/RCropped.tif"
-#path = r"data/MOLA/MOLA_R_KOROLEV.tif"
+#path = r"data/MOLA/RCropped.tif"
+path = r"data/MOLA/MOLA_R_KOROLEV.tif"
 
 # mars radius offset
 MARS_RADIUS = 3396000
@@ -97,15 +97,51 @@ for fill_mat in (dem_inc, dem_azi):
                 break
 # --- END VECTOR NORMAL COMPUTATION --- 
 
+# --- FIND CRATER RIM ---
+# find lat for each lon
+# to do this we split the crater into quadrants and evaluate each independently
+mid_lat = int(data_Rs.shape[0]*(1/3))
+mid_lon = int(data_Rs.shape[1]*(1/2))
+data_Rs_00 = data_Rs[:mid_lat, :mid_lon]
+data_Rs_01 = data_Rs[:mid_lat, mid_lon:]
+data_Rs_10 = data_Rs[mid_lat:, :mid_lon]
+data_Rs_11 = data_Rs[mid_lat:, mid_lon:]
+lat_0, lat_1 = tpar['lats'][:mid_lat], tpar['lats'][mid_lat:]
+lon_0, lon_1 = tpar['lons'][:mid_lon], tpar['lons'][mid_lon:]
+
+mask = np.zeros_like(data_Rs)
+
 # plot vector normals in spherical
 fig, ax = plt.subplots(2, figsize=(8, 6))
-im1 = ax[0].imshow(dem_inc, extent=tpar['extent'])
+im1 = ax[0].imshow(data_Rs, extent=tpar['extent'])
 fig.colorbar(im1, ax=ax[0])
-ax[0].set_title("Inclination angle from North [deg]")
-im2 = ax[1].imshow(dem_azi, extent=tpar['extent'], vmin=145, vmax=175)
-fig.colorbar(im2, ax=ax[1])
-ax[1].set_title("Azimuthal angle from Meridian [deg]")
-for a in ax: a.set_xlabel("Longitude [deg]"); a.set_ylabel("Latitude [deg]")
+
+# then for each quadrant we find the minimums and add to a list
+for i, (sect, pltlat, pltlon) in enumerate(zip((data_Rs_00, data_Rs_01, data_Rs_10, data_Rs_11),
+                                (lat_0, lat_0, lat_1, lat_1), (lon_0, lon_1, lon_0, lon_1))):
+    sect[np.isnan(sect)] = 1e10
+    idx = np.argmin(sect, axis=0)
+    sect[sect > 1e9] = None
+
+    if i > 1:
+        idx += mid_lat
+        
+    for j in range(len(idx)):
+        mask[idx[j]:, j] = 1
+
+    lats = tpar['lats'][idx]
+
+    ax[0].plot(pltlon, lats, color="red")
+
+im2 = ax[1].imshow(mask, extent=tpar['extent'])
+
+#im1 = ax[0].imshow(dem_inc, extent=tpar['extent'])
+#fig.colorbar(im1, ax=ax[0])
+#ax[0].set_title("Inclination angle from North [deg]")
+#im2 = ax[1].imshow(dem_azi, extent=tpar['extent'], vmin=145, vmax=175)
+#fig.colorbar(im2, ax=ax[1])
+#ax[1].set_title("Azimuthal angle from Meridian [deg]")
+#for a in ax: a.set_xlabel("Longitude [deg]"); a.set_ylabel("Latitude [deg]")
 plt.tight_layout()
 plt.savefig("figures/KOR_F_SPNORMS.png")
 plt.close()
