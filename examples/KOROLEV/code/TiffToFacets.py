@@ -98,50 +98,54 @@ for fill_mat in (dem_inc, dem_azi):
 # --- END VECTOR NORMAL COMPUTATION --- 
 
 # --- FIND CRATER RIM ---
-# find lat for each lon
-# to do this we split the crater into quadrants and evaluate each independently
-mid_lat = int(data_Rs.shape[0]*(1/3))
-mid_lon = int(data_Rs.shape[1]*(1/2))
-data_Rs_00 = data_Rs[:mid_lat, :mid_lon]
-data_Rs_01 = data_Rs[:mid_lat, mid_lon:]
-data_Rs_10 = data_Rs[mid_lat:, :mid_lon]
-data_Rs_11 = data_Rs[mid_lat:, mid_lon:]
-lat_0, lat_1 = tpar['lats'][:mid_lat], tpar['lats'][mid_lat:]
-lon_0, lon_1 = tpar['lons'][:mid_lon], tpar['lons'][mid_lon:]
-
+# start with crater center
+kcen_lat = 72.8
+kcen_lon = 164.5
+# turn into index
+kcenI_lon = np.argmin(np.abs(tpar['lons']-kcen_lon))
+kcenI_lat = np.argmin(np.abs(tpar['lats']-kcen_lat))
+# wipe areas which are obviously outside of data region
+data_circle = np.copy(data_Rs)
+data_circle[:100, :] = np.inf
 mask = np.zeros_like(data_Rs)
+# iterate over a circle identifying the lowest elevation point at every theta
+len_indicies = np.arange(220)
+minlats, minlons = [], []
+for theta in np.linspace(-1*np.pi, np.pi, 300):
+    ix = (np.cos(theta) * len_indicies).astype(int)
+    iy = (np.sin(theta) * len_indicies).astype(int)
+    latvals = np.clip(iy+kcenI_lat, 0, data_circle.shape[0])
+    lonvals = np.clip(ix+kcenI_lon, 0, data_circle.shape[1])
+    # pull the values from that line and identify the minimum
+    vals = data_circle[latvals, lonvals]
+    minR = np.argmin(vals)
+    # update mask
+    mask[latvals[:minR], lonvals[:minR]] = 1
+    # add the lat and lon to output arrays
+    minlats.append(tpar['lats'][iy[minR] + kcenI_lat])
+    minlons.append(tpar['lons'][ix[minR] + kcenI_lon])
+
+# clean up mask by going column by column and filling in data where it is missing
+for i in range(mask.shape[1]):
+    if np.sum(mask[:, i]) < 2:
+        continue
+    # find first and last occurance of 1
+    f, l = np.nonzero(mask[:, i])[0][[0, -1]]
+    # fill in column
+    mask[f:l+1, i] = 1
 
 # plot vector normals in spherical
 fig, ax = plt.subplots(2, figsize=(8, 6))
-im1 = ax[0].imshow(data_Rs, extent=tpar['extent'])
-fig.colorbar(im1, ax=ax[0])
-
-# then for each quadrant we find the minimums and add to a list
-for i, (sect, pltlat, pltlon) in enumerate(zip((data_Rs_00, data_Rs_01, data_Rs_10, data_Rs_11),
-                                (lat_0, lat_0, lat_1, lat_1), (lon_0, lon_1, lon_0, lon_1))):
-    sect[np.isnan(sect)] = 1e10
-    idx = np.argmin(sect, axis=0)
-    sect[sect > 1e9] = None
-
-    if i > 1:
-        idx += mid_lat
-        
-    for j in range(len(idx)):
-        mask[idx[j]:, j] = 1
-
-    lats = tpar['lats'][idx]
-
-    ax[0].plot(pltlon, lats, color="red")
-
-im2 = ax[1].imshow(mask, extent=tpar['extent'])
 
 #im1 = ax[0].imshow(dem_inc, extent=tpar['extent'])
 #fig.colorbar(im1, ax=ax[0])
 #ax[0].set_title("Inclination angle from North [deg]")
-#im2 = ax[1].imshow(dem_azi, extent=tpar['extent'], vmin=145, vmax=175)
-#fig.colorbar(im2, ax=ax[1])
-#ax[1].set_title("Azimuthal angle from Meridian [deg]")
-#for a in ax: a.set_xlabel("Longitude [deg]"); a.set_ylabel("Latitude [deg]")
+im1 = ax[0].imshow(mask, extent=tpar['extent'])
+ax[0].plot(minlons, minlats, color="red")
+im2 = ax[1].imshow(dem_azi, extent=tpar['extent'], vmin=145, vmax=175)
+fig.colorbar(im2, ax=ax[1])
+ax[1].set_title("Azimuthal angle from Meridian [deg]")
+for a in ax: a.set_xlabel("Longitude [deg]"); a.set_ylabel("Latitude [deg]")
 plt.tight_layout()
 plt.savefig("figures/KOR_F_SPNORMS.png")
 plt.close()
