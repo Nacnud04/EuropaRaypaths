@@ -134,6 +134,13 @@ for i in range(mask.shape[1]):
     # fill in column
     mask[f:l+1, i] = 1
 
+# cast to bool
+mask = mask.astype(bool)
+
+# find the radius of mars to the middle of the crater to create a subsurface mars radius "depth"
+crater_depth = 1500
+subsrf_rad = data_Rs[kcenI_lat, kcenI_lon] - crater_depth
+
 # plot vector normals in spherical
 fig, ax = plt.subplots(2, figsize=(8, 6))
 
@@ -153,11 +160,13 @@ plt.close()
 # output array to house all facet coordinates
 fxs, fys, fzs = np.array([]), np.array([]), np.array([])
 frs = np.array([])
+sbxs, sbys, sbzs = np.array([]), np.array([]), np.array([])
 
 # output arrays for orthonormals
 fnxs, fnys, fnzs = np.array([]), np.array([]), np.array([])
 fuxs, fuys, fuzs = np.array([]), np.array([]), np.array([])
 fvxs, fvys, fvzs = np.array([]), np.array([]), np.array([])
+sbnxs, sbnys, sbnzs = np.array([]), np.array([]), np.array([])
 
 # begin iteration over latitudes
 for i_lat in range(tpar['rows']):
@@ -174,6 +183,7 @@ for i_lat in range(tpar['rows']):
 
     row_lons = tpar['tpnt_lon'] + tpar['scl_lon'] * idx
     row_rads = row[idx].astype(float) + MARS_RADIUS
+    row_mask = mask[i_lat, :][idx]
 
     # Convert longitude to meters
     lon_rad = np.radians(row_lons)
@@ -186,8 +196,9 @@ for i_lat in range(tpar['rows']):
 
     arc_uniform = np.linspace(arc_min, arc_max, lon_facets)
 
-    # Interpolate radius in meter-space
+    # Interpolate radius and mask in meter-space
     facet_radius = np.interp(arc_uniform, arc_m, row_rads)
+    subsrf_mask  = np.interp(arc_uniform, arc_m, row_mask).astype(bool)
 
     # Convert back to longitude
     facet_lons_rad = arc_uniform / r_lat
@@ -228,8 +239,8 @@ for i_lat in range(tpar['rows']):
     ref[:, 2] = 1.0  # z-axis
 
     # if n is too close to z, switch to x-axis
-    mask = np.abs(n_hat[:, 2]) > 0.9
-    ref[mask] = np.array([1.0, 0.0, 0.0])
+    ref_mask = np.abs(n_hat[:, 2]) > 0.9
+    ref[ref_mask] = np.array([1.0, 0.0, 0.0])
 
     # first tangent: u_hat = normalize(ref * n)
     u_hat = np.cross(ref, n_hat)
@@ -239,14 +250,44 @@ for i_lat in range(tpar['rows']):
     v_hat = np.cross(n_hat, u_hat)
 
     # u_hat, v_hat, n_hat now form a right-handed orthonormal basis
-   
     fuxs = np.append(fuxs, u_hat[:,0])
     fuys = np.append(fuys, u_hat[:,1])
     fuzs = np.append(fuzs, u_hat[:,2])
-
     fvxs = np.append(fvxs, v_hat[:,0])
     fvys = np.append(fvys, v_hat[:,1])
     fvzs = np.append(fvzs, v_hat[:,2])
+
+    # only generate a subsurface if there is actually the crater interior in the row!
+    if np.sum(subsrf_mask) < 1:
+        continue
+
+    # generate subsurface facet coordinates
+    subsrf_xs = subsrf_rad * np.cos(lat_rad) * np.cos(facet_lons_rad[subsrf_mask])
+    subsrf_ys = subsrf_rad * np.cos(lat_rad) * np.sin(facet_lons_rad[subsrf_mask])
+    subsrf_zs = subsrf_rad * np.sin(lat_rad) * np.ones(np.sum(subsrf_mask))
+
+    sbxs = np.append(sbxs, subsrf_xs)
+    sbys = np.append(sbys, subsrf_ys)
+    sbzs = np.append(sbzs, subsrf_zs)
+
+    # generate subsurface facet normals
+    subsrf_nhat = ku.sharad_normal(subsrf_xs, subsrf_ys, subsrf_zs)
+
+    sbnxs = np.append(sbnxs, subsrf_nhat[:, 0])
+    sbnys = np.append(sbnys, subsrf_nhat[:, 1])
+    sbnzs = np.append(sbnzs, subsrf_nhat[:, 2])
+
+sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
+    arr.flatten()[::20] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
+]
+
+# export subsurface as obj file
+ku.target_norms_to_obj("data/Subsurface", "KOR_T", 
+                        sbxs, sbys, sbzs,
+                        sbnxs, sbnys, sbnzs, norms=False)
+ku.target_norms_to_file("data/Subsurface", "KOR_T", 
+                        sbxs, sbys, sbzs,
+                        sbnxs, sbnys, sbnzs)
 
 fig, ax = plt.subplots(2, 2, figsize=(14, 8))
 ax[0, 0].scatter(fxs, fys, s=1, c=frs)
@@ -278,6 +319,7 @@ with open(facet_file, 'w') as f:
 # generate a target file
 # place the target 1 km deep (ish b/c straight along axis) in the center of the ice mound
 # use the same normal as the facet above the target ("upwards")
+"""
 facet_above_target = 34138
 tx, ty, tz = fxs[facet_above_target], fys[facet_above_target], fzs[facet_above_target] - 1e3
 tnx, tny, tnz = [n[facet_above_target] for n in (fnxs, fnys, fnzs)]
@@ -286,7 +328,7 @@ target_file = "data/Subsurface/KOR_T.txt"
 with open(target_file, 'w') as f:
     i = 0
     f.write(f"{tx},{ty},{tz},{-1*tnx},{-1*tny},{-1*tnz}")
-
+"""
 
 def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_name="magma", vmin=None, vmax=None, nscale=0.5e3):
     # Normalize values to [0, 1]
@@ -307,7 +349,7 @@ def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_
             f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
             f.write(f"l {i+1} {i+2}\n")
             i += 2
-            print(f"Exporting... {i}/{len(xs)*2}", end="      \r")
+            print(f"Writing out facet data ... {i}/{len(xs)*2}", end="      \r")
 
 
 export_obj_points_colored(

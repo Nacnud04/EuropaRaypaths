@@ -193,6 +193,51 @@ def sources_to_obj(DIRECTORY, OBS, sx, sy, sz, nscale=0.5e3):
         print(f"Exported {i} verticies to {obj_file}")
 
 
+# target exporting to obj (with normals)
+def target_norms_to_obj(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz, nscale=0.5e3, norms=True):
+
+    obj_file = f"{DIRECTORY}/{NAME}.obj"
+
+    with open(obj_file, 'w') as f:
+
+        f.write("# KOROLEV crater subsurface facets\n")
+
+        i = 0
+
+        for x, y, z, nx, ny, nz in zip(tx, ty, tz, tnx, tny, tnz):
+            f.write(f"v {x:.6f} {y:.6f} {z:.6f}\n")
+            if norms:
+                f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f}\n")
+                f.write(f"l {i+1} {i+2}\n")
+                i += 1
+            i += 1
+
+        print(f"Exported {i} verticies to {obj_file}")
+
+
+# target exporting (with normals)
+def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz):
+
+    i = 0
+
+    target_file = f"{DIRECTORY}/{NAME}.txt"
+    f = open(target_file, 'w')
+
+    for x, y, z, nx, ny, nz in zip(tx, ty, tz, tnx, tny, tnz):
+
+        if i != len(tx) - 1:
+            f.write(f"{x},{y},{z},{nx},{ny},{nz}\n")
+
+        else:
+            f.write(f"{x},{y},{z},{nx},{ny},{nz}")
+
+        i += 1
+
+    f.close()
+
+    print(f"Exported {i} sources to {target_file}")
+
+
 # load tiff of cropped mola
 def load_cropped_mola_tif(filename):
 
