@@ -29,10 +29,12 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=
         xmin = par['sx0']
         xmax = par['sx0'] + par['sdx'] * par['ns']
     else:
-        raise NotImplementedError("Cannot handle uneven source spacing yet.")
+        xmin = 0
+        xmax = rdrgrm.shape[1]
+        #raise NotImplementedError("Cannot handle uneven source spacing yet.")
 
     plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, vmax=vmax,
-           extent=[xmin/1e3, xmax/1e3, 2*(par["rx_window_offset_m"] + par["rx_window_m"])/299.792458, 2*par["rx_window_offset_m"]/299.792458])
+           extent=[xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]])
     plt.colorbar(label='Power [dB]')
     plt.xlabel("Azimuth [km]")
     plt.ylabel("Range [us]")

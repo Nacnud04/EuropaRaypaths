@@ -11,9 +11,12 @@ import unit_convs      as uc
 
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 2000
+params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
+
+rp.simple_rdrgrm(rdrgrm, params, "tmp.png", linspace=False)
 
 np.save("output/rdrgrm.npy", rdrgrm)
 

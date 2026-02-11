@@ -138,7 +138,7 @@ for i in range(mask.shape[1]):
 mask = mask.astype(bool)
 
 # find the radius of mars to the middle of the crater to create a subsurface mars radius "depth"
-crater_depth = 1500
+crater_depth = 300#1500
 subsrf_rad = data_Rs[kcenI_lat, kcenI_lon] - crater_depth
 
 # plot vector normals in spherical
@@ -271,7 +271,7 @@ for i_lat in range(tpar['rows']):
     sbzs = np.append(sbzs, subsrf_zs)
 
     # generate subsurface facet normals
-    subsrf_nhat = ku.sharad_normal(subsrf_xs, subsrf_ys, subsrf_zs)
+    subsrf_nhat = -1*ku.sharad_normal(subsrf_xs, subsrf_ys, subsrf_zs)
 
     sbnxs = np.append(sbnxs, subsrf_nhat[:, 0])
     sbnys = np.append(sbnys, subsrf_nhat[:, 1])
@@ -285,9 +285,9 @@ sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
 ku.target_norms_to_obj("data/Subsurface", "KOR_T", 
                         sbxs, sbys, sbzs,
                         sbnxs, sbnys, sbnzs, norms=False)
-ku.target_norms_to_file("data/Subsurface", "KOR_T", 
-                        sbxs, sbys, sbzs,
-                        sbnxs, sbnys, sbnzs)
+#ku.target_norms_to_file("data/Subsurface", "KOR_T", 
+#                        sbxs, sbys, sbzs,
+#                        sbnxs, sbnys, sbnzs)
 
 fig, ax = plt.subplots(2, 2, figsize=(14, 8))
 ax[0, 0].scatter(fxs, fys, s=1, c=frs)
@@ -319,16 +319,16 @@ with open(facet_file, 'w') as f:
 # generate a target file
 # place the target 1 km deep (ish b/c straight along axis) in the center of the ice mound
 # use the same normal as the facet above the target ("upwards")
-"""
-facet_above_target = 34138
-tx, ty, tz = fxs[facet_above_target], fys[facet_above_target], fzs[facet_above_target] - 1e3
+
+facet_above_target = 35083
+tx, ty, tz = fxs[facet_above_target], fys[facet_above_target], fzs[facet_above_target] - 0.4e3
 tnx, tny, tnz = [n[facet_above_target] for n in (fnxs, fnys, fnzs)]
 # export
 target_file = "data/Subsurface/KOR_T.txt"
 with open(target_file, 'w') as f:
-    i = 0
-    f.write(f"{tx},{ty},{tz},{-1*tnx},{-1*tny},{-1*tnz}")
-"""
+    f.write(f"{tx},{ty},{tz},{tnx},{tny},{tnz}")
+
+
 
 def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_name="magma", vmin=None, vmax=None, nscale=0.5e3):
     # Normalize values to [0, 1]

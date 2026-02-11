@@ -28,6 +28,9 @@
 #include <sys/time.h>
 #include <cuComplex.h>
 
+#include <thrust/device_ptr.h>
+#include <thrust/extrema.h>
+
 // custom kernels
 #include "geometry_kernels.cu"
 #include "facet_funcs.cu"
@@ -696,7 +699,7 @@ int main(int argc, const char* argv[])
             //       normal points "up" while the target is "down" relative to the
             //       spacecraft
             th_target = angleSourceNormTargetPosHost(-1*snx, -1*sny, -1*snz,
-                                                      tvc_x,  tvc_y,  tvc_z);
+                                                     tvc_x,  tvc_y,  tvc_z);
 
             if (th_target > (par.aperture*(pi/180.0f))) {
                 continue;
@@ -729,7 +732,6 @@ int main(int argc, const char* argv[])
                                                     par.fs, par.P, par.Grefr_lin, par.lam);
             checkCUDAError("compRefrEnergyIn kernel");
 
-
             // --- COMPUTE UPWARD TRANSMITTED RAYS ---
 
             compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
@@ -738,6 +740,16 @@ int main(int argc, const char* argv[])
                                                         par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                         par.fs, par.P, par.lam, par.eps_1, par.eps_2);
             checkCUDAError("compRefrEnergyOut kernel");
+
+            //thrust::device_ptr<float> dev_ptr(d_fRefrEI);
+            //float maxVal = *thrust::max_element(dev_ptr, dev_ptr + valid_facets);
+
+            //printf("Maximum d_fRefrEI value = %f\n", maxVal);
+
+            //thrust::device_ptr<float> dev_ptr(d_fRefrEO);
+            //float maxVal = *thrust::max_element(dev_ptr, dev_ptr + valid_facets);
+
+            //printf("Maximum d_fRefrEO value = %f\n", maxVal);
             
             // create refracted signal and total signal using original method
             if (!par.convolution) {

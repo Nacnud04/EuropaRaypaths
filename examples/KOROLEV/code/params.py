@@ -15,7 +15,7 @@ params = {
     "frequency": 20e6,        # Radar frequency [Hz]
     "bandwidth": 10e6,        # Radar bandwidth [Hz]
     "surface_gain": 20,       # Antenna gain [dB]
-    "subsurface_gain": 0,    # Subsurface antenna gain [dB]
+    "subsurface_gain": 30,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 1,            # aperture (from nadir->edge) [deg]
 
@@ -44,7 +44,7 @@ params = {
     "fs": 463.114129,              # facet size [m]
 
     # target params
-    "rerad_funct": 2,  # 0.5-degree boxcar
+    "rerad_funct": 1,  # 3-degree boxcar
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing
@@ -106,7 +106,61 @@ sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 
 # compute a normal vector for each observation
 n_hat = ku.sharad_normal(sat_x, sat_y, sat_z, nmult=1)
+print(n_hat)
 
 # export as source file and obj
 ku.sources_norms_to_file(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2]) 
 ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
+
+# MAKE SUBSURFACE TARGETS
+
+# make some test subsurface targets directly beneath source
+tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-315.3, geometry['LAT'], geometry['LON'])
+
+# convert from KM into M
+tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
+
+# compute a normal vector for each observation
+#n_hat = ku.sharad_normal(tar_x, tar_y, tar_z, nmult=1)
+print(n_hat)
+
+# export as source file and obj
+ku.target_norms_to_file("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
+
+
+# MAKE BASIC SIMPLE SURFACE
+# make some test subsurface targets directly beneath source
+tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-315, geometry['LAT'], geometry['LON'])
+
+# convert from KM into M
+tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
+
+# compute a normal vector for each observation
+n_hat = ku.sharad_normal(tar_x, tar_y, tar_z, nmult=1)
+
+# create a basis
+ref = np.zeros_like(n_hat)
+ref[:, 2] = 1.0  # z-axis
+
+# if n is too close to z, switch to x-axis
+ref_mask = np.abs(n_hat[:, 2]) > 0.9
+ref[ref_mask] = np.array([1.0, 0.0, 0.0])
+
+# first tangent: u_hat = normalize(ref * n)
+u_hat = np.cross(ref, n_hat)
+u_hat /= np.linalg.norm(u_hat, axis=1, keepdims=True)
+
+# second tangent: v_hat = n * u_hat
+v_hat = np.cross(n_hat, u_hat)
+
+# export as source file and obj
+#ku.target_norms_to_file("data/Subsurface", "KOR_F", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
+with open("data/Subsurface/KOR_F.fct", 'w') as f:
+    i = 0
+    for x, y, z, nx, ny, nz, ux, uy, uz, vx, vy, vz in zip(tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], u_hat[:, 0], u_hat[:, 1], u_hat[:, 2], v_hat[:, 0], v_hat[:, 1], v_hat[:, 2]):
+        if i != len(tar_x) - 1:
+            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}\n")
+        else:
+            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
+        i += 1
+    print(f"Exported facet data to: data/Subsurface/KOR_F.fct")

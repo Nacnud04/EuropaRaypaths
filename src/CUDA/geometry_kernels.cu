@@ -275,19 +275,20 @@ __global__ void compTargetRays(float tx, float ty, float tz,
                                float* d_attZmin, float* d_attZmax,
                                float* d_alphas, float alpha2, int nAttenPrisms,
                                float* d_fRefrEI, float* d_fRefrEO) {
-    
-    // first get the distance betweem the source and all facets
-    pointDistanceBulk(tx, ty, tz,
-                      d_fx, d_fy, d_fz,
-                      d_Ttd, nfacets);
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
+        float dx = tx - d_fx[idx];
+        float dy = ty - d_fy[idx];
+        float dz = tz - d_fz[idx];
+
+        d_Ttd[idx] = sqrt(dx*dx+dy*dy+dz*dz);
+
         // get incident cartesian vector
-        float Ix = (tx - d_fx[idx]) / d_Ttd[idx];
-        float Iy = (ty - d_fy[idx]) / d_Ttd[idx];
-        float Iz = (tz - d_fz[idx]) / d_Ttd[idx];
+        float Ix = dx / d_Ttd[idx];
+        float Iy = dy / d_Ttd[idx];
+        float Iz = dz / d_Ttd[idx];
 
         // inclination relative to facet normal
         d_Tth[idx] = slowArcCos(fmaxf(-1.0f, fminf(1.0f, 
@@ -485,12 +486,12 @@ __global__ void compRefrEnergyIn(
         // now we do similar for phi
         float delta_ph = d_Iph[id] - d_Tph[id];
         // compute facet reradiation
-        float scl = 0.0f;
-        if (abs(delta_th) < 0.01f) {
-            scl = 1.0;
-        }
-        d_fRefrEI[id] *= scl * facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
-        //d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        //float scl = 0.0f;
+        //if (abs(delta_th) < 0.01f) {
+        //    scl = 1.0;
+        //}
+        //d_fRefrEI[id] *= scl * facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
 
         // refraction coefficient
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];

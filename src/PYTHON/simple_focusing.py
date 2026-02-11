@@ -76,7 +76,6 @@ def est_slant_range(sx, sz, tx, tz, c1, c2, trim=True, clutter=False):
     return sltrng_ests
 
 
-
 def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
 
     if sx_linspace:
