@@ -14,6 +14,7 @@ Contact:     duncan.byrne@colorado.edu
 import numpy  as np
 import pandas as pd
 import tifffile, pickle
+from scipy.ndimage import zoom
 
 import unit_convs as uc
 import output_handling as oh
@@ -239,7 +240,7 @@ def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz):
 
 
 # load tiff of cropped mola
-def load_cropped_mola_tif(filename):
+def load_cropped_mola_tif(filename, upsample=1):
 
     # load tiff
     with tifffile.TiffFile(filename) as tif:
@@ -250,6 +251,31 @@ def load_cropped_mola_tif(filename):
         model_tiepoint = tags["ModelTiepointTag"].value
         model_pixelscale = tags["ModelPixelScaleTag"].value
 
+    # upsample resolution if desired!
+    if upsample != 1:
+
+        data = data.astype(np.float32)
+
+        # Treat zeros as missing
+        data[data == 0] = np.nan
+
+        # Build validity mask
+        valid_mask = np.isfinite(data).astype(np.float32)
+
+        # Fill NaNs with 0 temporarily
+        data_filled = np.nan_to_num(data, nan=0.0)
+
+        # Interpolate both
+        data_zoom = zoom(data_filled, upsample, order=3)
+        mask_zoom = zoom(valid_mask, upsample, order=3) 
+
+        # Normalize to remove influence of missing pixels
+        with np.errstate(invalid='ignore', divide='ignore'):
+            data = data_zoom / mask_zoom
+
+        # Where mask is near zero there is no real data nearby
+        data[mask_zoom < 0.99] = 0
+
     # find tiff origin
     tpnt_lat = model_tiepoint[4]
     tpnt_lon = model_tiepoint[3]
@@ -258,6 +284,8 @@ def load_cropped_mola_tif(filename):
 
     # get pixel scale
     lat_scale, lon_scale = model_pixelscale[:2]
+    lat_scale /= upsample
+    lon_scale /= upsample
     lat_scale *= -1
     lat_scale_rad = np.radians(lat_scale)
     lon_scale_rad = np.radians(lon_scale)

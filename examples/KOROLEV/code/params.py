@@ -20,7 +20,7 @@ params = {
     "aperture": 1,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
-    "rx_window_m":  7.5e3,         # receive window length [m]
+    "rx_window_m":  12e3,         # receive window length [m]
     "rx_window_offset_m": 300e3,  # receive window offset [m]
     "rx_sample_rate": 40e6,       # receive sample rate [Hz]
     "rx_window_position_file": "data/rx_window_positions.txt",
@@ -106,7 +106,7 @@ sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 
 # compute a normal vector for each observation
 n_hat = ku.sharad_normal(sat_x, sat_y, sat_z, nmult=1)
-print(n_hat)
+
 
 # export as source file and obj
 ku.sources_norms_to_file(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2]) 
@@ -115,19 +115,22 @@ ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[
 # MAKE SUBSURFACE TARGETS
 
 # make some test subsurface targets directly beneath source
-tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-315.3, geometry['LAT'], geometry['LON'])
+tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-320, geometry['LAT'], geometry['LON'])
+tar_x = tar_x[500:1500]
+tar_y = tar_y[500:1500]
+tar_z = tar_z[500:1500]
 
 # convert from KM into M
 tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
 
 # compute a normal vector for each observation
 #n_hat = ku.sharad_normal(tar_x, tar_y, tar_z, nmult=1)
-print(n_hat)
+
 
 # export as source file and obj
 ku.target_norms_to_file("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
 
-
+"""
 # MAKE BASIC SIMPLE SURFACE
 # make some test subsurface targets directly beneath source
 tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-315, geometry['LAT'], geometry['LON'])
@@ -164,3 +167,4 @@ with open("data/Subsurface/KOR_F.fct", 'w') as f:
             f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
         i += 1
     print(f"Exported facet data to: data/Subsurface/KOR_F.fct")
+"""

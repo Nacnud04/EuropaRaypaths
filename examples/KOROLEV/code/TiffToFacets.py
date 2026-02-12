@@ -16,7 +16,7 @@ path = r"data/MOLA/MOLA_R_KOROLEV.tif"
 # mars radius offset
 MARS_RADIUS = 3396000
 
-data, tpar = ku.load_cropped_mola_tif(path)
+data, tpar = ku.load_cropped_mola_tif(path, upsample=2)
 
 # compute the resolution in meters along latitude to get the square side of each pixel
 resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)
@@ -277,6 +277,14 @@ for i_lat in range(tpar['rows']):
     sbnys = np.append(sbnys, subsrf_nhat[:, 1])
     sbnzs = np.append(sbnzs, subsrf_nhat[:, 2])
 
+# check for any straggler nans in the output and clean up if so. 
+arrays = [frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs]
+mask = np.logical_and.reduce([np.isfinite(a) for a in arrays])
+frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs = [
+    a[mask] for a in arrays
+]
+
+
 sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
     arr.flatten()[::20] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
 ]
@@ -349,7 +357,8 @@ def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_
             f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
             f.write(f"l {i+1} {i+2}\n")
             i += 2
-            print(f"Writing out facet data ... {i}/{len(xs)*2}", end="      \r")
+            if i % 66 == 0:
+                print(f"Writing out facet data ... {i}/{len(xs)*2}", end="      \r")
 
 
 export_obj_points_colored(
