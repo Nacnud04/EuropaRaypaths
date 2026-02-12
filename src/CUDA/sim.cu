@@ -543,6 +543,7 @@ int main(int argc, const char* argv[])
     // this happens at the last minute as in case we cancel a process before
     // the main simulation begins not all data is lost
     remove_s_txt_files(argv[4]);
+    std::cout << "Number of range bins: " << par.nr << std::endl;
 
     for (int is=0; is<par.ns; is++) {
 
@@ -740,16 +741,6 @@ int main(int argc, const char* argv[])
                                                         par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                         par.fs, par.P, par.lam, par.eps_1, par.eps_2);
             checkCUDAError("compRefrEnergyOut kernel");
-
-            //thrust::device_ptr<float> dev_ptr(d_fRefrEI);
-            //float maxVal = *thrust::max_element(dev_ptr, dev_ptr + valid_facets);
-
-            //printf("Maximum d_fRefrEI value = %f\n", maxVal);
-
-            //thrust::device_ptr<float> dev_ptr(d_fRefrEO);
-            //float maxVal = *thrust::max_element(dev_ptr, dev_ptr + valid_facets);
-
-            //printf("Maximum d_fRefrEO value = %f\n", maxVal);
             
             // create refracted signal and total signal using original method
             if (!par.convolution) {
@@ -793,7 +784,6 @@ int main(int argc, const char* argv[])
                 }
 
                 // accumulate this target's contribution into the running sum
-                // d_refr_sig += d_refr_temp
                 addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
                 checkCUDAError("addComplexArrays accumulate refracted target");
 

@@ -349,8 +349,8 @@ __global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs,
 
 
 __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
-                              float* d_fRfrSR, float* d_fReflEI, float* d_fReflEO, 
-                              float* d_Tth, float* d_Ttd, int target_fun,
+                              float* d_fRfrSR, float* d_fRefrEI, float* d_fRefrEO, 
+                              float* d_Targetth, float* d_Ttd, int target_fun,
                               float P, float G, float lam, float fs, int nfacets,
                               float rst, float dr, int nr, float c, float c2) {
 
@@ -364,7 +364,7 @@ __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
 
         // compute reradiation constant based on target reradiation function,
         // the radar equation, and other losses in fReflEI and fReflEO
-        float reradConst = rerad_funct(target_fun, d_Tth[id], d_Tth[id1]) * d_fReflEI[id] * d_fReflEO[id1];
+        float reradConst = rerad_funct(target_fun, d_Targetth[id], d_Targetth[id1]) * d_fRefrEI[id] * d_fRefrEO[id1];
               reradConst = reradConst * radarEq(P, G, fs, lam, sltrng, nfacets);
 
         // compute slant range equivalent time

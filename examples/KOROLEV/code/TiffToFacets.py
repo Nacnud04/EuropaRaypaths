@@ -11,12 +11,13 @@ import unit_convs as uc
 
 # path to mars radius DEM
 #path = r"data/MOLA/RCropped.tif"
-path = r"data/MOLA/MOLA_R_KOROLEV.tif"
+#path = r"data/MOLA/MOLA_R_KOROLEV.tif"
+path = r"data/MOLA/MOLA_R_KOROLEV_TIGHT.tif"
 
 # mars radius offset
 MARS_RADIUS = 3396000
 
-data, tpar = ku.load_cropped_mola_tif(path, upsample=2)
+data, tpar = ku.load_cropped_mola_tif(path, upsample=4)
 
 # compute the resolution in meters along latitude to get the square side of each pixel
 resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)
@@ -138,7 +139,7 @@ for i in range(mask.shape[1]):
 mask = mask.astype(bool)
 
 # find the radius of mars to the middle of the crater to create a subsurface mars radius "depth"
-crater_depth = 300#1500
+crater_depth = 2000
 subsrf_rad = data_Rs[kcenI_lat, kcenI_lon] - crater_depth
 
 # plot vector normals in spherical
@@ -288,14 +289,15 @@ frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs = [
 sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
     arr.flatten()[::20] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
 ]
-
+"""
 # export subsurface as obj file
 ku.target_norms_to_obj("data/Subsurface", "KOR_T", 
                         sbxs, sbys, sbzs,
                         sbnxs, sbnys, sbnzs, norms=False)
-#ku.target_norms_to_file("data/Subsurface", "KOR_T", 
-#                        sbxs, sbys, sbzs,
-#                        sbnxs, sbnys, sbnzs)
+ku.target_norms_to_file("data/Subsurface", "KOR_T", 
+                        sbxs, sbys, sbzs,
+                        sbnxs, sbnys, sbnzs)
+"""
 
 fig, ax = plt.subplots(2, 2, figsize=(14, 8))
 ax[0, 0].scatter(fxs, fys, s=1, c=frs)
@@ -327,7 +329,7 @@ with open(facet_file, 'w') as f:
 # generate a target file
 # place the target 1 km deep (ish b/c straight along axis) in the center of the ice mound
 # use the same normal as the facet above the target ("upwards")
-
+"""
 facet_above_target = 35083
 tx, ty, tz = fxs[facet_above_target], fys[facet_above_target], fzs[facet_above_target] - 0.4e3
 tnx, tny, tnz = [n[facet_above_target] for n in (fnxs, fnys, fnzs)]
@@ -335,7 +337,7 @@ tnx, tny, tnz = [n[facet_above_target] for n in (fnxs, fnys, fnzs)]
 target_file = "data/Subsurface/KOR_T.txt"
 with open(target_file, 'w') as f:
     f.write(f"{tx},{ty},{tz},{tnx},{tny},{tnz}")
-
+"""
 
 
 def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_name="magma", vmin=None, vmax=None, nscale=0.5e3):

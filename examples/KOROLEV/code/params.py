@@ -15,12 +15,12 @@ params = {
     "frequency": 20e6,        # Radar frequency [Hz]
     "bandwidth": 10e6,        # Radar bandwidth [Hz]
     "surface_gain": 20,       # Antenna gain [dB]
-    "subsurface_gain": 30,    # Subsurface antenna gain [dB]
+    "subsurface_gain": 35,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 1,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
-    "rx_window_m":  12e3,         # receive window length [m]
+    "rx_window_m":  7.5e3,         # receive window length [m]
     "rx_window_offset_m": 300e3,  # receive window offset [m]
     "rx_sample_rate": 40e6,       # receive sample rate [Hz]
     "rx_window_position_file": "data/rx_window_positions.txt",
@@ -41,10 +41,11 @@ params = {
     "source_path_file": "data/Observation/s_00554201_srcs.txt",
 
     # facet params
-    "fs": 463.114129,              # facet size [m]
+    "altitude": 316e3,           # approximate altitude [m]
+    "fs": 115.66,              # facet size [m]
 
     # target params
-    "rerad_funct": 1,  # 3-degree boxcar
+    "rerad_funct": 2,  # 3-degree boxcar
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing
@@ -115,7 +116,7 @@ ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[
 # MAKE SUBSURFACE TARGETS
 
 # make some test subsurface targets directly beneath source
-tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-320, geometry['LAT'], geometry['LON'])
+tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-317, geometry['LAT'], geometry['LON'])
 tar_x = tar_x[500:1500]
 tar_y = tar_y[500:1500]
 tar_z = tar_z[500:1500]
@@ -128,7 +129,9 @@ tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
 
 
 # export as source file and obj
+ku.target_norms_to_obj("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], norms=False)
 ku.target_norms_to_file("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
+
 
 """
 # MAKE BASIC SIMPLE SURFACE

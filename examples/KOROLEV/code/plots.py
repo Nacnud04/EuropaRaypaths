@@ -72,8 +72,8 @@ plotpar = {
     'ymax': ymax,
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
-    'syn_min': 43,
-    'syn_max': 50,
+    'syn_min': 18,
+    'syn_max': 23,
 }
 
 # plot
@@ -82,4 +82,4 @@ rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola, plotpar)
 
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
-rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, geometry=geometry, rdrmin=30, rdrmax=40, focmin=40, focmax=55)
+rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, geometry=geometry, rdrmin=30, rdrmax=40, focmin=plotpar['syn_min'], focmax=plotpar['syn_max'])
