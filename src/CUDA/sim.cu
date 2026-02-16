@@ -56,11 +56,14 @@ float reportTimeNum(){
 
 void checkCUDAError(const char* msg)
 {
+    // Catch launch errors
     cudaError_t err = cudaGetLastError();
-    if (cudaSuccess != err) {
-        std::cerr << "CUDA ERROR IN: " << msg << "-> " << cudaGetErrorString(err) << std::endl;
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA LAUNCH ERROR in " << msg
+                  << " : " << cudaGetErrorString(err) << std::endl;
         exit(EXIT_FAILURE);
     }
+
 }
 
 void reportNewAlloc(int bytes, const char* varName) {
@@ -594,7 +597,6 @@ int main(int argc, const char* argv[])
         // --- CROP TO ILLUMINATED ---
         // crop full facet arrays into the per-source cropped arrays and get
         // the number of valid (illuminated) facets returned by the function
-        
         int valid_facets = cropByAperture(totFacets, nfacets, par.aperture, d_FSth,
                                         d_Ffx,  d_Ffy,  d_Ffz,
                                         d_Ffnx, d_Ffny, d_Ffnz,
@@ -608,7 +610,7 @@ int main(int argc, const char* argv[])
                                         d_Itd);
         checkCUDAError("cropByAperture process");
         cudaDeviceSynchronize();
-
+        
         // If no facets are illuminated, skip per-facet kernels to avoid
         // operating on uninitialised memory which can produce NaNs.
         if (valid_facets == 0) {
@@ -617,8 +619,12 @@ int main(int argc, const char* argv[])
 	    continue;
         }
 
-        int numBlocks = (nfacets + blockSize - 1) / blockSize;
+        if (valid_facets > nfacets) {
+            std::cout << "ERROR: valid_facets > nfacets. CHECK FACET SIZE OR ESTIMATE BUFFER!!" << std::endl;
+        }
 
+        int numBlocks = (nfacets + blockSize - 1) / blockSize;
+        
         // --- COMP INCIDENT RAYS ---
         compIncidentRays<<<numBlocks, blockSize>>>(sx, sy, sz,
                             d_fx,  d_fy,   d_fz,
@@ -672,18 +678,18 @@ int main(int argc, const char* argv[])
             // generate phasor trace
             genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Reflected process");
-
+            
             // par.convolution with chirp to get reflected signal
             if (!par.convolution_linear) {
-                convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
                 checkCUDAError("convolvePhasorChirp Reflected process");
             } else {
                 convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
                 checkCUDAError("convolvePhasorChirpLinear Reflected process");
             }
-
+            
         }
-
+        
         for (int it=0; it<ntargets; it++) {
 
             // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
@@ -786,11 +792,12 @@ int main(int argc, const char* argv[])
                 // accumulate this target's contribution into the running sum
                 addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
                 checkCUDAError("addComplexArrays accumulate refracted target");
-
+            
             }
+            
 
         }
-
+        
         // --- COMBINE INTO OUTPUT SIGNAL AND EXPORT ---
         combineRadarSignals<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refl_sig, d_refr_sig, d_sig, par.nr);
         checkCUDAError("combineRadarSignals kernel");
@@ -830,7 +837,7 @@ int main(int argc, const char* argv[])
     } else {
         std::cout << "No sources (par.ns == 0), cannot compute per-source statistics." << std::endl;
     }
-
+    
     cudaFree(d_Ffx); cudaFree(d_Ffy); cudaFree(d_Ffz);
     cudaFree(d_Ffnx); cudaFree(d_Ffny); cudaFree(d_Ffnz);
     cudaFree(d_Ffux); cudaFree(d_Ffuy); cudaFree(d_Ffuz);

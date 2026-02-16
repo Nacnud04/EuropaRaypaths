@@ -42,7 +42,7 @@ params = {
 
     # facet params
     "altitude": 316e3,           # approximate altitude [m]
-    "fs": 115.66,              # facet size [m]
+    "fs": 46.27785,              # facet size [m]
 
     # target params
     "rerad_funct": 2,  # 3-degree boxcar

@@ -12,12 +12,13 @@ import unit_convs as uc
 # path to mars radius DEM
 #path = r"data/MOLA/RCropped.tif"
 #path = r"data/MOLA/MOLA_R_KOROLEV.tif"
-path = r"data/MOLA/MOLA_R_KOROLEV_TIGHT.tif"
+#path = r"data/MOLA/MOLA_R_KOROLEV_TIGHT.tif"
+path = r"data/MOLA/MOLA_R_KOROLEV_TIGHTEST.tif"
 
 # mars radius offset
 MARS_RADIUS = 3396000
 
-data, tpar = ku.load_cropped_mola_tif(path, upsample=4)
+data, tpar = ku.load_cropped_mola_tif(path, upsample=10)
 
 # compute the resolution in meters along latitude to get the square side of each pixel
 resolution = uc.dLat_to_m(tpar['scl_lat'], MARS_RADIUS)

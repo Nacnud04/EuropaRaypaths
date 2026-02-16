@@ -313,7 +313,7 @@ __global__ void combineRadarSignals(cuFloatComplex* refl_sig, cuFloatComplex* re
 
 __global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs, 
                               float* d_fReflE, float* d_SltRng, 
-                              float lam, float range_res, float nfacets,
+                              float lam, float range_res, int nfacets,
                               float rst, float dr, int nr) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -434,7 +434,6 @@ void genPhasorTrace(cuFloatComplex* d_phasorTrace,
     );
 
     size_t num_unique = new_end.first - unique_keys.begin();
-    //std::cout << "Number of unique range bins in phasor trace: " << num_unique << std::endl;
 
     // SCATTER REDUCED VALUES INTO OUTPUT PHASOR TRACE
     thrust::device_ptr<cuFloatComplex> output_begin(d_phasorTrace);

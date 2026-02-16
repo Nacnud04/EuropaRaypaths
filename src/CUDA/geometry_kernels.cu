@@ -189,8 +189,6 @@ int cropByAperture(int totfacets, int nfacets, float aperture, float* d_FSth,
     auto end_fvy = thrust::copy_if(Ffvy, Ffvy + totfacets, FSth, fvy, pred);
     auto end_fvz = thrust::copy_if(Ffvz, Ffvz + totfacets, FSth, fvz, pred);
 
-    //auto end_Itd = thrust::copy_if(FItd, FItd + totfacets, FSth, Itd, pred);
-
     int valid = (int)(end_fx - fx);
     return valid;
 }
