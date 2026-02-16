@@ -129,8 +129,8 @@ tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
 
 
 # export as source file and obj
-ku.target_norms_to_obj("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], norms=False)
-ku.target_norms_to_file("data/Subsurface", "KOR_T", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
+ku.target_norms_to_obj("data/Subsurface", "KOR_T_LINE", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], norms=False)
+ku.target_norms_to_file("data/Subsurface", "KOR_T_LINE", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
 
 
 """

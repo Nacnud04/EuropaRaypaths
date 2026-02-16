@@ -524,9 +524,6 @@ __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
         // for transmission coefficient use refraction cofficient from before
         d_fRefrEO[idx] = d_fRefrEO[idx] * d_fRfrC[idx];
 
-        // signal attenuation in subsurface
-        //d_fRefrEO[idx] = d_fRefrEO[idx] * expf(-2.0f * alpha2 * d_Ttd[idx]);
-
         // surface roughness losses
         float rough_loss = expf(-4*((ks*cosGPU(d_Tth[idx]))*(ks*cosGPU(d_Tth[idx]))));
         d_fRefrEO[idx] = d_fRefrEO[idx] * rough_loss;

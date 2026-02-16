@@ -101,8 +101,8 @@ for fill_mat in (dem_inc, dem_azi):
 
 # --- FIND CRATER RIM ---
 # start with crater center
-kcen_lat = 72.8
-kcen_lon = 164.5
+kcen_lat = 72.9
+kcen_lon = 165.1
 # turn into index
 kcenI_lon = np.argmin(np.abs(tpar['lons']-kcen_lon))
 kcenI_lat = np.argmin(np.abs(tpar['lats']-kcen_lat))
@@ -111,7 +111,8 @@ data_circle = np.copy(data_Rs)
 data_circle[:100, :] = np.inf
 mask = np.zeros_like(data_Rs)
 # iterate over a circle identifying the lowest elevation point at every theta
-len_indicies = np.arange(220)
+#len_indicies = np.arange(800)
+len_indicies = np.arange(100)
 minlats, minlons = [], []
 for theta in np.linspace(-1*np.pi, np.pi, 300):
     ix = (np.cos(theta) * len_indicies).astype(int)
@@ -135,6 +136,15 @@ for i in range(mask.shape[1]):
     f, l = np.nonzero(mask[:, i])[0][[0, -1]]
     # fill in column
     mask[f:l+1, i] = 1
+
+# do the same going row by row
+for i in range(mask.shape[0]):
+    if np.sum(mask[i, :]) < 2:
+        continue
+    # find first and last occurance of 1
+    f, l = np.nonzero(mask[i, :])[0][[0, -1]]
+    # fill in column
+    mask[i, f:l+1] = 1
 
 # cast to bool
 mask = mask.astype(bool)
@@ -288,17 +298,19 @@ frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs = [
 
 
 sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
-    arr.flatten()[::20] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
+    arr.flatten()[:] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
 ]
-"""
+
 # export subsurface as obj file
 ku.target_norms_to_obj("data/Subsurface", "KOR_T", 
                         sbxs, sbys, sbzs,
-                        sbnxs, sbnys, sbnzs, norms=False)
+                        sbnxs, sbnys, sbnzs, norms=True)
 ku.target_norms_to_file("data/Subsurface", "KOR_T", 
                         sbxs, sbys, sbzs,
                         sbnxs, sbnys, sbnzs)
-"""
+
+sys.exit()
+
 
 fig, ax = plt.subplots(2, 2, figsize=(14, 8))
 ax[0, 0].scatter(fxs, fys, s=1, c=frs)
@@ -357,9 +369,9 @@ def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_
         for x, y, z, v, nx, ny, nz in zip(xs, ys, zs, values, nxs, nys, nzs):
             r, g, b, _ = cmap(norm(v))
             f.write(f"v {x:.6f} {y:.6f} {z:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
-            f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
-            f.write(f"l {i+1} {i+2}\n")
-            i += 2
+            #f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
+            #f.write(f"l {i+1} {i+2}\n")
+            i += 1
             if i % 66 == 0:
                 print(f"Writing out facet data ... {i}/{len(xs)*2}", end="      \r")
 
