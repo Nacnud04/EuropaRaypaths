@@ -236,7 +236,7 @@ def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz):
 
     f.close()
 
-    print(f"Exported {i} sources to {target_file}")
+    print(f"Exported {i} targets to {target_file}")
 
 
 # load tiff of cropped mola
