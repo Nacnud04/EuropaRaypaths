@@ -51,7 +51,7 @@ trc_en = 1200
 
 # what slantrange do we want to interpolate?
 rea_rng_st = 314e3
-rea_rng_en = 318e3
+rea_rng_en = 319e3
 
 foc_intrp = oh.interpolate_rdrgrm(geometry, rx_win, foc_db,
                                   sim_st=sim_st, sim_en=sim_en,
@@ -72,8 +72,8 @@ plotpar = {
     'ymax': ymax,
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
-    'syn_min': 18,
-    'syn_max': 23,
+    'syn_min': 0,
+    'syn_max': 8,
 }
 
 # plot
@@ -82,4 +82,7 @@ rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola, plotpar)
 
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
-rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, geometry=geometry, rdrmin=30, rdrmax=40, focmin=plotpar['syn_min'], focmax=plotpar['syn_max'])
+rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, geometry=geometry, 
+                    rdrmin=-15, rdrmax=5, 
+                    focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
+                    ymax=319)

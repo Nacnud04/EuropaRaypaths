@@ -111,8 +111,7 @@ data_circle = np.copy(data_Rs)
 data_circle[:100, :] = np.inf
 mask = np.zeros_like(data_Rs)
 # iterate over a circle identifying the lowest elevation point at every theta
-#len_indicies = np.arange(800)
-len_indicies = np.arange(100)
+len_indicies = np.arange(800)
 minlats, minlons = [], []
 for theta in np.linspace(-1*np.pi, np.pi, 300):
     ix = (np.cos(theta) * len_indicies).astype(int)
@@ -150,7 +149,7 @@ for i in range(mask.shape[0]):
 mask = mask.astype(bool)
 
 # find the radius of mars to the middle of the crater to create a subsurface mars radius "depth"
-crater_depth = 2000
+crater_depth = 1800
 subsrf_rad = data_Rs[kcenI_lat, kcenI_lon] - crater_depth
 
 # plot vector normals in spherical
@@ -283,7 +282,7 @@ for i_lat in range(tpar['rows']):
     sbzs = np.append(sbzs, subsrf_zs)
 
     # generate subsurface facet normals
-    subsrf_nhat = -1*ku.sharad_normal(subsrf_xs, subsrf_ys, subsrf_zs)
+    subsrf_nhat = ku.sharad_normal(subsrf_xs, subsrf_ys, subsrf_zs)
 
     sbnxs = np.append(sbnxs, subsrf_nhat[:, 0])
     sbnys = np.append(sbnys, subsrf_nhat[:, 1])
@@ -298,7 +297,7 @@ frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs = [
 
 
 sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
-    arr.flatten()[:] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
+    arr.flatten()[::50] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
 ]
 
 # export subsurface as obj file
@@ -308,8 +307,6 @@ ku.target_norms_to_obj("data/Subsurface", "KOR_T",
 ku.target_norms_to_file("data/Subsurface", "KOR_T", 
                         sbxs, sbys, sbzs,
                         sbnxs, sbnys, sbnzs)
-
-sys.exit()
 
 
 fig, ax = plt.subplots(2, 2, figsize=(14, 8))

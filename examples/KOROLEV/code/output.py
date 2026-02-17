@@ -44,6 +44,6 @@ sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 params['spacing'] = uc.estimate_spacing(sat_x, sat_y, sat_z)
 params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
 
-focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=650)
+focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=750)
 
 np.save("output/focused.npy", focused)
