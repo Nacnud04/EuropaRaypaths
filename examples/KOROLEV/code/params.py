@@ -45,7 +45,7 @@ params = {
     "fs": 46.27785,              # facet size [m]
 
     # target params
-    "rerad_funct": 2,  # 3-degree boxcar
+    "rerad_funct": 1,  # 3-degree boxcar
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing
