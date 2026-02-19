@@ -297,7 +297,7 @@ frs, fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs = [
 
 
 sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs = [
-    arr.flatten()[::50] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
+    arr.flatten()[::10] for arr in (sbxs, sbys, sbzs, sbnxs, sbnys, sbnzs)
 ]
 
 # export subsurface as obj file

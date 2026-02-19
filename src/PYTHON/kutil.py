@@ -542,3 +542,54 @@ def corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction):
     ymax = srad - (ymax + correction + MRAD)
 
     return ymin, ymax 
+
+
+def import_korolev_interior(directory, filename="tcb_korolev_Dec2012.dat"):
+
+    file_path = f"{directory}/{filename}"
+
+    # first read in entire file quickly
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+
+    # output & active arrays
+    output_data = []
+    clean_rows  = []
+
+    # convert data types and move into arrays
+    for line in lines:
+        line = line.strip()
+
+        # skip non-data lines
+        if "#" in line or "@" in line or len(line) == 0:
+            continue
+
+        # if the end of the data is reached move data in clean_rows to output_data
+        if line == "EOD":
+            output_data.append(np.array(clean_rows))
+            del clean_rows
+            clean_rows = []
+            continue
+
+        parts = line.split()
+
+        numeric_row = [int(parts[0][-10:]), int(parts[1][:-3]), float(parts[2])]
+        clean_rows.append(numeric_row)
+
+    # when done return the output_data array
+    return output_data
+
+
+def clean_korolev_interior(output_data):
+
+    output = []
+
+    for dat in output_data:
+        
+        # just select the region we care about
+        dat_sel = dat[dat[:, 0] == 554201000]
+
+        # now remove everything outside of the crater
+        cmin = 873
+        cmax = 1006
+        output.append(dat_sel[(dat_sel[:, 1] > cmin) * (dat_sel[:, 1] < cmax)])
