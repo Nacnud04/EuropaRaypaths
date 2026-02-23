@@ -393,6 +393,13 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     cbar2.set_ticks(ticklocs)
     cbar2.set_ticklabels([f"{t:.1f}" for t in ticklocs], fontsize=8)
 
+    # if there is a subsurface plot the layers
+    if "trc" in plotpar.keys() and "depth" in plotpar.keys():
+        for data in zip(plotpar["trc"], plotpar["depth"]):
+            lat_subsrf = aeroid['LAT'][data[0]]
+            depth_subsrf = data[1] + 315.4
+            ax.plot(lat_subsrf, depth_subsrf, color="white", linewidth=1, alpha=0.5)
+
     # labels
     ax.set_xlabel("Latitude [deg]")
     ax.set_ylabel("Range [km]")

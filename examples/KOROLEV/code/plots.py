@@ -61,6 +61,10 @@ foc_intrp = oh.interpolate_rdrgrm(geometry, rx_win, foc_db,
 correction = 9675
 ymin, ymax = ku.corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction)
 
+# load in crater interior
+korolev_interior = ku.import_korolev_interior("data/Subsurface/")
+trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid)
+
 plotpar = {
     'obs': OBS,
     'savefig': "figures/KOROLEV.png",
@@ -74,6 +78,8 @@ plotpar = {
     'rea_max': 0.001,
     'syn_min': 0,
     'syn_max': 8,
+    "trc":trc,
+    "depth":depth,
 }
 
 # plot

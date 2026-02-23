@@ -580,16 +580,38 @@ def import_korolev_interior(directory, filename="tcb_korolev_Dec2012.dat"):
     return output_data
 
 
-def clean_korolev_interior(output_data):
+def clean_korolev_interior(data, aeroid):
 
-    output = []
+    output_trc = []
+    output_depth = []
 
-    for dat in output_data:
+    for dat in data:
         
         # just select the region we care about
         dat_sel = dat[dat[:, 0] == 554201000]
 
+        if len(dat_sel) == 0:
+            continue
+
         # now remove everything outside of the crater
         cmin = 873
         cmax = 1006
-        output.append(dat_sel[(dat_sel[:, 1] > cmin) * (dat_sel[:, 1] < cmax)])
+        dat_sel = dat_sel[(dat_sel[:, 1] > cmin) * (dat_sel[:, 1] < cmax)]
+
+        # compute an actual depth from the time delay
+        trc = dat_sel[:, 1].astype(int)
+        depth = dat_sel[:, 2]
+
+        # correct units
+        depth -= 9750
+        depth = (((depth)*(1e-8))*(299.792458e6 / 2) / np.sqrt(1)) / 1e3
+
+        # correct with aeroid
+        aeroid_clip = aeroid['AEROID'][cmin:cmax]
+        aeroid_correct = aeroid_clip - np.min(aeroid_clip)
+        depth -= aeroid_correct[trc] / 1e3
+
+        output_trc.append(trc)
+        output_depth.append(depth)
+
+    return output_trc, output_depth
