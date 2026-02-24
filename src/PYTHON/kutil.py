@@ -580,7 +580,7 @@ def import_korolev_interior(directory, filename="tcb_korolev_Dec2012.dat"):
     return output_data
 
 
-def clean_korolev_interior(data, aeroid):
+def clean_korolev_interior(data, aeroid, mola, eps=1.0):
 
     output_trc = []
     output_depth = []
@@ -605,6 +605,11 @@ def clean_korolev_interior(data, aeroid):
         # correct units
         depth -= 9750
         depth = (((depth)*(1e-8))*(299.792458e6 / 2) / np.sqrt(1)) / 1e3
+
+        # correct for topo change
+        topo = mola['TOPO'][cmin:cmax] / 1e3
+        topo_var = np.max(topo) - topo
+        depth = (depth - topo_var[trc]) / np.sqrt(eps) + topo_var[trc]
 
         # correct with aeroid
         aeroid_clip = aeroid['AEROID'][cmin:cmax]

@@ -113,61 +113,21 @@ n_hat = ku.sharad_normal(sat_x, sat_y, sat_z, nmult=1)
 ku.sources_norms_to_file(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2]) 
 ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
 
-# MAKE SUBSURFACE TARGETS
+# --- MAKE SUBSURFACE TARGETS ---
 
-# make some test subsurface targets directly beneath source
-tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-317, geometry['LAT'], geometry['LON'])
-tar_x = tar_x[500:1500]
-tar_y = tar_y[500:1500]
-tar_z = tar_z[500:1500]
+# load source track via aeroid
+aeroid = ku.load_sharad_orbit_AEROID("data/Observation/rdrgrm", "00554201")
+mola = ku.load_sharad_orbit_MOLA("data/Observation/rdrgrm", "00554201")
 
-# convert from KM into M
-tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
+# load mapped horizons
+korolev_interior = ku.import_korolev_interior("data/Subsurface/")
+trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
-# compute a normal vector for each observation
-#n_hat = ku.sharad_normal(tar_x, tar_y, tar_z, nmult=1)
+# convert from trace number and depth into many facets
+tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=50, min_depth=0.75)
 
-
-# export as source file and obj
-ku.target_norms_to_obj("data/Subsurface", "KOR_T_LINE", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], norms=False)
-ku.target_norms_to_file("data/Subsurface", "KOR_T_LINE", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
-
-
-"""
-# MAKE BASIC SIMPLE SURFACE
-# make some test subsurface targets directly beneath source
-tar_x, tar_y, tar_z = ku.planetocentric_to_cartesian(geometry['SRAD']-315, geometry['LAT'], geometry['LON'])
-
-# convert from KM into M
-tar_x, tar_y, tar_z = uc.km_to_m(tar_x, tar_y, tar_z)
-
-# compute a normal vector for each observation
-n_hat = ku.sharad_normal(tar_x, tar_y, tar_z, nmult=1)
-
-# create a basis
-ref = np.zeros_like(n_hat)
-ref[:, 2] = 1.0  # z-axis
-
-# if n is too close to z, switch to x-axis
-ref_mask = np.abs(n_hat[:, 2]) > 0.9
-ref[ref_mask] = np.array([1.0, 0.0, 0.0])
-
-# first tangent: u_hat = normalize(ref * n)
-u_hat = np.cross(ref, n_hat)
-u_hat /= np.linalg.norm(u_hat, axis=1, keepdims=True)
-
-# second tangent: v_hat = n * u_hat
-v_hat = np.cross(n_hat, u_hat)
-
-# export as source file and obj
-#ku.target_norms_to_file("data/Subsurface", "KOR_F", tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
-with open("data/Subsurface/KOR_F.fct", 'w') as f:
-    i = 0
-    for x, y, z, nx, ny, nz, ux, uy, uz, vx, vy, vz in zip(tar_x, tar_y, tar_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2], u_hat[:, 0], u_hat[:, 1], u_hat[:, 2], v_hat[:, 0], v_hat[:, 1], v_hat[:, 2]):
-        if i != len(tar_x) - 1:
-            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}\n")
-        else:
-            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
-        i += 1
-    print(f"Exported facet data to: data/Subsurface/KOR_F.fct")
-"""
+# export
+ku.target_norms_to_obj("data/Subsurface", "KOR_T_MAPPED",
+                       tx, ty, tz, tnx, tny, tnz, norms=False)
+ku.target_norms_to_file("data/Subsurface", "KOR_T_MAPPED",
+                      tx, ty, tz, tnx, tny, tnz)

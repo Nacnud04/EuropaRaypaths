@@ -18,7 +18,7 @@ OBS       = "00554201"
 # load geometries (simulation source PKL, full track aeroid, full track MOLA)
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
 aeroid = ku.load_sharad_orbit_AEROID(DIRECTORY, OBS)
-mola = ku.load_sharad_orbit_MOLA(DIRECTORY, OBS)['TOPO']
+mola = ku.load_sharad_orbit_MOLA(DIRECTORY, OBS)
 
 # load and correct radargram
 rdrgrm = ku.load_COSHARPS_rdrgrm(DIRECTORY, OBS)
@@ -63,7 +63,7 @@ ymin, ymax = ku.corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction)
 
 # load in crater interior
 korolev_interior = ku.import_korolev_interior("data/Subsurface/")
-trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid)
+trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola)
 
 plotpar = {
     'obs': OBS,
@@ -83,12 +83,12 @@ plotpar = {
 }
 
 # plot
-rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola, plotpar)
+rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola['TOPO'], plotpar)
 
 
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
-rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, geometry=geometry, 
+rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, 
                     rdrmin=-15, rdrmax=5, 
                     focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
                     ymax=319)

@@ -145,3 +145,4 @@ def interpolate_rdrgrm(geometry, rx_win, foc_db,
     foc_intrp[np.isnan(foc_intrp)] = np.nanmin(foc_intrp[np.isfinite(foc_intrp)])
 
     return foc_intrp
+
