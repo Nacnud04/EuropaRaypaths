@@ -616,6 +616,10 @@ def clean_korolev_interior(data, aeroid, mola, eps=1.0):
         aeroid_correct = aeroid_clip - np.min(aeroid_clip)
         depth -= aeroid_correct[trc] / 1e3
 
+        # if correcting for subsurface add the mystery correction:
+        if eps != 1.0:
+            depth -= (110 / np.sqrt(eps)) * 1e-3
+
         output_trc.append(trc)
         output_depth.append(depth)
 
