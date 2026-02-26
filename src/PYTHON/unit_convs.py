@@ -139,14 +139,51 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
 
         # move to cartesian
         tx, ty, tz = planetocentric_to_cartesian(radii*1e3, lats, lons)
+        
+        # radial vector
         tnx, tny, tnz = normalize(tx, ty, tz, parts=True)
 
-        tx_all.append(tx)
-        ty_all.append(ty)
-        tz_all.append(tz)
-        tnx_all.append(tnx)
-        tny_all.append(tny)
-        tnz_all.append(tnz)
+        # tangent direction along track
+        dx = np.gradient(tx)
+        dy = np.gradient(ty)
+        dz = np.gradient(tz)
+        tx_hat, ty_hat, tz_hat = normalize(dx, dy, dz, parts=True)
+
+        # cross product is the across track direction
+        cx = ty_hat * tnz - tz_hat * tny
+        cy = tz_hat * tnx - tx_hat * tnz
+        cz = tx_hat * tny - ty_hat * tnx
+        cx_hat, cy_hat, cz_hat = normalize(cx, cy, cz, parts=True)
+
+        # get across track offsets
+        half_width = 500  # meters (example)
+        n_width = 21       # number of points across
+        offsets = np.linspace(-half_width, half_width, n_width)
+
+        # do spherical shift
+        tx_w, ty_w, tz_w = [], [], []
+
+        for o in offsets:
+
+            theta = o / (radii * 1e3)
+
+            # small spherical shift
+            x_new = tx*np.cos(theta) + cx_hat*np.sin(theta)*(radii*1e3)
+            y_new = ty*np.cos(theta) + cy_hat*np.sin(theta)*(radii*1e3)
+            z_new = tz*np.cos(theta) + cz_hat*np.sin(theta)*(radii*1e3)
+
+            tx_w.append(x_new)
+            ty_w.append(y_new)
+            tz_w.append(z_new)
+
+        # update output
+        tx_all.append(np.concatenate(tx_w))
+        ty_all.append(np.concatenate(ty_w))
+        tz_all.append(np.concatenate(tz_w))
+
+        tnx_all.append(np.repeat(tnx, n_width))
+        tny_all.append(np.repeat(tny, n_width))
+        tnz_all.append(np.repeat(tnz, n_width))
 
     return (np.concatenate(tx_all),
             np.concatenate(ty_all),

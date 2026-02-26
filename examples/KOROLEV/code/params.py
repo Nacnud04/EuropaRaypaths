@@ -124,7 +124,7 @@ korolev_interior = ku.import_korolev_interior("data/Subsurface/")
 trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 # convert from trace number and depth into many facets
-tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=50, min_depth=0.75)
+tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=0.75)
 
 # export
 ku.target_norms_to_obj("data/Subsurface", "KOR_T_MAPPED",
