@@ -156,8 +156,8 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
         cx_hat, cy_hat, cz_hat = normalize(cx, cy, cz, parts=True)
 
         # get across track offsets
-        half_width = 500  # meters (example)
-        n_width = 21       # number of points across
+        half_width = 1000  # meters (example)
+        n_width = 41       # number of points across
         offsets = np.linspace(-half_width, half_width, n_width)
 
         # do spherical shift
