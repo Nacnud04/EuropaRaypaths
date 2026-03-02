@@ -473,7 +473,7 @@ __global__ void compRefrEnergyIn(
                     float* d_Ttd, float* d_Tth, float* d_Tph, float* d_fRfrC,
                     float* d_fRefrEI, float* d_fRfrSR,
                     float ks, int nfacets, float alpha2, float c1, float c2,
-                    float fs, float P, float G, float lam) {
+                    float fs, float lam) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < nfacets) {

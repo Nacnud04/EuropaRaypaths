@@ -129,9 +129,9 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
         depth_dense = depth_interp(trc_dense)
 
         # interp lat lon
-        lat_interp = interp1d(trc_layer, aeroid['LAT'][trc_layer])
-        lon_interp = interp1d(trc_layer, aeroid['LON'][trc_layer])
-        srad_interp = interp1d(trc_layer, aeroid['SRAD'][trc_layer])
+        lat_interp = interp1d(aeroid['COL'], aeroid['LAT'])
+        lon_interp = interp1d(aeroid['COL'], aeroid['LON'])
+        srad_interp = interp1d(aeroid['COL'], aeroid['SRAD'])
 
         lats = lat_interp(trc_dense)
         lons = lon_interp(trc_dense)
@@ -156,7 +156,7 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
         cx_hat, cy_hat, cz_hat = normalize(cx, cy, cz, parts=True)
 
         # get across track offsets
-        half_width = 1000  # meters (example)
+        half_width = 1500  # meters (example)
         n_width = 41       # number of points across
         offsets = np.linspace(-half_width, half_width, n_width)
 

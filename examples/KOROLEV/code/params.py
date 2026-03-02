@@ -64,7 +64,11 @@ with open("data/params.pkl", 'wb') as hdl:
 NS = 2000
 sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
 data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
-ku.rxOpenWindow(data, "data/rx_window_positions", NS)
+#ku.rxOpenWindow(data, "data/rx_window_positions", NS)
+# temp clip
+nfin = 900
+data = data[:nfin]
+ku.rxOpenWindow(data, "data/rx_window_positions", nfin)
 
 # estimate the effective PRF
 duration = data['EPHEMERIS_TIME'][-1] - data['EPHEMERIS_TIME'][0]
@@ -102,6 +106,11 @@ sat_x, sat_y, sat_z = ku.planetocentric_to_cartesian(geometry['SRAD'], geometry[
 # interpolate
 sat_x, sat_y, sat_z = uc.interpolate_sources(NS, sat_x, sat_y, sat_z)
 
+# tmp clip
+sat_x = sat_x[:nfin]
+sat_y = sat_y[:nfin]
+sat_z = sat_z[:nfin]
+
 # convert from KM into M
 sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 
@@ -110,6 +119,7 @@ n_hat = ku.sharad_normal(sat_x, sat_y, sat_z, nmult=1)
 
 
 # export as source file and obj
+DIRECTORY = "data/Observation/"
 ku.sources_norms_to_file(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2]) 
 ku.sources_norms_to_obj(DIRECTORY, OBS, sat_x, sat_y, sat_z, n_hat[:, 0], n_hat[:, 1], n_hat[:, 2])
 
@@ -124,7 +134,7 @@ korolev_interior = ku.import_korolev_interior("data/Subsurface/")
 trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 # convert from trace number and depth into many facets
-tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=2.5, min_depth=0.75)
+tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=2, min_depth=0.75)
 
 # export
 ku.target_norms_to_obj("data/Subsurface", "KOR_T_MAPPED",

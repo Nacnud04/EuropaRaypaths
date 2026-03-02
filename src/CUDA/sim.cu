@@ -736,7 +736,7 @@ int main(int argc, const char* argv[])
                                                     d_Ttd, d_Tth, d_Tph, d_fRfrC,
                                                     d_fRefrEI, d_fRfrSR,
                                                     par.ks, valid_facets, par.alpha2, par.c_1, par.c_2,
-                                                    par.fs, par.P, par.Grefr_lin, par.lam);
+                                                    par.fs, par.lam);
             checkCUDAError("compRefrEnergyIn kernel");
 
             // --- COMPUTE UPWARD TRANSMITTED RAYS ---
@@ -764,12 +764,19 @@ int main(int argc, const char* argv[])
             } else {
 
                 // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
+
+                float subGain = par.Grefr_lin;
+                if (is < 800) {
+                    subGain = powf(10.0f, 37.5f/10.0f);
+                } else if ((is > 800) && (is < 825)) {
+                    subGain = powf(10.0f, (2.5f*((825-is)/25.0f) + 35.0f)/10.0f);
+                }
                 
                 // generate refracted phasor
                 genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
                                                         d_fRfrSR, d_fRefrEI, d_fRefrEO, 
                                                         d_TargetTh, d_Ttd, par.rerad_funct,
-                                                        par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
+                                                        par.P, subGain, par.lam, par.fs, valid_facets,
                                                         par.rst, par.dr, par.nr, par.c_1, par.c_2);
                 checkCUDAError("genRefrPhasor kernel");
 
