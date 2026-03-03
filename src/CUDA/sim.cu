@@ -142,6 +142,37 @@ int main(int argc, const char* argv[])
     }
 
 
+    // --- LOAD GAIN PATTERN ---
+
+    bool gainPatternProvided = false;
+
+    float *h_gRefl; float *h_gRefr;
+    float gRefl; float gRefr;
+
+    if (par.gainFile != "NONE") {
+    
+        gainPatternProvided = true;
+
+        // first open the gain file
+        const char* gain_filename;
+        gain_filename = par.gainFile.c_str();
+        checkFileExists(gain_filename);
+        FILE *gainFile = fopen(gain_filename, "r");
+
+        if (count_lines(gainFile) != par.ns) {
+            std::cerr << "ERROR: Gain pattern file has " << count_lines(gainFile) << " lines, but number of sources is " << par.ns << std::endl;
+        }
+
+        // allocate memory
+        h_gRefl = (float*)malloc(par.ns * sizeof(float));
+        h_gRefr = (float*)malloc(par.ns * sizeof(float));
+
+        // fill memory
+        loadGainFile(gainFile, par.ns, h_gRefl, h_gRefr);
+
+    }
+
+
     // --- LOAD TARGETS ---
 
     // variables for aperture calculation
@@ -555,6 +586,15 @@ int main(int argc, const char* argv[])
             par.rst = rx_window_pos[is];
         }
 
+        // update gains
+        if (gainPatternProvided) {
+            gRefl = powf(10.0f, h_gRefl[is]/10.0f);
+            gRefr = powf(10.0f, h_gRefr[is]/10.0f);
+        } else {
+            gRefl = par.Grefl_lin;
+            gRefr = par.Grefr_lin;
+        }
+
         // generate the chirp if using circular convolution and variable rx opening windows
         if (par.convolution && !par.convolution_linear && rxWindowPositionFileProvided) {
             genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
@@ -650,7 +690,7 @@ int main(int argc, const char* argv[])
 
         compReflectedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
                                                     d_fReflE, d_Rth, d_fRfrC,
-                                                    par.P, par.Grefl_lin, par.fs, par.lam,
+                                                    par.P, gRefl, par.fs, par.lam,
                                                     par.nu_1, par.nu_2, par.alpha1, par.ks, 
                                                     par.pol, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
@@ -758,25 +798,26 @@ int main(int argc, const char* argv[])
                                 d_Tth, d_fRefrEI, d_fRefrEO,
                                 d_refr_sig, 
                                 par.rst, par.dr, par.nr, par.c, par.c_2, par.rerad_funct,
-                                par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
+                                par.rng_res, par.P, gRefr, par.fs, par.lam, valid_facets);
                 checkCUDAError("refrRadarSignal kernel");
 
             } else {
 
                 // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
 
+                /*
                 float subGain = par.Grefr_lin;
                 if (is < 800) {
                     subGain = powf(10.0f, 37.5f/10.0f);
                 } else if ((is > 800) && (is < 825)) {
                     subGain = powf(10.0f, (2.5f*((825-is)/25.0f) + 35.0f)/10.0f);
-                }
+                }*/
                 
                 // generate refracted phasor
                 genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
                                                         d_fRfrSR, d_fRefrEI, d_fRefrEO, 
                                                         d_TargetTh, d_Ttd, par.rerad_funct,
-                                                        par.P, subGain, par.lam, par.fs, valid_facets,
+                                                        par.P, gRefr, par.lam, par.fs, valid_facets,
                                                         par.rst, par.dr, par.nr, par.c_1, par.c_2);
                 checkCUDAError("genRefrPhasor kernel");
 

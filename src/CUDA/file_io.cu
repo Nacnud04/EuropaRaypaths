@@ -58,6 +58,7 @@ struct SimulationParameters {
     float Grefl;        // Surface gain
     float rng_res;      // Range resolution
     float aperture;     // Source aperture
+    std::string gainFile; // file containing gain pattern (if exists)
 
     // computed params
     float lam;
@@ -140,10 +141,17 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.f0 = j["frequency"];
     params.B = j["bandwidth"];
     params.P = j["power"];
-    params.Grefr = j["subsurface_gain"];
-    params.Grefl = j["surface_gain"];
-    //params.rng_res = j["range_resolution"];
     params.aperture = j["aperture"];
+
+    // load gain
+    // first check for gain pattern file
+    params.gainFile = j.value("gain_pattern_file", std::string("NONE"));
+    if (params.gainFile == "NONE") {
+        params.Grefr = j["subsurface_gain"];
+        params.Grefl = j["surface_gain"];
+    } else {
+        std::cout << "Gain pattern file found: " << params.gainFile << std::endl;
+    }
 
     // compute the range resolution from bandwidth
     params.rng_res = params.c / params.B;
@@ -517,4 +525,34 @@ __host__ void remove_s_txt_files(const std::filesystem::path& dir)
     }
 
     std::cout << "\n" << std::endl;
+}
+
+
+__host__ void loadGainFile(FILE* file, const int ns,
+                           float* h_gRefl, float* h_gRefr) {
+
+    // go through line by line and load the sources into memory
+    char line[256];
+    int i = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+        // check if line is blank if so skip
+        if (line[0] == '\n' || line[0] == '\r') {
+            continue;
+        }
+
+        sscanf(line, "%f,%f", &h_gRefl[i], &h_gRefr[i]);
+        
+        // somehow if we are out of memory, break before segfault
+        if (i > ns) {
+            std::cout << "File has more sources than memory allocated - stopping read." << std::endl;
+            break;
+        }
+
+        i++;
+
+    }
+    
+    std::cout << "Gain file loaded successfully with " << i << " entries." << std::endl;
+
 }

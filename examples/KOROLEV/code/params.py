@@ -18,6 +18,7 @@ params = {
     "subsurface_gain": 35,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 1,            # aperture (from nadir->edge) [deg]
+    "gain_pattern_file": "data/source_gain.txt", # file with gain pattern [dB]
 
     # receive window parameters
     "rx_window_m":  7.5e3,         # receive window length [m]
@@ -64,11 +65,7 @@ with open("data/params.pkl", 'wb') as hdl:
 NS = 2000
 sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
 data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
-#ku.rxOpenWindow(data, "data/rx_window_positions", NS)
-# temp clip
-nfin = 900
-data = data[:nfin]
-ku.rxOpenWindow(data, "data/rx_window_positions", nfin)
+ku.rxOpenWindow(data, "data/rx_window_positions", NS)
 
 # estimate the effective PRF
 duration = data['EPHEMERIS_TIME'][-1] - data['EPHEMERIS_TIME'][0]
@@ -77,6 +74,9 @@ prf = NS / duration
 print(f"Therefore the PRF is {prf} Hz")
 prf_data = len(data) / duration
 print(f"The input (RDR) data has an approximate prf of {prf_data} Hz")
+
+# --- EXPORT ADAPTIVE GAIN ---
+ku.gainCorrection("data/source_gain", NS)
 
 # --- GENERATE SOURCE FILE ---
 
@@ -105,11 +105,6 @@ sat_x, sat_y, sat_z = ku.planetocentric_to_cartesian(geometry['SRAD'], geometry[
 
 # interpolate
 sat_x, sat_y, sat_z = uc.interpolate_sources(NS, sat_x, sat_y, sat_z)
-
-# tmp clip
-sat_x = sat_x[:nfin]
-sat_y = sat_y[:nfin]
-sat_z = sat_z[:nfin]
 
 # convert from KM into M
 sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)

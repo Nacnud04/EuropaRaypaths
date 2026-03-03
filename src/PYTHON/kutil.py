@@ -472,6 +472,26 @@ def rxOpenWindow(data, filename, ns):
     with open(f"{filename}.txt", 'w') as f:
         for pos in rx_win_upsample:
             f.write(f"{round(pos)}\n")
+
+def gainCorrection(filename, ns):
+
+    gainSt = 37.5
+    gainEn = 35
+
+    high_gain = int(ns * (800 / 2000))
+    low_gain  = int(ns * (825 / 2000))
+
+    gain_array = np.ones(ns) * gainEn
+    gain_array[:high_gain] = gainSt
+    gain_array[high_gain:low_gain] = np.linspace(gainSt, gainEn, low_gain - high_gain)
+
+    surf_gain = 20 * np.ones(ns)
+
+    # write to file
+    with open(f"{filename}.txt", "w") as f:
+        for g1, g2 in zip(surf_gain, gain_array):
+            f.write(f"{g1},{g2}\n")
+
     
 def plot_SHARAD_RDR(data, geometry):
 
