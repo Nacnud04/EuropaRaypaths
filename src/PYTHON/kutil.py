@@ -475,7 +475,7 @@ def rxOpenWindow(data, filename, ns):
 
 def gainCorrection(filename, ns):
 
-    gainSt = 37.5
+    gainSt = 39
     gainEn = 35
 
     high_gain = int(ns * (800 / 2000))

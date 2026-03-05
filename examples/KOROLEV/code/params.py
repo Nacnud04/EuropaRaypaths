@@ -62,7 +62,7 @@ with open("data/params.pkl", 'wb') as hdl:
 
 # --- EXPORT RX OPENING WINDOW ---
 
-NS = 2000
+NS = 3000
 sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
 data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
 ku.rxOpenWindow(data, "data/rx_window_positions", NS)
@@ -129,7 +129,7 @@ korolev_interior = ku.import_korolev_interior("data/Subsurface/")
 trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 # convert from trace number and depth into many facets
-tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=2, min_depth=0.75)
+tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=0.75)
 
 # export
 ku.target_norms_to_obj("data/Subsurface", "KOR_T_MAPPED",

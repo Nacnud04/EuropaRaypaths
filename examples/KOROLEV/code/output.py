@@ -10,7 +10,7 @@ import output_handling as oh
 import unit_convs      as uc
 
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
-params['ns'] = 2000
+params['ns'] = 3000
 params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params, rx_win_file="data/rx_window_positions.npy")

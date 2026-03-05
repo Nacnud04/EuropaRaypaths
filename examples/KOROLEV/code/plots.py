@@ -31,7 +31,7 @@ data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, l
 #ku.plot_SHARAD_RDR(data, geometry)
 
 par = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
-par['ns'] = 2000
+par['ns'] = 3000
 par['spacing'] = 225.758820 # spacing between sources in [m]
 
 rdrgrm = np.load("output/rdrgrm.npy")
