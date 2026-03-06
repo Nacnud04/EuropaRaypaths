@@ -14,10 +14,10 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 20e6,        # Radar frequency [Hz]
     "bandwidth": 10e6,        # Radar bandwidth [Hz]
-    "surface_gain": 20,       # Antenna gain [dB]
-    "subsurface_gain": 35,    # Subsurface antenna gain [dB]
+    "surface_gain": 23.75,       # Antenna gain [dB]
+    "subsurface_gain": 40,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 1,            # aperture (from nadir->edge) [deg]
+    "aperture": 0.5,            # aperture (from nadir->edge) [deg]
     "gain_pattern_file": "data/source_gain.txt", # file with gain pattern [dB]
 
     # receive window parameters

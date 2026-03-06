@@ -475,8 +475,8 @@ def rxOpenWindow(data, filename, ns):
 
 def gainCorrection(filename, ns):
 
-    gainSt = 39
-    gainEn = 35
+    gainSt = 44
+    gainEn = 40
 
     high_gain = int(ns * (800 / 2000))
     low_gain  = int(ns * (825 / 2000))
@@ -485,7 +485,7 @@ def gainCorrection(filename, ns):
     gain_array[:high_gain] = gainSt
     gain_array[high_gain:low_gain] = np.linspace(gainSt, gainEn, low_gain - high_gain)
 
-    surf_gain = 20 * np.ones(ns)
+    surf_gain = 23.75 * np.ones(ns)
 
     # write to file
     with open(f"{filename}.txt", "w") as f:
