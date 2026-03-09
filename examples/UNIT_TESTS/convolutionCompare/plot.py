@@ -1,15 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import pickle
+import pickle, sys
+
+sys.path.append("../../../src/PYTHON")
+import rdr_plots       as rp
 
 directory = "rdrgrms/"
-unfocused_files = ["NoConv_raw.npz", "CircConv_raw.npz", "LinConv_raw.npz"]
-focused_files   = ["NoConv_focused.npz", "CircConv_focused.npz", "LinConv_focused.npz"]
-names           = ["Original", "Circular Convolution", "Linear Convolution"]
+unfocused_files = ["NoConv_raw.npz", "LinConv_raw.npz"]
+focused_files   = ["NoConv_focused.npz", "LinConv_focused.npz"]
+names           = ["Original", "Linear Convolution"]
 
 with open("inputs/NoConv.pkl", 'rb') as hdl:
     params = pickle.load(hdl)
 
+rp.TGRS_rdrgrm_conv(params, directory, focused_files, unfocused_files, names)
+
+"""
 # 5 rows: 3 methods + 2 diff rows, 2 columns: unfocused and focused
 fig, axes = plt.subplots(5, 2, figsize=(15, 18))
 
@@ -26,11 +32,11 @@ for i, (unf_file, foc_file, name) in enumerate(zip(unfocused_files, focused_file
               2*params["rx_window_offset_m"]/299.792458]
 
     # Plot unfocused and focused images with colorbars
-    im_unf = axes[i][0].imshow(rdrgrm_unf, aspect='auto', cmap='viridis', interpolation='nearest', vmin=-20, extent=extent)
+    im_unf = axes[i][0].imshow(rdrgrm_unf, aspect='auto', cmap='viridis', interpolation='nearest', vmin=45, extent=extent)
     axes[i][0].set_title(f"{name} - Unfocused")
     fig.colorbar(im_unf, ax=axes[i][0])
 
-    im_foc = axes[i][1].imshow(rdrgrm_foc, aspect='auto', cmap='viridis', interpolation='nearest', vmin=0, extent=extent)
+    im_foc = axes[i][1].imshow(rdrgrm_foc, aspect='auto', cmap='viridis', interpolation='nearest', vmin=60, extent=extent)
     axes[i][1].set_title(f"{name} - Focused")
     fig.colorbar(im_foc, ax=axes[i][1])
 
@@ -52,3 +58,4 @@ for j, conv_idx in enumerate([1, 2]):  # indices for Circular and Linear Convolu
 plt.tight_layout()
 plt.savefig("ConvolutionComparison.png")
 plt.close()
+"""
