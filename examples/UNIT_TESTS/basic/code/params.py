@@ -9,11 +9,11 @@ params = {
     "power": 100,             # Transmitter power [W]
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
-    "surface_gain": 32,       # Antenna gain [dB]
+    "surface_gain": 36,       # Antenna gain [dB]
     "subsurface_gain": 47,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 7,           # aperture (from nadir->edge) [deg]
+    "aperture": 2,           # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  10e3,         # receive window length [m]
@@ -48,7 +48,7 @@ params = {
     "ny": 400,
 
     # target params
-    "rerad_funct": 1,  # 1-degree boxcar
+    "rerad_funct": 2,  # 1-degree boxcar
 
     # processing parameters (BOOLEAN)
     "convolution": True,   # use convolution-based processing

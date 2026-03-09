@@ -420,7 +420,7 @@ def plot_unfoc_foc(rdrgrm, focused, rx_win, OBS, geometry=None,
         np.min(rx_win)/1e3 + 7.5, np.min(rx_win)/1e3,
     ]
 
-    fig, ax = plt.subplots(2, 1, figsize=(8, 8), sharey=True)
+    fig, ax = plt.subplots(2, 1, figsize=(10, 7), sharey=True)
 
     # rdrgrms
     im1 = ax[0].imshow(rdrgrm, vmin=rdrmin, vmax=rdrmax, cmap="viridis", aspect=aspect, extent=extent)
@@ -464,4 +464,57 @@ def plot_unfoc_foc(rdrgrm, focused, rx_win, OBS, geometry=None,
     # export
     plt.tight_layout(rect=(0.08, 0, 1, 1))
     plt.savefig("figures/output.png")
+    plt.close()
+
+
+def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename, 
+                        vminrdr=None, vminfoc=None, linspace=True, c1=299792458):
+
+    if linspace:
+        azmin = par['sx0']
+        azmax = par['sx0'] + par['sdx'] * par['ns']
+    else:
+        raise NotImplementedError("Cannot handle uneven source spacing yet.")
+    
+    rb = int((par["rx_window_m"] / c1) / (1 / par["rx_sample_rate"]))
+    
+    extent = (azmin/1e3, azmax/1e3, 2*((par['rx_window_offset_m'] + par['rx_window_m'])/c1)*10**6,
+        2*(par['rx_window_offset_m']/c1)*10**6)
+
+    fig, ax = plt.subplots(2, 1, figsize=(3, 5), constrained_layout=True, dpi=300)
+
+    # radargram panel
+    im0 = ax[0].imshow(uc.lin_to_db(np.abs(rdrgrm)), cmap="viridis",
+                    aspect=par['aspect'], extent=extent,
+                    vmin=vminrdr)
+
+    # focused panel
+    im1 = ax[1].imshow(uc.lin_to_db(np.abs(focused)), cmap="viridis",
+                    aspect=par['aspect'], extent=extent,
+                    vmin=vminfoc)
+
+    # labels and text
+    labels = ["(a)", "(b) Focused"]
+    fontsizes = (11, 11, 9)
+    for a, label, fs in zip(ax, labels, fontsizes):
+        a.set_ylabel("Range [µs]", fontsize=11)
+        a.tick_params(axis="both", which="major", labelsize=9, direction="out")
+        a.tick_params(axis="both", which="minor", direction="out")
+        a.text(0.02, 0.95, label, transform=a.transAxes, fontsize=fs,
+            fontweight="bold", va="top", ha="left", color="black",
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
+
+    ax[1].set_xlabel("Azimuth [km]", fontsize=11)
+
+    # colorbars
+    ims = [im0, im1]
+    for a, im in zip(ax, ims):
+        cax = inset_axes(a, width="3%", height="100%",
+                        loc='center right', borderpad=-2)  # negative pad pushes it outward
+        cbar = fig.colorbar(im, cax=cax, orientation="vertical")
+        cbar.ax.tick_params(labelsize=7)
+        cbar.set_label("Power [dB]", fontsize=8, labelpad=2)
+
+    plt.savefig(f"{filename}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{filename}.pgf", dpi=300, bbox_inches="tight")
     plt.close()

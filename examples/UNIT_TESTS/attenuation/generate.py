@@ -19,7 +19,7 @@ params = {
     "subsurface_gain": 50,    # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 7,            # aperture (from nadir->edge) [deg]
+    "aperture": 3,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  10e3,         # receive window length [m]
@@ -54,7 +54,7 @@ params = {
     "ny": 400,
 
     # target params
-    "rerad_funct": 1,  # 1-degree boxcar
+    "rerad_funct": 2,  # 1-degree boxcar
 
     # attenuation geometry file (NOT REQUIRED)
     "attenuation_geometry_file":"params/halfspace.txt",
@@ -103,7 +103,7 @@ tys[0] = 0
 tzs[0] = -1500
 
 # now generate layer
-tspace = 300
+tspace = 100
 for x in np.arange(params['sx0'], params['sx0']+params['sdx']*params['ns'], tspace):
     txs.append(x)
     tys.append(0)
