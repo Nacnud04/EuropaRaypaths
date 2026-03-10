@@ -27,7 +27,7 @@ NoOffset = ku.correct_rdrgrm(rdrgrm, aeroid)
 # FIRST LOAD REAL DATA 
 sharad_data_path = "data/Observation/rdr-cosharps/r_0554201_001_ss19_700_a.dat"
 
-data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
+#data = ku.load_SHARAD_RDR(sharad_data_path, st=18000, en=30000, latmin=70.768, latmax=74.2075)
 #ku.plot_SHARAD_RDR(data, geometry)
 
 par = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
@@ -63,7 +63,7 @@ ymin, ymax = ku.corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction)
 
 # load in crater interior
 korolev_interior = ku.import_korolev_interior("data/Subsurface/")
-trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola)
+trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 plotpar = {
     'obs': OBS,
@@ -88,7 +88,7 @@ rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola['TOPO'], p
 
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
-rp.plot_unfoc_foc(rdr_db, foc_db, rx_win, OBS, 
-                    rdrmin=-15, rdrmax=5, 
+rp.TGRS_KOR1_SYN(rdr_db, foc_db, rx_win, OBS, mola, aeroid, plotpar, geometry=geometry,
+                    rdrmin=-15, rdrmax=5, trc_st=trc_st, trc_en=trc_en,
                     focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
                     ymax=319)

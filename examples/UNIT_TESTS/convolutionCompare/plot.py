@@ -8,7 +8,7 @@ import rdr_plots       as rp
 directory = "rdrgrms/"
 unfocused_files = ["NoConv_raw.npz", "LinConv_raw.npz"]
 focused_files   = ["NoConv_focused.npz", "LinConv_focused.npz"]
-names           = ["Original", "Linear Convolution"]
+names           = ["Non-Convolution", "Linear Convolution"]
 
 with open("inputs/NoConv.pkl", 'rb') as hdl:
     params = pickle.load(hdl)

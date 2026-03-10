@@ -518,3 +518,149 @@ def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename,
     plt.savefig(f"{filename}.png", dpi=300, bbox_inches="tight")
     plt.savefig(f"{filename}.pgf", dpi=300, bbox_inches="tight")
     plt.close()
+
+
+
+def TGRS_rdrgrm_conv(params, directory, focused_files, unfocused_files, names):
+
+    scl = 0.75
+    pad = 12
+    fig, axes = plt.subplots(3, 2, figsize=(scl*10, scl*12), sharey=True, sharex=True)
+
+    # Column titles
+    fig.text(0.31, 0.95, "Unfocused", ha='center', fontsize=16, fontweight="bold")
+    fig.text(0.74, 0.95, "Focused", ha='center', fontsize=16, fontweight="bold")
+
+    rdrgrm_unf_orig = np.load(directory + unfocused_files[0])['rdrgrm']
+    rdrgrm_foc_orig = np.load(directory + focused_files[0])['focused']
+
+    for i, (unf_file, foc_file, name) in enumerate(zip(unfocused_files, focused_files, names)):
+
+        # Row title
+        fig.text(0.035, 0.8 - i*0.30, name, va='center', rotation=90, fontsize=14, fontweight="bold")
+
+        rdrgrm_unf = np.load(directory + unf_file)['rdrgrm']
+        rdrgrm_foc = np.load(directory + foc_file)['focused']
+
+        extent = [-5, 5,
+                2*(params["rx_window_offset_m"] + params["rx_window_m"])/299.792458,
+                2*params["rx_window_offset_m"]/299.792458]
+
+        # Unfocused
+        im_unf = axes[i][0].imshow(rdrgrm_unf, aspect='auto', cmap='viridis',
+                                interpolation='nearest', vmin=-5, extent=extent)
+        cbar = fig.colorbar(im_unf, ax=axes[i][0], fraction=0.046, pad=0.02)
+        cbar.set_label("Power [dB]", rotation=270, labelpad=pad)
+        cbar.ax.tick_params(labelsize=8)
+        cbar.ax.xaxis.set_label_position('top')
+
+        # Focused
+        im_foc = axes[i][1].imshow(rdrgrm_foc, aspect='auto', cmap='viridis',
+                                interpolation='nearest', vmin=10, extent=extent)
+        cbar = fig.colorbar(im_foc, ax=axes[i][1], fraction=0.046, pad=0.02)
+        cbar.set_label("Power [dB]", rotation=270, labelpad=pad)
+        cbar.ax.tick_params(labelsize=8)
+        cbar.ax.xaxis.set_label_position('top')
+
+        # Add y-axis label only on left column
+        axes[i][0].set_ylabel("Range [µs]")
+
+    # Difference row
+    j = 0
+    conv_idx = 1
+    row_idx = len(focused_files) + j
+
+    fig.text(0.035, 0.8 - row_idx*0.30, f"Difference",
+            va='center', rotation=90, fontsize=14, fontweight="bold")
+
+    lims = 5
+    diff_unf = np.load(directory + unfocused_files[conv_idx])['rdrgrm'] - rdrgrm_unf_orig
+    im_diff_unf = axes[row_idx][0].imshow(diff_unf, aspect='auto', cmap='coolwarm',
+                                        interpolation='nearest', vmin=-lims, vmax=lims,
+                                        extent=extent)
+
+    diff_foc = np.load(directory + focused_files[conv_idx])['focused'] - rdrgrm_foc_orig
+    im_diff_foc = axes[row_idx][1].imshow(diff_foc, aspect='auto', cmap='coolwarm',
+                                        interpolation='nearest', vmin=-lims, vmax=lims,
+                                        extent=extent)
+
+    cbar = fig.colorbar(im_diff_unf, ax=axes[row_idx][0], fraction=0.046, pad=0.02)
+    cbar.set_label("Difference [dB]", rotation=270, labelpad=pad)
+    cbar.ax.xaxis.set_label_position('top')
+    cbar.ax.tick_params(labelsize=8)
+
+    cbar = fig.colorbar(im_diff_foc, ax=axes[row_idx][1], fraction=0.046, pad=0.02)
+    cbar.set_label("Difference [dB]", rotation=270, labelpad=pad)
+    cbar.ax.xaxis.set_label_position('top')
+    cbar.ax.tick_params(labelsize=8)
+
+    # Axis labels for the last row
+    axes[row_idx][0].set_xlabel("Azimuth [km]")
+    axes[row_idx][1].set_xlabel("Azimuth [km]")
+    axes[row_idx][0].set_ylabel("Range [µs]")
+
+    plt.tight_layout(rect=[0.06, 0, 1, 0.95])
+    plt.savefig("TGRS-CONV-COMP.png")
+    plt.savefig("TGRS-CONV-COMP.pgf")
+    plt.close()
+
+
+def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=None,
+                   trc_st=750, trc_en=1200,
+                   rdrmin=22, rdrmax=35, focmin=35, focmax=45,
+                   aspect="auto", ymin=314.15, ymax=318):
+
+    Nr, Na = rdrgrm.shape
+
+    extent = [
+        geometry['LAT'].iloc[0], geometry['LAT'].iloc[-1],
+        np.min(rx_win)/1e3 + 7.5, np.min(rx_win)/1e3,
+    ]
+
+    fig, ax = plt.subplots(3, 1, figsize=(10, 6), sharex=True, constrained_layout=True)
+
+    ax[0].set_xlim(geometry['LAT'].iloc[0], geometry['LAT'].iloc[-1])
+    if "trc" in plotpar.keys() and "depth" in plotpar.keys():
+        i = 0
+        for data in zip(plotpar["trc"], plotpar["depth"]):
+            lat_subsrf = aeroid['LAT'][data[0]]
+            depth_subsrf = data[1] + 315.4
+            if np.any(depth_subsrf < 316):
+                continue
+            else:
+                if i == 0:
+                    ax[0].plot(lat_subsrf, depth_subsrf, color="red", linewidth=1, label="Subsurface Layers")
+                else:
+                    ax[0].plot(lat_subsrf, depth_subsrf, color="red", linewidth=1)
+                i += 1
+
+    ax[0].plot(mola['LAT'], mola['SRANGE']/1e3, color="black", linewidth=1, label="Surface Topography")
+    ax[0].legend()
+
+    # rdrgrms
+    im1 = ax[1].imshow(rdrgrm, vmin=rdrmin, vmax=rdrmax, cmap="viridis", aspect=aspect, extent=extent)
+    plt.colorbar(im1, label="Power [dB]", pad=0.01)
+    im2 = ax[2].imshow(focused, extent=extent, vmin=focmin, vmax=focmax, aspect=aspect)
+    plt.colorbar(im2, label="Power [dB]", pad=0.01)
+
+    # labels
+    for a in ax: a.set_ylabel("Range [km]")
+    ax[2].set_xlabel("Latitude [deg]")
+
+    labels = ["(a) 2D Slice","(b) Unfocused", "(c) Focused"]
+    fontsizes = (11, 11, 11)
+    for a, label, fs in zip(ax, labels, fontsizes):
+        
+        a.tick_params(axis="both", which="major", labelsize=9, direction="out")
+        a.tick_params(axis="both", which="minor", direction="out")
+        a.text(0.011, 0.95, label, transform=a.transAxes, fontsize=fs,
+            fontweight="bold", va="top", ha="left", color="black",
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
+
+    # cropping
+    for a in ax: a.set_ylim(ymax, ymin)
+
+    # export
+    plt.savefig("figures/TGRS-KOR2-SYN.png")
+    plt.savefig("figures/TGRS-KOR2-SYN.pgf")
+    plt.close()
