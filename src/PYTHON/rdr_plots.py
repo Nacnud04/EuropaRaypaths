@@ -295,7 +295,7 @@ def plot_rdr_attenuation_prof(rdr, focused, attenuation_file, params, savefig):
 
 
 def plot_SHARAD_comparison(real, synth, geometry, aeroid, 
-                           mola, plotpar):
+                           mola, plotpar, layers=False):
 
     # set sharad params
     ADC_SAMP_INT = 0.0375e-6
@@ -384,7 +384,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     cbar1.set_label("Synthetic Power [dB]", rotation=270, labelpad=-6)
 
     cbar2 = fig.colorbar(mappable_rea, cax=cax2)
-    cbar2.set_label("Real Power [?]", rotation=270, labelpad=-6)
+    cbar2.set_label("Normalized Real Power [dB]", rotation=270, labelpad=-6)
 
     ticklocs = [0, 0.25, 0.75, 1.0]
     cbar1.set_ticks(ticklocs)
@@ -394,7 +394,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     cbar2.set_ticklabels([f"{t:.1f}" for t in ticklocs], fontsize=8)
 
     # if there is a subsurface plot the layers
-    if "trc" in plotpar.keys() and "depth" in plotpar.keys():
+    if "trc" in plotpar.keys() and "depth" in plotpar.keys() and layers == True:
         for data in zip(plotpar["trc"], plotpar["depth"]):
             lat_subsrf = aeroid['LAT'][data[0]]
             depth_subsrf = data[1] + 315.4
@@ -403,9 +403,10 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     # labels
     ax.set_xlabel("Latitude [deg]")
     ax.set_ylabel("Range [km]")
-    ax.set_title(f"SHARAD Obs. {plotpar['obs']}", fontsize=18, fontweight="bold")
+    #ax.set_title(f"SHARAD Obs. {plotpar['obs']}", fontsize=18, fontweight="bold")
 
-    plt.savefig(plotpar['savefig'], dpi=300, bbox_inches="tight")
+    plt.savefig(f"{plotpar['savefig']}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{plotpar['savefig']}.pgf", dpi=300, bbox_inches="tight")
     plt.close()
 
 

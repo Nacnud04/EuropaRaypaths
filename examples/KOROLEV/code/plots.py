@@ -66,8 +66,8 @@ korolev_interior = ku.import_korolev_interior("data/Subsurface/")
 trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 plotpar = {
-    'obs': OBS,
-    'savefig': "figures/KOROLEV.png",
+    'obs': "554201000",
+    'savefig': "figures/KOROLEV",
     'trc_st': trc_st,
     'trc_en': trc_en,
     'rea_rng_st': rea_rng_st,
@@ -77,7 +77,7 @@ plotpar = {
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
     'syn_min': 0,
-    'syn_max': 8,
+    'syn_max': 9,
     "trc":trc,
     "depth":depth,
 }
