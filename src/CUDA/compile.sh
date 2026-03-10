@@ -3,7 +3,7 @@
 if [ "$(hostname)" = "hpdl380g6" ]; then
     echo "Compiling for hpdl380g6"
     nvcc sim.cu -O3 -lineinfo -o sim -lcufft \
-    --compiler-bindir=/usr/bin/g++-8 \
+    --compiler-bindir=/usr/bin/g++-8 -lstdc++fs \
     -gencode=arch=compute_30,code=sm_30
 
 elif [ "$(hostname)" = "CCAR-L-006" ]; then

@@ -30,6 +30,8 @@
 #include <sys/stat.h>
 #include <stdexcept>
 #include <string>
+#include <dirent.h>
+#include <unistd.h>
 
 using json = nlohmann::json;
 
@@ -500,32 +502,47 @@ __host__ void loadRxWindowPositions(FILE* file,
 }
 
 
-__host__ void remove_s_txt_files(const std::filesystem::path& dir)
+__host__ void remove_s_txt_files(const std::string& dir)
 {
-    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
+    DIR* dp = opendir(dir.c_str());
+    if (!dp) {
         std::cerr << "Invalid directory\n";
         return;
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
-        if (!entry.is_regular_file())
+    struct dirent* entry;
+    while ((entry = readdir(dp)) != nullptr) {
+
+        // Skip "." and ".."
+        if (strcmp(entry->d_name, ".") == 0 ||
+            strcmp(entry->d_name, "..") == 0)
             continue;
 
-        const auto& path = entry.path();
-        const std::string filename = path.filename().string();
+        std::string filename(entry->d_name);
 
-        // Match: s*.txt
-        if (filename.size() >= 5 &&
-            filename[0] == 's' &&
-            path.extension() == ".txt")
-        {
-            std::filesystem::remove(path);
-            std::cout << "Clearing write directory... Removed: " << path << "         \r";
+        // Must start with 's'
+        if (filename.empty() || filename[0] != 's')
+            continue;
+
+        // Must end with ".txt"
+        if (filename.size() < 5 ||
+            filename.substr(filename.size() - 4) != ".txt")
+            continue;
+
+        // Build full path
+        std::string fullpath = dir + "/" + filename;
+
+        // Remove file
+        if (unlink(fullpath.c_str()) == 0) {
+            std::cout << "Clearing write directory... Removed: "
+                      << fullpath << "         \r";
         }
     }
 
+    closedir(dp);
     std::cout << "\n" << std::endl;
 }
+
 
 
 __host__ void loadGainFile(FILE* file, const int ns,

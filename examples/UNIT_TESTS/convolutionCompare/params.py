@@ -18,7 +18,7 @@ params = {
     # receive window parameters
     "rx_window_m":  10e3,         # receive window length [m]
     "rx_window_offset_m": 7.5e3,  # receive window offset [m]
-    "rx_sample_rate": 48e6,       # receive sample rate [Hz]
+    "rx_sample_rate": 18e6,       # receive sample rate [Hz]
 
     # surface parameters
     "sigma": 1,              # sigma [?]
