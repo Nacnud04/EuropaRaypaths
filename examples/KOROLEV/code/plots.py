@@ -63,7 +63,7 @@ ymin, ymax = ku.corrected_ymin_ymax(rdrgrm, aeroid, trc_st, trc_en, correction)
 
 # load in crater interior
 korolev_interior = ku.import_korolev_interior("data/Subsurface/")
-trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
+trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola)
 
 plotpar = {
     'obs': "554201000",

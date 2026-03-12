@@ -600,6 +600,14 @@ def TGRS_rdrgrm_conv(params, directory, focused_files, unfocused_files, names):
     axes[row_idx][1].set_xlabel("Azimuth [km]")
     axes[row_idx][0].set_ylabel("Range [µs]")
 
+    # subplot labels
+    labels = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
+    fontsizes = (11, 11, 11, 11, 11, 11)
+    for a, label, fs in zip(axes.flatten(), labels, fontsizes):
+        a.text(0.04, 0.96, label, transform=a.transAxes, fontsize=fs,
+            fontweight="bold", va="top", ha="left", color="black",
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
+
     plt.tight_layout(rect=[0.06, 0, 1, 0.95])
     plt.savefig("TGRS-CONV-COMP.png")
     plt.savefig("TGRS-CONV-COMP.pgf")
@@ -607,7 +615,7 @@ def TGRS_rdrgrm_conv(params, directory, focused_files, unfocused_files, names):
 
 
 def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=None,
-                   trc_st=750, trc_en=1200,
+                   trc_st=750, trc_en=1200, c=299.792458,
                    rdrmin=22, rdrmax=35, focmin=35, focmax=45,
                    aspect="auto", ymin=314.15, ymax=318):
 
@@ -615,7 +623,7 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
 
     extent = [
         geometry['LAT'].iloc[0], geometry['LAT'].iloc[-1],
-        np.min(rx_win)/1e3 + 7.5, np.min(rx_win)/1e3,
+        (np.min(rx_win) + 7.5e3)/c, (np.min(rx_win))/c,
     ]
 
     fig, ax = plt.subplots(3, 1, figsize=(10, 6), sharex=True, constrained_layout=True)
@@ -630,12 +638,12 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
                 continue
             else:
                 if i == 0:
-                    ax[0].plot(lat_subsrf, depth_subsrf, color="red", linewidth=1, label="Subsurface Layers")
+                    ax[0].plot(lat_subsrf, (depth_subsrf*1e3)/c, color="red", linewidth=1, label="Subsurface Layers")
                 else:
-                    ax[0].plot(lat_subsrf, depth_subsrf, color="red", linewidth=1)
+                    ax[0].plot(lat_subsrf, (depth_subsrf*1e3)/c, color="red", linewidth=1)
                 i += 1
 
-    ax[0].plot(mola['LAT'], mola['SRANGE']/1e3, color="black", linewidth=1, label="Surface Topography")
+    ax[0].plot(mola['LAT'], mola['SRANGE']/c, color="black", linewidth=1, label="Surface Topography")
     ax[0].legend()
 
     # rdrgrms
@@ -645,7 +653,7 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
     plt.colorbar(im2, label="Power [dB]", pad=0.01)
 
     # labels
-    for a in ax: a.set_ylabel("Range [km]")
+    for a in ax: a.set_ylabel("Range [$\mu$s]")
     ax[2].set_xlabel("Latitude [deg]")
 
     labels = ["(a) 2D Slice","(b) Unfocused", "(c) Focused"]
@@ -659,9 +667,9 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
             bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
 
     # cropping
-    for a in ax: a.set_ylim(ymax, ymin)
+    for a in ax: a.set_ylim((ymax*1e3)/c, (ymin*1e3)/c)
 
     # export
-    plt.savefig("figures/TGRS-KOR2-SYN.png")
-    plt.savefig("figures/TGRS-KOR2-SYN.pgf")
+    plt.savefig("figures/TGRS-KOR1-SYN.png")
+    plt.savefig("figures/TGRS-KOR1-SYN.pgf")
     plt.close()
