@@ -32,7 +32,7 @@ params = {
 
     # atmosphere/subsurface parameters
     "eps_1": 1.0,            # permittivity of medium 1 
-    "eps_2": 3.15,           # permittivity of medium 2
+    "eps_2": 3.18,           # permittivity of medium 2
     "sig_1": 0.0,            # conductivity of medium 1 [S/m]
     "sig_2": 1e-6,           # conductivity of medium 2 [S/m]
     "mu_1": 1.0,             # permeability of medium 1
