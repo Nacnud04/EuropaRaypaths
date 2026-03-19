@@ -18,3 +18,13 @@ rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focus
 
 params['aspect'] = 'auto'
 rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=-10, vminfoc=10)
+
+# calc focusing gain
+import numpy as np
+targ_loc = np.unravel_index(np.argmax(np.abs(focused)), focused.shape)
+unfoc_pow = 10*np.log10(np.abs(rdrgrm[targ_loc]))
+foc_pow   = 10*np.log10(np.abs(focused[targ_loc]))
+
+print(f"Unfocused power at target: {unfoc_pow:.2f} dB")
+print(f"Focused power at target: {foc_pow:.2f} dB")
+print(f"Focusing gain: {foc_pow - unfoc_pow:.2f} dB")
