@@ -329,7 +329,7 @@ __global__ void compTargetRays(float tx, float ty, float tz,
 
         // regions not in prisms also attenuate by the background alpha
         exponent += alpha2 * (d_Ttd[idx] - total_atten_dist);
-        float atten = expf(-2 * exponent);
+        float atten = expf(-4 * exponent);
 
         // apply attenuation to ray weights in and out
         d_fRefrEI[idx] = atten;
@@ -426,9 +426,8 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
             d_fRfrC[idx] = 0.0f;
         }
 
-        // signal attenuation
-        // NOTE: This exponent may need to be to -4x as it is a 2-way signal.
-        float atm_atten = expf(-2.0f * alpha1 * d_Itd[idx])
+        // signal attenuation (-4 b/c power & 2 way travel)
+        float atm_atten = expf(-4.0f * alpha1 * d_Itd[idx]);
         d_fRe[idx] = d_fRe[idx] * atm_atten;
         // account for atmospheric attenuation for the subsurface ray weights
         d_fRfrC[idx] = d_fRfrC[idx] * atm_atten;
