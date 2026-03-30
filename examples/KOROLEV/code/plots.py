@@ -8,7 +8,6 @@ sys.path.append("../../src/PYTHON")
 import rdr_plots       as rp
 import unit_convs      as uc
 import output_handling as oh
-import rdr_plots       as rp
 import kutil           as ku
 
 # Load Co-SHARPS downsampled orbit:
@@ -91,4 +90,4 @@ geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
 rp.TGRS_KOR1_SYN(rdr_db, foc_db, rx_win, OBS, mola, aeroid, plotpar, geometry=geometry,
                     rdrmin=-15, rdrmax=5, trc_st=trc_st, trc_en=trc_en,
                     focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
-                    ymax=319)
+                    ymax=319, show=True)

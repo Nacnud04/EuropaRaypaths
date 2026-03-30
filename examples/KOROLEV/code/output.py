@@ -42,6 +42,7 @@ sat_x, sat_y, sat_z = uc.interpolate_sources(params['ns'], sat_x, sat_y, sat_z)
 sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 
 params['spacing'] = uc.estimate_spacing(sat_x, sat_y, sat_z)
+print(f"Estimated spacing between sources is {params['spacing']} m")
 params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
 
 focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=750)

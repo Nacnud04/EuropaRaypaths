@@ -15,6 +15,7 @@ import output_handling as oh
 # matplotlib configuration for LaTeX
 os.environ["PATH"] += os.pathsep + '/usr/share/texlive/texmf-dist/tex/xelatex'
 
+
 matplotlib.use("pgf")
 matplotlib.rcParams.update({
     "pgf.texsystem": "pdflatex",
@@ -22,6 +23,7 @@ matplotlib.rcParams.update({
     'text.usetex': True,
     'pgf.rcfonts': False,
 })
+
 
 def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=None):
 
@@ -412,7 +414,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
 
 def plot_unfoc_foc(rdrgrm, focused, rx_win, OBS, geometry=None,
                    rdrmin=22, rdrmax=35, focmin=35, focmax=45,
-                   aspect=250, ymin=314.15, ymax=318):
+                   aspect=250, ymin=314.15, ymax=318, show=False):
 
     Nr, Na = rdrgrm.shape
 
@@ -465,6 +467,10 @@ def plot_unfoc_foc(rdrgrm, focused, rx_win, OBS, geometry=None,
     # export
     plt.tight_layout(rect=(0.08, 0, 1, 1))
     plt.savefig("figures/output.png")
+
+    if show:
+        plt.show()
+
     plt.close()
 
 
@@ -617,7 +623,7 @@ def TGRS_rdrgrm_conv(params, directory, focused_files, unfocused_files, names):
 def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=None,
                    trc_st=750, trc_en=1200, c=299.792458,
                    rdrmin=22, rdrmax=35, focmin=35, focmax=45,
-                   aspect="auto", ymin=314.15, ymax=318):
+                   aspect="auto", ymin=314.15, ymax=318, show=False):
 
     Nr, Na = rdrgrm.shape
 
@@ -672,4 +678,8 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
     # export
     plt.savefig("figures/TGRS-KOR1-SYN.png")
     plt.savefig("figures/TGRS-KOR1-SYN.pgf")
+
+    if show:
+        plt.show()
+
     plt.close()
