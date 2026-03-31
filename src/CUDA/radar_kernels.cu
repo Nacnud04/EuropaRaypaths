@@ -633,3 +633,122 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
     cudaFree(d_PADchirp);
     cudaFree(d_PADphasor);
 }
+
+
+// reradiation pattern for hertzian dipole
+__device__ float hertz_dipole(float th) {
+    return 1.5 * powf(sinf(th), 2);
+}
+
+
+// this function sums input ray weights to get current the target
+__global__ void accumulateTarget(float* d_PTarget, float rst, float dr, int nr, int nfacets,
+                                 float* d_Tth, float* d_Tph, float* d_Ttd,
+                                 float* d_fRefrEI, float* d_fRfrSR, 
+                                 float P, float G, float lam, float fs, float c, float c2) {
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id < nfacets) {
+
+        // effective aperture constant
+        float Ae = (lam * lam) / (4.0f * pi);
+
+        // UNIT: [W] - power at surface facet
+        float Pfacet = beaconEq(P, G, fs, lam, d_fRfrSR[id]-d_Ttd[id], nfacets);
+
+        // UNIT: [W/m^2] - power density in subsurface just before target
+        // NOTE: losses through facet beam pattern is accounted for through d_fRefrEI
+        float Ssub = Pfacet * d_fRefrEI[id] * \
+                     beaconPowerDensity(P, G, d_Ttd[id]);
+
+        // get solid angle ray weight (known as spat)
+        float solid_angle_weight = ((fs * fs) / (d_Ttd[id] * d_Ttd[id])) / (4.0f * pi);
+
+        // find the gain in the inbound ray direction
+        float G_dipole = hertz_dipole(d_Tth[id] + (3.141559/2));
+
+        // evaluate to find the individual power contribution
+        float Pray = Ssub * solid_angle_weight * Ae * G_dipole;
+
+        // identify exact range bin to add into
+        // note that this is all halved b/c one way propagation into the subsurface
+        float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (c / c2);
+        short bin = (short)((rngt - rst) / dr);
+        
+        // atomic add into range bin
+        if ((bin < 0) || (bin >= nr)) {
+            // out of range, do nothing
+        } else {
+            atomicAdd(&(d_PTarget[bin]), Pray);
+        }
+
+    }
+
+}
+
+
+// radiate target outward and compute power received at source
+__global__ void radiateTarget(float* d_PSource, float rst, float dr, int nr, int nfacets,
+                              float* d_Tth, float* d_Tph, float* d_Ttd,
+                              float* d_fRefrEO, float* d_fRfrSR, 
+                              float P, float G, float lam, float fs, float c, float c2) {
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id < nfacets) {
+
+        // effective aperture constant
+        float Ae = (lam * lam) / (4.0f * pi);
+
+        // NOTE: All power is normalized to 1 watt, as convolution with the inward 
+        //       phasor trace will scale the final signal by the reradiated power.
+        //       So [W] -> [.], [W/m^2] -> [1/m^2]
+
+        // --- TARGET -> FACET ---
+
+        // Solid angle weight [spat]
+        float solid_angle_weight = ((fs * fs) / (d_Ttd[id] * d_Ttd[id])) / (4.0f * pi);
+
+        float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
+
+        // UNITS: Srad [W/m^2]
+        float Srad = (4 * pi) / (G_dipole * solid_angle_weight * lam * lam);
+
+        // this assumes across the facet, power density is constant
+        float Ae_fct = (fs * fs); // effective aperture of facet
+
+        // here we use the beacon equation to go from power density leaving target
+        // to the power density at the surface facet. Note that we use d_fRefrEO
+        // to account for facet beam pattern gain. Power is still normalized.
+        
+        // UNITS: Pfacet [W]
+        float Pfacet = Ae_fct * d_fRefrEO[id] * Srad * beaconEq(1, 1, fs, lam, d_Ttd[id], nfacets);
+
+        // --- FACET -> SOURCE ---
+
+        float rng_surf = d_fRfrSR[id] - d_Ttd[id];
+        // UNITS: Ssou [W/m^2]
+        float Ssou = beaconPowerDensity(Pfacet, G, rng_surf);
+
+        // get solid angle ray weight (units of spat)
+        solid_angle_weight = ((fs * fs) / (rng_surf * rng_surf)) / (4.0f * pi);
+
+        // evaluate to find the individual power contribution
+        float Pray = Ssou * solid_angle_weight * Ae * G;
+
+        // identify exact range bin to add into
+        // note that this is all halved b/c one way propagation into the subsurface
+        float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (c / c2);
+        short bin = (short)((rngt - rst) / dr);
+        
+        // atomic add into range bin
+        if ((bin < 0) || (bin >= nr)) {
+            // out of range, do nothing
+        } else {
+            atomicAdd(&(d_PSource[bin]), Pray);
+        }
+
+    }
+
+}

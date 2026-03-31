@@ -438,6 +438,11 @@ int main(int argc, const char* argv[])
         cudaMemsetAsync(d_refr_temp, 0, par.nr * sizeof(cuFloatComplex));
     }
 
+    // array for power function at target
+    float* d_Ptarg;
+    cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(float));
+    cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(float));
+
     // refracted signal
     cuFloatComplex* d_refr_sig;
     cudaMalloc((void**)&d_refr_sig, par.nr * sizeof(cuFloatComplex));
@@ -779,8 +784,21 @@ int main(int argc, const char* argv[])
                                                     par.fs, par.lam);
             checkCUDAError("compRefrEnergyIn kernel");
 
-            // --- COMPUTE UPWARD TRANSMITTED RAYS ---
+            // --- CALCULATE POWER AT TARGET ---
+            accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, par.rst, par.dr, par.nr, valid_facets,
+                                                       d_Tth, d_Tph, d_Ttd,
+                                                       d_fRefrEI, d_fRfrSR,
+                                                       par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
+            cudaDeviceSynchronize();
+            checkCUDAError("accumulateTarget kernel");
+            // write out d_Ptarg to file for debugging
+            char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
+            sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
+            saveFloatsToFile(Ptarg_filename, d_Ptarg, par.nr);
+            free(Ptarg_filename);
+            checkCUDAError("exportingTargetPower kernel");
 
+            // --- COMPUTE UPWARD TRANSMITTED RAYS ---
             compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
                                                         d_Ttd, d_Tth, d_Tph, 
                                                         d_fRefrEO, d_fRfrC, 
@@ -804,14 +822,6 @@ int main(int argc, const char* argv[])
             } else {
 
                 // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
-
-                /*
-                float subGain = par.Grefr_lin;
-                if (is < 800) {
-                    subGain = powf(10.0f, 37.5f/10.0f);
-                } else if ((is > 800) && (is < 825)) {
-                    subGain = powf(10.0f, (2.5f*((825-is)/25.0f) + 35.0f)/10.0f);
-                }*/
                 
                 // generate refracted phasor
                 genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 

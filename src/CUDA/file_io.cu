@@ -276,6 +276,20 @@ __host__ void saveSignalToFile(const char* filename, cuFloatComplex* d_sig, int 
 
 }
 
+__host__ void saveFloatsToFile(const char* filename, float* d_sig, int nr) {
+
+    // copy Itd to host and export as file
+    float* h_sig = (float*)malloc(nr * sizeof(float));
+    cudaMemcpy(h_sig, d_sig, nr * sizeof(float), cudaMemcpyDeviceToHost);
+    FILE* fItd = fopen(filename, "w");
+    // export real and imag parts
+    for (int i = 0; i < nr; i++) {
+        fprintf(fItd, "%e\n", h_sig[i]);
+    }
+    fclose(fItd);
+
+}
+
 #define BUF_SIZE 65536
 
 int count_lines(FILE* file, int counter_start = 1)

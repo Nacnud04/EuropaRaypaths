@@ -382,6 +382,22 @@ __device__ float radarEq(float P, float G, float fs, float lam, float dist, int 
 
 }
 
+__device__ float beaconEq(float P, float G, float fs, float lam, float dist, int nfacets){
+    
+    // note this is the radar equation using the RCS for a flat incident facet.
+    float num = P * G * fs * fs;
+    float denom = (4 * 3.14159) * dist * dist;
+    // note here we multiply by nfacets to account for coherent summation of facets
+    // where the RCS scales by nfacets^2 instead of nfacets
+    return num / denom;
+    //return nfacets * (num / denom);
+
+}
+
+__device__ float beaconPowerDensity(float P, float G, float dist) {
+    return (P * G) / (4 * 3.14159 * dist * dist);
+}
+
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,
@@ -487,14 +503,9 @@ __global__ void compRefrEnergyIn(
         // now we do similar for phi
         float delta_ph = d_Iph[id] - d_Tph[id];
         // compute facet reradiation
-        //float scl = 0.0f;
-        //if (abs(delta_th) < 0.01f) {
-        //    scl = 1.0;
-        //}
-        //d_fRefrEI[id] *= scl * facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
         d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
 
-        // refraction coefficient
+        // transmission coefficient
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
 
         // surface roughness losses
