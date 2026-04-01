@@ -443,6 +443,11 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(float));
     cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(float));
 
+    // array for power function at source
+    float* d_Psour;
+    cudaMalloc((void**)&d_Psour, par.nr * sizeof(float));
+    cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(float));
+
     // refracted signal
     cuFloatComplex* d_refr_sig;
     cudaMalloc((void**)&d_refr_sig, par.nr * sizeof(cuFloatComplex));
@@ -785,6 +790,7 @@ int main(int argc, const char* argv[])
             checkCUDAError("compRefrEnergyIn kernel");
 
             // --- CALCULATE POWER AT TARGET ---
+            // this is the inward phasor trace
             accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, par.rst, par.dr, par.nr, valid_facets,
                                                        d_Tth, d_Tph, d_Ttd,
                                                        d_fRefrEI, d_fRfrSR,
@@ -805,6 +811,20 @@ int main(int argc, const char* argv[])
                                                         par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
                                                         par.fs, par.P, par.lam, par.eps_1, par.eps_2);
             checkCUDAError("compRefrEnergyOut kernel");
+
+            // --- CALCULATE OUTWARD PHASOR TRACE ---
+            radiateTarget<<<numBlocks, blockSize>>>(d_Psour, par.rst, par.dr, par.nr, valid_facets,
+                                                    d_Tth, d_Tph, d_Ttd,
+                                                    d_fRefrEI, d_fRfrSR,
+                                                    par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
+            cudaDeviceSynchronize();
+            checkCUDAError("radiateTarget kernel");
+            // write out d_Psour to file for debugging
+            char* Psour_filename = (char*)malloc(64 * sizeof(char));
+            sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
+            saveFloatsToFile(Psour_filename, d_Psour, par.nr);
+            free(Psour_filename);
+            checkCUDAError("exportingSourcePower kernel");
             
             // create refracted signal and total signal using original method
             if (!par.convolution) {

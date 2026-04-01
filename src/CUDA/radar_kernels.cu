@@ -689,7 +689,7 @@ __global__ void accumulateTarget(float* d_PTarget, float rst, float dr, int nr, 
 
 
 // radiate target outward and compute power received at source
-__global__ void radiateTarget(float* d_PSource, float rst, float dr, int nr, int nfacets,
+__global__ void radiateTarget(float* d_Psource, float rst, float dr, int nr, int nfacets,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_fRefrEO, float* d_fRfrSR, 
                               float P, float G, float lam, float fs, float c, float c2) {
@@ -746,7 +746,7 @@ __global__ void radiateTarget(float* d_PSource, float rst, float dr, int nr, int
         if ((bin < 0) || (bin >= nr)) {
             // out of range, do nothing
         } else {
-            atomicAdd(&(d_PSource[bin]), Pray);
+            atomicAdd(&(d_Psource[bin]), Pray);
         }
 
     }

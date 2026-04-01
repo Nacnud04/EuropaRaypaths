@@ -7,8 +7,20 @@ import output_handling as oh
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+dt = 1 / 18 # sample rate
+fig, ax = plt.subplots(3, sharex=True, figsize=(10, 6))
 tdat = np.loadtxt("rdrgrm/Ptarg_s000050_t00.txt")
-plt.plot(tdat)
+ax[0].plot(np.arange(len(tdat)) * dt, tdat, linewidth=1)
+ax[0].set_title("Inward Phasor Trace")
+sdat = np.loadtxt("rdrgrm/Psour_s000050_t00.txt")
+ax[1].plot(np.arange(len(sdat)) * dt, sdat, linewidth=1)
+ax[1].set_title("Outward Phasor Trace")
+conv = np.convolve(tdat, sdat, mode='full')[::2]
+ax[2].plot(np.arange(len(conv)) * dt,conv, linewidth=1)
+ax[2].set_title("Convolution of Inward and Outward Traces")
+ax[2].set_xlabel("Time [us]")
+for a in ax: a.set_ylabel("Power [W]")
 plt.savefig("figures/Ptarg.png")
 plt.close()
 
