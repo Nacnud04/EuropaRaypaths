@@ -20,6 +20,8 @@
  *
  ******************************************************************************/
 
+#define THREADS 256 // threads per block
+
 // --- TRIG FUNCTIONS ---
 
 // slow but accurate sin function
@@ -188,3 +190,52 @@ __device__ void takeEveryOtherComplex(cuFloatComplex* input, cuFloatComplex* out
 
 // --- CONVOLUTION ---
 
+// convolve two 1D complex signals of the same length. Downsample at end.
+void convolve(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
+              cuFloatComplex* d_output, int nr) {
+
+    // convolution in here
+    int nrPad = 2 * nr; // zero-pad to avoid circular convolution
+
+    // allocate device memory for padded signal and kernel
+    cuFloatComplex* d_signalPad;
+    cuFloatComplex* d_kernelPad;
+    cudaMalloc(&d_signalPad, nrPad * sizeof(cuFloatComplex));
+    cudaMalloc(&d_kernelPad, nrPad * sizeof(cuFloatComplex));
+
+    // fill both arrays with zeros
+    cudaMemset(d_signalPad, 0, nrPad * sizeof(cuFloatComplex));
+    cudaMemset(d_kernelPad, 0, nrPad * sizeof(cuFloatComplex));
+
+    // move signal and kernel into padded arrays
+    cudaMemcpy(d_signalPad, d_signal, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_kernelPad, d_kernel, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
+
+    // create FFT plan for padded length
+    cufftHandle plan;
+    cufftPlan1d(&plan, nrPad, CUFFT_C2C, 1);
+
+    // forward FFT on both signal and kernel
+    cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
+
+    // pointwise multiply in frequency domain
+    int blocks = (nrPad + THREADS - 1) / THREADS;
+    complexPointwiseMul<<<blocks, THREADS>>>(d_signalPad, d_kernelPad, nrPad);
+
+    // inverse FFT to get the convolved signal
+    cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_INVERSE);
+
+    // normalize by the padded length
+    float scale = 1.0f / nrPad;
+    scaleComplex<<<blocks, THREADS>>>(d_signalPad, nrPad, scale);
+
+    // downsample the convolved signal by taking every other sample of valid region
+    takeEveryOtherComplex<<<blocks, THREADS>>>(d_signalPad, d_output, nr);
+
+    // free device memory and destroy FFT plan
+    cudaFree(d_signalPad);
+    cudaFree(d_kernelPad);
+    cufftDestroy(plan);
+
+}
