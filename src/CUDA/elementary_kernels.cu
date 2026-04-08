@@ -165,3 +165,26 @@ __host__ float angleSourceNormTargetPosHost(float snx, float sny, float snz,
     float theta = acosf(dp);
     return theta;
 }
+
+
+// --- GENERIC MEMORY OPERATIONS ---
+
+// take every other sample of a 1D array (float)
+__device__ void takeEveryOtherFloats(float* input, float* output, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n / 2) {
+        output[idx] = input[2 * idx];
+    }
+}
+
+// take every other sample of a 1D array (cuFloatComplex)
+__device__ void takeEveryOtherComplex(cuFloatComplex* input, cuFloatComplex* output, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n / 2) {
+        output[idx] = input[2 * idx];
+    }
+}
+
+
+// --- CONVOLUTION ---
+
