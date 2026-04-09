@@ -439,14 +439,19 @@ int main(int argc, const char* argv[])
     }
 
     // array for power function at target
-    float* d_Ptarg;
-    cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(float));
-    cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(float));
+    cuFloatComplex* d_Ptarg;
+    cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
 
     // array for power function at source
-    float* d_Psour;
-    cudaMalloc((void**)&d_Psour, par.nr * sizeof(float));
-    cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(float));
+    cuFloatComplex* d_Psour;
+    cudaMalloc((void**)&d_Psour, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
+
+    // tmp for phasor trace
+    cuFloatComplex* d_PTTmp;
+    cudaMalloc((void**)&d_PTTmp, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
 
     // refracted signal
     cuFloatComplex* d_refr_sig;
@@ -800,7 +805,7 @@ int main(int argc, const char* argv[])
             // write out d_Ptarg to file for debugging
             char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
             sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
-            saveFloatsToFile(Ptarg_filename, d_Ptarg, par.nr);
+            saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
             free(Ptarg_filename);
             checkCUDAError("exportingTargetPower kernel");
 
@@ -822,9 +827,20 @@ int main(int argc, const char* argv[])
             // write out d_Psour to file for debugging
             char* Psour_filename = (char*)malloc(64 * sizeof(char));
             sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
-            saveFloatsToFile(Psour_filename, d_Psour, par.nr);
+            saveSignalToFile(Psour_filename, d_Psour, par.nr);
             free(Psour_filename);
             checkCUDAError("exportingSourcePower kernel");
+
+            
+            // --- CONVOLVE INTO FULL PHASOR TRACE ---
+            convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+            checkCUDAError("convolve kernel");
+            // write out d_PTTmp to file for debugging
+            char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
+            sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
+            saveSignalToFile(PTTmp_filename, d_PTTmp, par.nr);
+            free(PTTmp_filename);
+            checkCUDAError("exportingPhasorTrace kernel");
             
             // create refracted signal and total signal using original method
             if (!par.convolution) {

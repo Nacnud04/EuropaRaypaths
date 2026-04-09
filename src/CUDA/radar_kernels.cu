@@ -508,23 +508,6 @@ __global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSi
     }
 }
 
-__global__ void complexPointwiseMul(cuFloatComplex* a, const cuFloatComplex* b, int N) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < N) {
-        cuFloatComplex A = a[i];
-        cuFloatComplex B = b[i];
-        a[i] = make_cuFloatComplex(A.x * B.x - A.y * B.y,
-                                   A.x * B.y + A.y * B.x);
-    }
-}
-
-__global__ void scaleComplex(cuFloatComplex* data, int N, float scale) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < N) {
-        data[i].x *= scale;
-        data[i].y *= scale;
-    }
-}
 
 // Elementwise add: dest += src  (both length N)
 __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
@@ -534,6 +517,7 @@ __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src
         dest[i].y += src[i].y;
     }
 }
+
 
 void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp, 
                          cuFloatComplex* d_sig, int nr) {
@@ -641,8 +625,17 @@ __device__ float hertz_dipole(float th) {
 }
 
 
+// phasor from range
+__device__ cuFloatComplex phasor(float r, float lam) {
+    float phase = (4.0f * 3.14159265f / lam) * r;
+    float c, s;
+    sincosf(phase, &s, &c);
+    return make_cuFloatComplex(c, s);
+}
+
+
 // this function sums input ray weights to get current the target
-__global__ void accumulateTarget(float* d_PTarget, float rst, float dr, int nr, int nfacets,
+__global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr, int nr, int nfacets,
                                  float* d_Tth, float* d_Tph, float* d_Ttd,
                                  float* d_fRefrEI, float* d_fRfrSR, 
                                  float P, float G, float lam, float fs, float c, float c2) {
@@ -680,7 +673,10 @@ __global__ void accumulateTarget(float* d_PTarget, float rst, float dr, int nr, 
         if ((bin < 0) || (bin >= nr)) {
             // out of range, do nothing
         } else {
-            atomicAdd(&(d_PTarget[bin]), Pray);
+            // if within range take phasor and multiply by power contribution
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, lam), make_cuFloatComplex(Pray, 0.0f));
+            atomicAdd(&(d_PTarget[bin].x), contrib.x); // add real components together
+            atomicAdd(&(d_PTarget[bin].y), contrib.y); // add imag components together
         }
 
     }
@@ -689,7 +685,7 @@ __global__ void accumulateTarget(float* d_PTarget, float rst, float dr, int nr, 
 
 
 // radiate target outward and compute power received at source
-__global__ void radiateTarget(float* d_Psource, float rst, float dr, int nr, int nfacets,
+__global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, int nr, int nfacets,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_fRefrEO, float* d_fRfrSR, 
                               float P, float G, float lam, float fs, float c, float c2) {
@@ -746,7 +742,10 @@ __global__ void radiateTarget(float* d_Psource, float rst, float dr, int nr, int
         if ((bin < 0) || (bin >= nr)) {
             // out of range, do nothing
         } else {
-            atomicAdd(&(d_Psource[bin]), Pray);
+            // if within range take phasor and multiply by power contribution
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, lam), make_cuFloatComplex(Pray, 0.0f));
+            atomicAdd(&(d_Psource[bin].x), contrib.x); // add real components together
+            atomicAdd(&(d_Psource[bin].y), contrib.y); // add imag components together
         }
 
     }

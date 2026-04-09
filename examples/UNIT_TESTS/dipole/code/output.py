@@ -5,22 +5,33 @@ import simple_focusing as sf
 import rdr_plots       as rp
 import output_handling as oh
 
+from dipole_src import *
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 dt = 1 / 18 # sample rate
-fig, ax = plt.subplots(3, sharex=True, figsize=(10, 6))
-tdat = np.loadtxt("rdrgrm/Ptarg_s000050_t00.txt")
-ax[0].plot(np.arange(len(tdat)) * dt, tdat, linewidth=1)
-ax[0].set_title("Inward Phasor Trace")
-sdat = np.loadtxt("rdrgrm/Psour_s000050_t00.txt")
-ax[1].plot(np.arange(len(sdat)) * dt, sdat, linewidth=1)
-ax[1].set_title("Outward Phasor Trace")
+fig, ax = plt.subplots(3, 2, sharex=True, figsize=(10, 8))
+tdat = load_complex("rdrgrm/Ptarg_s000050_t00.txt")
+amp_to_ax(ax[0,0], tdat, dt, abs=True)
+ph_to_ax(ax[0,1], tdat, dt)
+ax[0,0].set_title("Inward Phasor Trace", fontsize=10)
+sdat = load_complex("rdrgrm/Psour_s000050_t00.txt")
+amp_to_ax(ax[1,0], sdat, dt, abs=True)
+ph_to_ax(ax[1,1], sdat, dt)
+ax[1,0].set_title("Outward Phasor Trace", fontsize=10)
 conv = np.convolve(tdat, sdat, mode='full')[::2]
-ax[2].plot(np.arange(len(conv)) * dt,conv, linewidth=1)
-ax[2].set_title("Convolution of Inward and Outward Traces")
-ax[2].set_xlabel("Time [us]")
-for a in ax: a.set_ylabel("Power [W]")
+ax[2,0].plot(np.arange(len(conv)) * dt, np.abs(conv), color="black", linewidth=1, label="Python")
+ax[2,1].plot(np.arange(len(conv)) * dt, np.angle(conv) * 180 / np.pi, color="black", linewidth=1, label="Python")
+fdat = load_complex("rdrgrm/PTTmp_s000050_t00.txt")
+ax[2,0].plot(np.arange(len(fdat)) * dt, np.abs(fdat), color="red", linewidth=1, label="CUDA FFT", linestyle=":")
+ax[2,1].plot(np.arange(len(fdat)) * dt, np.angle(fdat) * 180 / np.pi, color="red", linewidth=1, label="CUDA FFT", linestyle=":")
+ax[2,0].legend()
+ax[2,1].legend()
+ax[2,0].set_title("Convolution of Inward and Outward Traces", fontsize=10)
+ax[2,0].set_xlabel("Time [us]")
+for a in ax[:,0]: a.set_ylabel("Power [W]")
+plt.xlim(20, 30)
 plt.savefig("figures/Ptarg.png")
 plt.close()
 

@@ -20,6 +20,9 @@
  *
  ******************************************************************************/
 
+// FFT for chirp convolution
+#include <cufft.h>
+
 #define THREADS 256 // threads per block
 
 // --- TRIG FUNCTIONS ---
@@ -172,27 +175,53 @@ __host__ float angleSourceNormTargetPosHost(float snx, float sny, float snz,
 // --- GENERIC MEMORY OPERATIONS ---
 
 // take every other sample of a 1D array (float)
-__device__ void takeEveryOtherFloats(float* input, float* output, int n) {
+__global__ void takeEveryOtherFloats(float* input, float* output, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n / 2) {
+    if (idx < n) {
         output[idx] = input[2 * idx];
     }
 }
 
 // take every other sample of a 1D array (cuFloatComplex)
-__device__ void takeEveryOtherComplex(cuFloatComplex* input, cuFloatComplex* output, int n) {
+__global__ void takeEveryOtherComplex(cuFloatComplex* input,
+                                     cuFloatComplex* output,
+                                     int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n / 2) {
+    if (idx < n) {
         output[idx] = input[2 * idx];
+    }
+}
+
+// -- SCALE ARRAY ---
+
+__global__ void scaleComplex(cuFloatComplex* data, int N, float scale) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        data[i].x *= scale;
+        data[i].y *= scale;
+    }
+}
+
+
+// --- COMPLEX POINTWISE MULTIPLICATION ---
+
+__global__ void complexPointwiseMul(cuFloatComplex* a, const cuFloatComplex* b, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        cuFloatComplex A = a[i];
+        cuFloatComplex B = b[i];
+        a[i] = make_cuFloatComplex(A.x * B.x - A.y * B.y,
+                                   A.x * B.y + A.y * B.x);
     }
 }
 
 
 // --- CONVOLUTION ---
 
+
 // convolve two 1D complex signals of the same length. Downsample at end.
-void convolve(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
-              cuFloatComplex* d_output, int nr) {
+void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
+                     cuFloatComplex* d_output, int nr) {
 
     // convolution in here
     int nrPad = 2 * nr; // zero-pad to avoid circular convolution
