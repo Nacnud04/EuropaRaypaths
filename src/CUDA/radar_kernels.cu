@@ -679,10 +679,11 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int n
         */
 
         // FRIIS inward
-        float Pfacet = friis(P, G, 1, lam, d_Itd[id]) * wr;
+        float Pfacet = friis(P, G, 1, lam, d_Itd[id]);
 
         // FRIIS outward
-        float Psrc   = friis(Pfacet, 1, G, lam, d_Itd[id]) * wr;
+        // we normalize here
+        float Psrc   = friis(Pfacet, 1, G, lam, d_Itd[id]) / nfacets;
 
         // get range bin location
         short bin = (short)((d_Itd[id] - rst) / dr);
@@ -734,10 +735,11 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr,
         float Pray = Ssub * solid_angle_weight * coeff * G_dipole;
         */
         
-        float Pfacet = friis(P, G, 1, lam, d_Itd[id]) * wr;
+        //float Pfacet = friis(P, G, 1, lam, d_Itd[id]) * wr;
 
         //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
-        float Pray   = Pfacet;//friis(Pfacet, 1, G_dipole, lam, d_Ttd[id]) * wr;
+        // STRAIGHT TO SOURCE FROM TARGET
+        float Pray   = friis(P, G, G_dipole, lam, d_fRfrSR[id]) / nfacets;
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
@@ -783,7 +785,6 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, in
 
         float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
 
-        float Pfacet = friis(1, 1, G, lam, d_Itd[id]) * wr;
         /*
         // UNITS: Srad [W/m^2]
         // raditation intensity along the ray leaving the dipole
@@ -814,8 +815,9 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, in
         float Pray = Ssou * solid_angle_weight * Ae * G;
         */
 
-        //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
-        float Pray   = Pfacet;//friis(Pfacet, 1, G, lam, d_Ttd[id]) * wr;
+        // STRAIGHT TO SOURCE FROM TARGET
+        // DOES NOT ACCOUNT FOR FACET LOSSES
+        float Pray   = friis(1, G_dipole, G, lam, d_fRfrSR[id]) / nfacets;
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
