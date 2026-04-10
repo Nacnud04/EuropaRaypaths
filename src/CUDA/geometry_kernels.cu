@@ -398,6 +398,10 @@ __device__ float beaconPowerDensity(float P, float G, float dist) {
     return (P * G) / (4 * 3.14159 * dist * dist);
 }
 
+__device__ float friis(float P, float Gt, float Gr, float lam, float dist) {
+    return (P * lam * lam * Gt * Gr) / (pow(4 * 3.14159, 2) * dist * dist);
+}
+
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,

@@ -345,7 +345,8 @@ __host__ void loadFacetFile(FILE * file, const int totfacets,
 
 __host__ void loadTargetFile(FILE* file, const int nt,
                             float* h_tx, float* h_ty, float* h_tz,
-                            float* h_tnx, float* h_tny, float* h_tnz) {
+                            float* h_tnx, float* h_tny, float* h_tnz,
+                            uChar* h_ttype) {
 
     // go through line by line and load the targets into memory
     char line[256];
@@ -368,6 +369,15 @@ __host__ void loadTargetFile(FILE* file, const int nt,
             h_tny[i] = 0.0f;
             h_tnz[i] = 1.0f;
         }
+        // if there are 4 entries a target type is included
+        else if (comma_count == 3) {
+            sscanf(line, "%f,%f,%f,%hhu",
+                &h_tx[i],   &h_ty[i],  &h_tz[i], &h_ttype[i]);
+            h_tnx[i] = 0.0f;
+            h_tny[i] = 0.0f;
+            h_tnz[i] = 1.0f;
+        }
+        // if there are 6 entries there is a normal vector provided
         else if (comma_count == 5) {
             sscanf(line, "%f,%f,%f,%f,%f,%f",
                 &h_tx[i],   &h_ty[i],  &h_tz[i],

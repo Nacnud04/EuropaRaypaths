@@ -24,6 +24,7 @@
 #include <cufft.h>
 
 #define THREADS 256 // threads per block
+#define uChar   unsigned char
 
 // --- TRIG FUNCTIONS ---
 
@@ -189,6 +190,14 @@ __global__ void takeEveryOtherComplex(cuFloatComplex* input,
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         output[idx] = input[2 * idx];
+    }
+}
+
+__global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSignal, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        complexSignal[i].x = realSignal[i];
+        complexSignal[i].y = 0.0f;
     }
 }
 

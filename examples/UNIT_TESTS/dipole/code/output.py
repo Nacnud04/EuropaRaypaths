@@ -35,6 +35,13 @@ plt.xlim(20, 30)
 plt.savefig("figures/Ptarg.png")
 plt.close()
 
+surf_dat = load_complex("rdrgrm/Psurf_s000050_t00.txt")
+fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+ax.plot(np.arange(len(surf_dat)) * dt, np.abs(surf_dat), color="black", linewidth=1, label="Surface")
+ax.plot(np.arange(len(fdat)) * dt, np.abs(fdat), color="red", linewidth=1, label="Subsurface")
+plt.savefig("figures/PTComparison.png")
+plt.close()
+
 params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
