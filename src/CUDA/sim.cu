@@ -32,10 +32,10 @@
 #include <thrust/extrema.h>
 
 // custom kernels
+#include "file_io.cu"
 #include "geometry_kernels.cu"
 #include "facet_funcs.cu"
 #include "radar_kernels.cu"
-#include "file_io.cu"
 
 // some macros 
 #define uChar unsigned char
@@ -624,11 +624,8 @@ int main(int argc, const char* argv[])
 
         // update gains
         if (gainPatternProvided) {
-            gRefl = powf(10.0f, h_gRefl[is]/10.0f);
-            gRefr = powf(10.0f, h_gRefr[is]/10.0f);
-        } else {
-            gRefl = par.Grefl_lin;
-            gRefr = par.Grefr_lin;
+            par.Grefl_lin = powf(10.0f, h_gRefl[is]/10.0f);
+            par.Grefr_lin = powf(10.0f, h_gRefr[is]/10.0f);
         }
 
         // generate the chirp if using circular convolution and variable rx opening windows
@@ -726,9 +723,7 @@ int main(int argc, const char* argv[])
 
         compReflectedEnergy<<<numBlocks, blockSize>>>(d_Itd, d_Ith, d_Iph,
                                                     d_fReflE, d_Rth, d_fRfrC,
-                                                    par.P, gRefl, par.fs, par.lam,
-                                                    par.nu_1, par.nu_2, par.alpha1, par.ks, 
-                                                    par.pol, valid_facets);
+                                                    par, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
         
         
@@ -811,34 +806,32 @@ int main(int argc, const char* argv[])
             compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rth, d_Itd, d_Iph,
                                                     d_Ttd, d_Tth, d_Tph, d_fRfrC,
                                                     d_fRefrEI, d_fRfrSR,
-                                                    par.ks, valid_facets, par.alpha2, par.c_1, par.c_2,
-                                                    par.fs, par.lam);
+                                                    par, valid_facets);
             checkCUDAError("compRefrEnergyIn kernel");
 
             // loop for all non-specular target types
             if (h_ttype[it] != 0) {
 
-                surfacePT<<<numBlocks, blockSize>>>(d_PSurf, par.rst, par.dr, par.nr, valid_facets,
-                                                d_Ith, d_Iph, d_Itd,
-                                                d_fReflE,
-                                                par.P, gRefr, par.lam, par.fs, par.c, par.c_1);
-                cudaDeviceSynchronize();
-                checkCUDAError("surfacePT kernel");
+                if (!par.specular) {
+                    surfacePT<<<numBlocks, blockSize>>>(d_PSurf, d_Ith, d_Iph, d_Itd,
+                                                        d_fReflE, par, valid_facets);
+                    cudaDeviceSynchronize();
+                    checkCUDAError("surfacePT kernel");
 
-                // write out surface phasor
-                char* Psurf_filename = (char*)malloc(64 * sizeof(char));
-                sprintf(Psurf_filename, "%s/Psurf_s%06d_t%02d.txt", argv[4], is, it);
-                saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
-                free(Psurf_filename);
-                checkCUDAError("exportingSurfacePhasor kernel");
+                    // write out surface phasor
+                    char* Psurf_filename = (char*)malloc(64 * sizeof(char));
+                    sprintf(Psurf_filename, "%s/Psurf_s%06d_t%02d.txt", argv[4], is, it);
+                    saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
+                    free(Psurf_filename);
+                    checkCUDAError("exportingSurfacePhasor kernel");
+                }
 
                 // --- CALCULATE POWER AT TARGET ---
                 // this is the inward phasor trace
-                accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, par.rst, par.dr, par.nr, valid_facets,
-                                                        d_Ith, d_Iph, d_Itd,
-                                                        d_Tth, d_Tph, d_Ttd,
-                                                        d_fRefrEI, d_fRfrSR,
-                                                        par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
+                accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, d_Ith, d_Iph, d_Itd,
+                                                           d_Tth, d_Tph, d_Ttd,
+                                                           d_fRefrEI, d_fRfrSR,
+                                                           par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
                 // write out d_Ptarg to file for debugging
@@ -853,19 +846,17 @@ int main(int argc, const char* argv[])
             compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
                                                         d_Ttd, d_Tth, d_Tph, 
                                                         d_fRefrEO, d_fRfrC, 
-                                                        par.ks, valid_facets, par.alpha1, par.alpha2, par.c_1, par.c_2,
-                                                        par.fs, par.P, par.lam, par.eps_1, par.eps_2);
+                                                        par, valid_facets);
             checkCUDAError("compRefrEnergyOut kernel");
 
             // loop for all non-specular target types
             if (h_ttype[it] != 0) {
 
                 // --- CALCULATE OUTWARD PHASOR TRACE ---
-                radiateTarget<<<numBlocks, blockSize>>>(d_Psour, par.rst, par.dr, par.nr, valid_facets,
-                                                        d_Ith, d_Iph, d_Itd,
+                radiateTarget<<<numBlocks, blockSize>>>(d_Psour, d_Ith, d_Iph, d_Itd,
                                                         d_Tth, d_Tph, d_Ttd,
-                                                        d_fRefrEI, d_fRfrSR,
-                                                        par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
+                                                        d_fRefrEO, d_fRfrSR,
+                                                        par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("radiateTarget kernel");
                 // write out d_Psour to file for debugging
@@ -897,7 +888,7 @@ int main(int argc, const char* argv[])
                                 d_Tth, d_fRefrEI, d_fRefrEO,
                                 d_refr_sig, 
                                 par.rst, par.dr, par.nr, par.c, par.c_2, par.rerad_funct,
-                                par.rng_res, par.P, gRefr, par.fs, par.lam, valid_facets);
+                                par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
                 checkCUDAError("refrRadarSignal kernel");
 
             } else {
@@ -910,7 +901,7 @@ int main(int argc, const char* argv[])
                     genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
                                                             d_fRfrSR, d_fRefrEI, d_fRefrEO, 
                                                             d_TargetTh, d_Ttd, par.rerad_funct,
-                                                            par.P, gRefr, par.lam, par.fs, valid_facets,
+                                                            par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
                                                             par.rst, par.dr, par.nr, par.c_1, par.c_2);
                     checkCUDAError("genRefrPhasor kernel");
 

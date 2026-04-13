@@ -399,43 +399,49 @@ __device__ float beaconPowerDensity(float P, float G, float dist) {
 }
 
 __device__ float friis(float P, float Gt, float Gr, float lam, float dist) {
-    return (P * lam * lam * Gt * Gr) / (pow(4 * 3.14159, 2) * dist * dist);
+    return (P * lam * lam * Gt * Gr) / (pow(4 * 3.14159, 2) * dist * dist); 
 }
 
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,
-                                    float P, float G, float fs, float lam, 
-                                    float nu1, float nu2, float alpha1, 
-                                    float ks, int polarization, int nfacets){
+                                    SimulationParameters par, int nfacets){
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
-        // first get facet reradiation
-        // we double inclination angle to as the center of the beam pattern is in the
-        // exact opposite direction as the incident ray. 
-        d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], lam, fs);
+        if (par.specular) {
 
-        // losses from radar equation
-        // since we are working with coherent energy we need to square the number of
-        // illuminated facets. We can do this by multiplying the radar equation by
-        // nfacets
-        d_fRe[idx] = d_fRe[idx] * radarEq(P, G, fs, lam, d_Itd[idx], nfacets);
+            // first get facet reradiation
+            // we double inclination angle to as the center of the beam pattern is in the
+            // exact opposite direction as the incident ray. 
+            d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], par.lam, par.fs);
+
+            // losses from radar equation
+            // since we are working with coherent energy we need to square the number of
+            // illuminated facets. We can do this by multiplying the radar equation by
+            // nfacets
+            d_fRe[idx] = d_fRe[idx] * radarEq(par.P, par.Grefl_lin, par.fs, par.lam, d_Itd[idx], nfacets);
+
+        } else {
+            // ignores facet reradiation and radar equation
+            // these are included later in the "surfacePT" kernel
+            d_fRe[idx] = 1;
+        }
 
         // reflection coefficient
         // horizontal pol.
         float rho;
-        if (polarization == 0){ 
-            rho = (nu2 * cosGPU(d_Ith[idx]) - nu1 * cosGPU(d_Rth[idx])) /
-                    (nu2 * cosGPU(d_Ith[idx]) + nu1 * cosGPU(d_Rth[idx]));
+        if (par.pol == 0){ 
+            rho = (par.nu_2 * cosGPU(d_Ith[idx]) - par.nu_1 * cosGPU(d_Rth[idx])) /
+                    (par.nu_2 * cosGPU(d_Ith[idx]) + par.nu_1 * cosGPU(d_Rth[idx]));
             // set for the refracted coefficient for refracted signal computation
             d_fRfrC[idx] = 1 - (rho * rho);
         } 
         // vertical pol.
-        else if (polarization == 1) {
-            rho = (nu2 * cosGPU(d_Rth[idx]) - nu1 * cosGPU(d_Ith[idx])) /
-                    (nu2 * cosGPU(d_Rth[idx]) + nu1 * cosGPU(d_Ith[idx]));
+        else if (par.pol == 1) {
+            rho = (par.nu_2 * cosGPU(d_Rth[idx]) - par.nu_1 * cosGPU(d_Ith[idx])) /
+                    (par.nu_2 * cosGPU(d_Rth[idx]) + par.nu_1 * cosGPU(d_Ith[idx]));
             // set for the refracted coefficient for refracted signal computation
             d_fRfrC[idx] = 1 - (rho * rho);
         }
@@ -447,13 +453,13 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         }
 
         // signal attenuation (-4 b/c power & 2 way travel)
-        float atm_atten = expf(-4.0f * alpha1 * d_Itd[idx]);
+        float atm_atten = expf(-4.0f * par.alpha1 * d_Itd[idx]);
         d_fRe[idx] = d_fRe[idx] * atm_atten;
         // account for atmospheric attenuation for the subsurface ray weights
         d_fRfrC[idx] = d_fRfrC[idx] * atm_atten;
 
         // surface roughness losses
-        float rough_loss = expf(-4*((ks*cosGPU(d_Ith[idx]))*(ks*cosGPU(d_Ith[idx]))));
+        float rough_loss = expf(-4*((par.ks*cosGPU(d_Ith[idx]))*(par.ks*cosGPU(d_Ith[idx]))));
         d_fRe[idx] = d_fRe[idx] * rough_loss;
 
     }
@@ -495,25 +501,29 @@ __global__ void compRefrEnergyIn(
                     float* d_Rth, float* d_Itd, float* d_Iph,
                     float* d_Ttd, float* d_Tth, float* d_Tph, float* d_fRfrC,
                     float* d_fRefrEI, float* d_fRfrSR,
-                    float ks, int nfacets, float alpha2, float c1, float c2,
-                    float fs, float lam) {
+                    SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < nfacets) {
 
-        // start with facet reradiation
-        // we need to get delta theta between refracted and forced ray as follows:
-        float delta_th = d_Rth[id] - d_Tth[id];
-        // now we do similar for phi
-        float delta_ph = d_Iph[id] - d_Tph[id];
-        // compute facet reradiation
-        d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, lam, fs);
+        // if doing a non-specular sim these are included later
+        if (par.specular) {
+
+            // start with facet reradiation
+            // we need to get delta theta between refracted and forced ray as follows:
+            float delta_th = d_Rth[id] - d_Tth[id];
+            // now we do similar for phi
+            float delta_ph = d_Iph[id] - d_Tph[id];
+            // compute facet reradiation
+            d_fRefrEI[id] *= facetReradiation(d_Ttd[id], delta_th, delta_ph, par.lam, par.fs);
+
+        }
 
         // transmission coefficient
         d_fRefrEI[id] = d_fRefrEI[id] * d_fRfrC[id];
 
         // surface roughness losses
-        float rough_loss = expf(-4*((ks*cosGPU(d_Tth[id]))*(ks*cosGPU(d_Tth[id]))));
+        float rough_loss = expf(-4*((par.ks*cosGPU(d_Tth[id]))*(par.ks*cosGPU(d_Tth[id]))));
         d_fRefrEI[id] = d_fRefrEI[id] * rough_loss;
 
         // total travel slant range
@@ -527,23 +537,26 @@ __global__ void compRefrEnergyIn(
 __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
                                   float* d_Ttd, float* d_Tth, float* d_Tph,
                                   float* d_fRefrEO, float* d_fRfrC, 
-                                  float ks, int nfacets, float alpha1, float alpha2, float c1, float c2,
-                                  float fs, float G, float lam, float eps_1, float eps_2){
+                                  SimulationParameters par, int nfacets){
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
-        // for facet reradiation for upward transmitted, we can assume that
-        // RrTh is the upward transmitted inclination angle
-        float RrTh = snellsLaw(pi - d_Tth[idx], eps_2, eps_1);
+        if (par.specular) {
 
-        d_fRefrEO[idx] *= facetReradiation(d_Itd[idx], RrTh, d_Tph[idx]-d_Iph[idx], lam, fs);
+            // for facet reradiation for upward transmitted, we can assume that
+            // RrTh is the upward transmitted inclination angle
+            float RrTh = snellsLaw(pi - d_Tth[idx], par.eps_2, par.eps_1);
+
+            d_fRefrEO[idx] *= facetReradiation(d_Itd[idx], RrTh, d_Tph[idx]-d_Iph[idx], par.lam, par.fs);
+        
+        }
 
         // for transmission coefficient use refraction cofficient from before
         d_fRefrEO[idx] = d_fRefrEO[idx] * d_fRfrC[idx];
 
         // surface roughness losses
-        float rough_loss = expf(-4*((ks*cosGPU(d_Tth[idx]))*(ks*cosGPU(d_Tth[idx]))));
+        float rough_loss = expf(-4*((par.ks*cosGPU(d_Tth[idx]))*(par.ks*cosGPU(d_Tth[idx]))));
         d_fRefrEO[idx] = d_fRefrEO[idx] * rough_loss;
 
     }

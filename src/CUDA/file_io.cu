@@ -33,6 +33,8 @@
 #include <dirent.h>
 #include <unistd.h>
 
+#define uChar unsigned char
+
 using json = nlohmann::json;
 
 struct SimulationParameters {
@@ -107,6 +109,8 @@ struct SimulationParameters {
     // processing parameters
     bool convolution;
     bool convolution_linear;
+    bool specular;
+    bool lossless;
 
 };
 
@@ -225,6 +229,8 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     // processing parameters
     params.convolution = j["convolution"];
     params.convolution_linear = j["convolution_linear"];
+    params.specular = j["specular"];
+    params.lossless = j["lossless"];
     
     return params;
 }

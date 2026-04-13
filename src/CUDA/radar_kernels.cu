@@ -645,10 +645,8 @@ __device__ cuFloatComplex phasor(float r, float lam) {
 }
 
 // function to generate surface phasor trace
-__global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int nr, int nfacets,
-                          float* d_Ith, float* d_Iph, float* d_Itd,
-                          float* d_fReflE, 
-                          float P, float G, float lam, float fs, float c, float c1) {
+__global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph, float* d_Itd,
+                          float* d_fReflE, SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -658,24 +656,29 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int n
         //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // facet gain in inbound direction
-        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs);
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
 
         // FRIIS inward
-        float Pfacet = friis(P, G, G_fct, lam, d_Itd[id]);
+        float Pfacet = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
 
         // FRIIS outward
         // we normalize here (dont know why but 4x nfacets is needed)
-        float Psrc   = friis(Pfacet, G_fct, G, lam, d_Itd[id]) / (4 * nfacets);
+        float Psrc   = friis(Pfacet, G_fct, par.Grefr_lin, par.lam, d_Itd[id]) / (4 * nfacets);
+
+        // account for losses
+        if (!par.lossless) {
+            Psrc = Psrc * d_fReflE[id];
+        }
 
         // get range bin location
-        short bin = (short)((d_Itd[id] - rst) / dr);
+        short bin = (short)((d_Itd[id] - par.rst) / par.dr);
 
         // atomic add into range bin
-        if ((bin < 0) || (bin >= nr)) {
+        if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(d_Itd[id], lam), make_cuFloatComplex(Psrc, 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(d_Itd[id], par.lam), make_cuFloatComplex(Psrc, 0.0f));
             atomicAdd(&(d_Psurface[bin].x), contrib.x); // add real components together
             atomicAdd(&(d_Psurface[bin].y), contrib.y); // add imag components together
         }
@@ -685,45 +688,47 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int n
 }
 
 // this function sums input ray weights to get current the target
-__global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr, int nr, int nfacets,
-                                 float* d_Ith, float* d_Iph, float* d_Itd,
+__global__ void accumulateTarget(cuFloatComplex* d_PTarget, float* d_Ith, float* d_Iph, float* d_Itd,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
                                  float* d_fRefrEI, float* d_fRfrSR, 
-                                 float P, float G, float lam, float fs, float c, float c2) {
+                                 SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id < nfacets) {
 
         // get solid angle ray weight (known as spat)
-        float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
+        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // find the gain in the inbound ray direction
         float G_dipole = hertz_dipole(d_Tth[id] + (3.141559/2));
-        
-        //float Pfacet = friis(P, G, 1, lam, d_Itd[id]) * wr;
 
         //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(1, G, G_dipole, lam, d_fRfrSR[id]) / (4 * nfacets);
+        float Pray   = friis(1, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]) / (4 * nfacets);
 
         // account for prop through facet
-        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs) * \
-                      facet_G(d_Tth[id], d_Tph[id], lam, fs);
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
+                      facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
 
+        // account for losses
+        if (!par.lossless) {
+            Pray = Pray * d_fRefrEI[id];
+        }
+
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
-        float rngt = d_Itd[id] + d_Ttd[id] * (c / c2);
-        short bin = (short)((rngt - rst) / dr);
+        float rngt = d_Itd[id] + d_Ttd[id] * (par.c / par.c_2);
+        short bin = (short)((rngt - par.rst) / par.dr);
         
         // atomic add into range bin
-        if ((bin < 0) || (bin >= nr)) {
+        if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(rngt, lam), make_cuFloatComplex(Pray, 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(Pray, 0.0f));
             atomicAdd(&(d_PTarget[bin].x), contrib.x); // add real components together
             atomicAdd(&(d_PTarget[bin].y), contrib.y); // add imag components together
         }
@@ -734,11 +739,11 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr,
 
 
 // radiate target outward and compute power received at source
-__global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, int nr, int nfacets,
+__global__ void radiateTarget(cuFloatComplex* d_Psource, 
                               float* d_Ith, float* d_Iph, float* d_Itd,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_fRefrEO, float* d_fRfrSR, 
-                              float P, float G, float lam, float fs, float c, float c2) {
+                              SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -751,30 +756,35 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, in
         // --- TARGET -> FACET ---
 
         // Solid angle weight [spat]
-        float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
+        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
 
         float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
 
         // STRAIGHT TO SOURCE FROM TARGET
         // DOES NOT ACCOUNT FOR FACET LOSSES
-        float Pray   = friis(P, G_dipole, G, lam, d_fRfrSR[id]) / (4 * nfacets);
+        float Pray   = friis(par.P, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]) / (4 * nfacets);
 
-        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs) * \
-                      facet_G(d_Tth[id], d_Tph[id], lam, fs);
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
+                      facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
 
+        // losses
+        if (!par.lossless) {
+            Pray = Pray * d_fRefrEO[id];
+        }
+
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
-        float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (c / c2);
-        short bin = (short)((rngt - rst) / dr);
+        float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (par.c / par.c_2);
+        short bin = (short)((rngt - par.rst) / par.dr);
         
         // atomic add into range bin
-        if ((bin < 0) || (bin >= nr)) {
+        if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(rngt, lam), make_cuFloatComplex(Pray, 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(Pray, 0.0f));
             atomicAdd(&(d_Psource[bin].x), contrib.x); // add real components together
             atomicAdd(&(d_Psource[bin].y), contrib.y); // add imag components together
         }
