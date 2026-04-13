@@ -768,13 +768,6 @@ int main(int argc, const char* argv[])
         
         for (int it=0; it<ntargets; it++) {
 
-            // write out surface phasor
-            char* Psurf_filename = (char*)malloc(64 * sizeof(char));
-            sprintf(Psurf_filename, "%s/Psurf_s%06d_t%02d.txt", argv[4], is, it);
-            saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
-            free(Psurf_filename);
-            checkCUDAError("exportingSurfacePhasor kernel");
-
             // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
             // should probably be offloaded to GPU at some point
             tvc_x = h_tx[it] - sx;
@@ -832,10 +825,18 @@ int main(int argc, const char* argv[])
                 cudaDeviceSynchronize();
                 checkCUDAError("surfacePT kernel");
 
+                // write out surface phasor
+                char* Psurf_filename = (char*)malloc(64 * sizeof(char));
+                sprintf(Psurf_filename, "%s/Psurf_s%06d_t%02d.txt", argv[4], is, it);
+                saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
+                free(Psurf_filename);
+                checkCUDAError("exportingSurfacePhasor kernel");
+
                 // --- CALCULATE POWER AT TARGET ---
                 // this is the inward phasor trace
                 accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, par.rst, par.dr, par.nr, valid_facets,
-                                                        d_Tth, d_Tph, d_Ttd, d_Itd,
+                                                        d_Ith, d_Iph, d_Itd,
+                                                        d_Tth, d_Tph, d_Ttd,
                                                         d_fRefrEI, d_fRfrSR,
                                                         par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
                 cudaDeviceSynchronize();
@@ -861,7 +862,8 @@ int main(int argc, const char* argv[])
 
                 // --- CALCULATE OUTWARD PHASOR TRACE ---
                 radiateTarget<<<numBlocks, blockSize>>>(d_Psour, par.rst, par.dr, par.nr, valid_facets,
-                                                        d_Tth, d_Tph, d_Ttd, d_Itd,
+                                                        d_Ith, d_Iph, d_Itd,
+                                                        d_Tth, d_Tph, d_Ttd,
                                                         d_fRefrEI, d_fRfrSR,
                                                         par.P, gRefr, par.lam, par.fs, par.c, par.c_2);
                 cudaDeviceSynchronize();

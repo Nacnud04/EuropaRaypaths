@@ -43,9 +43,9 @@ params = {
     "ox": -5e3,
     "oy": -1e3,
     "oz": 0,
-    "fs": 5,
-    "nx": 2000,
-    "ny": 400,
+    "fs": 25,
+    "nx": 400,
+    "ny": 80,
 
     # target params
     "rerad_funct": 2,  # 1-degree boxcar

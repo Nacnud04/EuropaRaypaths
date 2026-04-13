@@ -616,7 +616,7 @@ __device__ float hertz_dipole(float th) {
 }
 
 // reradiation pattern for facet
-__device__ float facet_normalized(float th, float ph,  
+__device__ float facet_G(float th, float ph,  
                                   float lam, float fs){
 
     // np.sinc(((r) / lam) * np.sin(ph) * np.cos(th))
@@ -626,7 +626,12 @@ __device__ float facet_normalized(float th, float ph,
 
     // combine all together
     // note it is squared to convert from field strength to power
-    return pow((fs*fs/lam) * sinc1 * sinc2, 2);
+    float D_normalized = pow(sinc1 * sinc2, 2);
+
+    // maximum directivity
+    float D_max = (4 * pi * fs * fs) / (lam * lam);
+
+    return D_normalized * D_max;
 
 }
 
@@ -649,41 +654,18 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int n
 
     if (id < nfacets) {
 
-        /*
-        // effective aperture of facet
-        float Ae = (fs * fs);
-
-        // UNIT: [W/m^2] - power density at surface facet
-        // CURRENTLY PROPAGATION IS LOSSLESS
-        float Sfct = beaconPowerDensity(P, G, d_Itd[id]);
-        */
         // get solid angle ray weight at facet
-        float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
-        /*
+        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
+        
         // facet gain in inbound direction
-        float G_fct = facet_normalized(d_Ith[id], d_Iph[id], lam, fs);
-
-        // get power contribution at the facet from the inbound ray
-        float Pfct = Sfct * solid_angle_weight * Ae * G_fct;
-
-        // now reradiate back out
-        // power density at source
-        float Ssrc = beaconPowerDensity(Pfct, G_fct, d_Itd[id]);
-
-        // solid angle weight at source is the same as at the facet
-        // gain is G
-
-        // now get power contribution at source
-        float coeff = (lam * lam) / (4.0f * pi); 
-        float Psrc = Ssrc * solid_angle_weight * coeff * G;
-        */
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs);
 
         // FRIIS inward
-        float Pfacet = friis(P, G, 1, lam, d_Itd[id]);
+        float Pfacet = friis(P, G, G_fct, lam, d_Itd[id]);
 
         // FRIIS outward
-        // we normalize here
-        float Psrc   = friis(Pfacet, 1, G, lam, d_Itd[id]) / nfacets;
+        // we normalize here (dont know why but 4x nfacets is needed)
+        float Psrc   = friis(Pfacet, G_fct, G, lam, d_Itd[id]) / (4 * nfacets);
 
         // get range bin location
         short bin = (short)((d_Itd[id] - rst) / dr);
@@ -704,7 +686,8 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float rst, float dr, int n
 
 // this function sums input ray weights to get current the target
 __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr, int nr, int nfacets,
-                                 float* d_Tth, float* d_Tph, float* d_Ttd, float* d_Itd, 
+                                 float* d_Ith, float* d_Iph, float* d_Itd,
+                                 float* d_Tth, float* d_Tph, float* d_Ttd, 
                                  float* d_fRefrEI, float* d_fRfrSR, 
                                  float P, float G, float lam, float fs, float c, float c2) {
 
@@ -712,34 +695,23 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr,
 
     if (id < nfacets) {
 
-        /*
-        float Ae = lam * lam;
-
-        // UNIT: [W] - power at surface facet
-        // can get away with this here b/c we assume isotropic source
-        float Pfacet = beaconEq(P, G, fs, lam, d_fRfrSR[id]-d_Ttd[id], nfacets);
-
-        // UNIT: [W/m^2] - power density in subsurface just before target
-        // NOTE: facet beam pattern is accounted for through d_fRefrEI
-        float Ssub = 1 * beaconPowerDensity(Pfacet, 1, d_Ttd[id]);
-        */
-
         // get solid angle ray weight (known as spat)
         float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // find the gain in the inbound ray direction
         float G_dipole = hertz_dipole(d_Tth[id] + (3.141559/2));
-        /*
-        // evaluate to find the individual power contribution
-        float coeff = (lam * lam) / (4.0f * pi);
-        float Pray = Ssub * solid_angle_weight * coeff * G_dipole;
-        */
         
         //float Pfacet = friis(P, G, 1, lam, d_Itd[id]) * wr;
 
         //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(P, G, G_dipole, lam, d_fRfrSR[id]) / nfacets;
+        float Pray   = friis(1, G, G_dipole, lam, d_fRfrSR[id]) / (4 * nfacets);
+
+        // account for prop through facet
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs) * \
+                      facet_G(d_Tth[id], d_Tph[id], lam, fs);
+
+        Pray = Pray * G_fct;
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
@@ -763,16 +735,14 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float rst, float dr,
 
 // radiate target outward and compute power received at source
 __global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, int nr, int nfacets,
-                              float* d_Tth, float* d_Tph, float* d_Ttd, float* d_Itd,
+                              float* d_Ith, float* d_Iph, float* d_Itd,
+                              float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_fRefrEO, float* d_fRfrSR, 
                               float P, float G, float lam, float fs, float c, float c2) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id < nfacets) {
-        
-        // effective aperture constant
-        //float Ae = (lam * lam) / (4.0f * pi);
 
         // NOTE: All power is normalized to 1 watt, as convolution with the inward 
         //       phasor trace will scale the final signal by the reradiated power.
@@ -785,39 +755,14 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource, float rst, float dr, in
 
         float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
 
-        /*
-        // UNITS: Srad [W/m^2]
-        // raditation intensity along the ray leaving the dipole
-        //float Srad = (4 * pi) / (G_dipole * solid_angle_weight * lam * lam);
-        float Srad = beaconPowerDensity(1, G_dipole, d_Ttd[id]);
-
-        // this assumes across the facet, power density is constant
-        float Ae_fct = (fs * fs); // effective aperture of facet
-
-        // here we use the beacon equation to go from power density leaving target
-        // to the power density at the surface facet. Note that we use d_fRefrEO
-        // to account for facet beam pattern gain. Power is still normalized.
-        
-        // UNITS: Pfacet [W]
-        //float Pfacet = Ae_fct * d_fRefrEO[id] * Srad * beaconEq(1, 1, fs, lam, d_Ttd[id], nfacets);
-        float Pfacet = Srad * Ae * 1 * solid_angle_weight;
-
-        // --- FACET -> SOURCE ---
-
-        // UNITS: Ssou [W/m^2]
-        // gain of 1 b/c accounted for in d_fRefrEO
-        float Ssou = beaconPowerDensity(Pfacet, 1, rng_surf);
-        */
-        // get solid angle ray weight (units of spat)
-        //wr = ((fs * fs) / (rng_surf * rng_surf)) / (4.0f * pi);
-        /*
-        // evaluate to find the individual power contribution
-        float Pray = Ssou * solid_angle_weight * Ae * G;
-        */
-
         // STRAIGHT TO SOURCE FROM TARGET
         // DOES NOT ACCOUNT FOR FACET LOSSES
-        float Pray   = friis(1, G_dipole, G, lam, d_fRfrSR[id]) / nfacets;
+        float Pray   = friis(P, G_dipole, G, lam, d_fRfrSR[id]) / (4 * nfacets);
+
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], lam, fs) * \
+                      facet_G(d_Tth[id], d_Tph[id], lam, fs);
+
+        Pray = Pray * G_fct;
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
