@@ -35,7 +35,7 @@ plt.xlim(20, 30)
 plt.savefig("figures/Ptarg.png")
 plt.close()
 
-surf_dat = load_complex("rdrgrm/Psurf_s000050_t00.txt")
+surf_dat = load_complex("rdrgrm/Psurf_s000050.txt")
 fig, ax = plt.subplots(1, 1, figsize=(10, 4))
 ax.plot(np.arange(len(surf_dat)) * dt, np.abs(surf_dat), color="black", linewidth=1, label="Surface")
 ax.plot(np.arange(len(fdat)) * dt, np.abs(fdat), color="red", linewidth=1, label="Subsurface")
@@ -46,7 +46,7 @@ params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
 
-rp.simple_rdrgrm(rdrgrm, params, "figures/rdrgrm.png", title="Very basic radargram", vmin=-10)
+rp.simple_rdrgrm(rdrgrm, params, "figures/rdrgrm.png", title="Very basic radargram", vmin=-30)
 
 focused = sf.full_focus_at_center(rdrgrm, params)
 #focused[:500] = rdrgrm[:500]

@@ -725,40 +725,57 @@ int main(int argc, const char* argv[])
                                                     d_fReflE, d_Rth, d_fRfrC,
                                                     par, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
+
+        if (!par.specular) {
+            surfacePT<<<numBlocks, blockSize>>>(d_PSurf, d_Ith, d_Iph, d_Itd,
+                                                d_fReflE, par, valid_facets);
+            cudaDeviceSynchronize();
+            checkCUDAError("surfacePT kernel");
+        }
         
-        
-        // reflected signal construction using original method
-        if (!par.convolution ) {
+        if (par.specular) {
+            // reflected signal construction using original method
+            if (!par.convolution ) {
 
-            // --- CONSTRUCT REFLECTED SIGNAL SLOWLY ---
-            // launch with shared memory for per-block accumulation (real+imag floats)
-            reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
-                                    par.rst, par.dr, par.nr,
-                                    par.rng_res, par.lam, valid_facets);
-            checkCUDAError("constructRadarSignal kernel1");
+                // --- CONSTRUCT REFLECTED SIGNAL SLOWLY ---
+                // launch with shared memory for per-block accumulation (real+imag floats)
+                reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
+                                        par.rst, par.dr, par.nr,
+                                        par.rng_res, par.lam, valid_facets);
+                checkCUDAError("constructRadarSignal kernel1");
 
-        } else {
-
-            // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
-            // generate reflected phasor
-            genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
-                                                    d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
-                                                    par.rst, par.dr, par.nr);
-            checkCUDAError("genReflPhasor kernel");
-
-            // generate phasor trace
-            genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
-            checkCUDAError("genPhasorTrace Reflected process");
-            
-            // par.convolution with chirp to get reflected signal
-            if (!par.convolution_linear) {
-                //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
-                checkCUDAError("convolvePhasorChirp Reflected process");
             } else {
-                convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
-                checkCUDAError("convolvePhasorChirpLinear Reflected process");
+
+                // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
+                // generate reflected phasor
+                genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
+                                                        d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
+                                                        par.rst, par.dr, par.nr);
+                checkCUDAError("genReflPhasor kernel");
+
+                // generate phasor trace
+                genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
+                checkCUDAError("genPhasorTrace Reflected process");
+                
+                // par.convolution with chirp to get reflected signal
+                if (!par.convolution_linear) {
+                    //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                    checkCUDAError("convolvePhasorChirp Reflected process");
+                } else {
+                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                    checkCUDAError("convolvePhasorChirpLinear Reflected process");
+                }
+                
             }
-            
+        } else {
+            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
+            checkCUDAError("convolvePhasorChirpLinear Reflected process");
+            // write out surface phasor
+            char* Psurf_filename = (char*)malloc(64 * sizeof(char));
+            sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
+            saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
+            free(Psurf_filename);
+            checkCUDAError("exportingSurfacePhasor kernel");
         }
         
         for (int it=0; it<ntargets; it++) {
@@ -811,20 +828,6 @@ int main(int argc, const char* argv[])
 
             // loop for all non-specular target types
             if (h_ttype[it] != 0) {
-
-                if (!par.specular) {
-                    surfacePT<<<numBlocks, blockSize>>>(d_PSurf, d_Ith, d_Iph, d_Itd,
-                                                        d_fReflE, par, valid_facets);
-                    cudaDeviceSynchronize();
-                    checkCUDAError("surfacePT kernel");
-
-                    // write out surface phasor
-                    char* Psurf_filename = (char*)malloc(64 * sizeof(char));
-                    sprintf(Psurf_filename, "%s/Psurf_s%06d_t%02d.txt", argv[4], is, it);
-                    saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
-                    free(Psurf_filename);
-                    checkCUDAError("exportingSurfacePhasor kernel");
-                }
 
                 // --- CALCULATE POWER AT TARGET ---
                 // this is the inward phasor trace
@@ -924,8 +927,8 @@ int main(int argc, const char* argv[])
 
                 // for all other targets
                 else {
-                    convolveComplex(d_PTTmp, d_chirpComplex, d_refr_temp, par.nr);
-                    checkCUDAError("convolve kernel");
+                    convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                    checkCUDAError("refracted convolve kernel");
                 }
 
                 // accumulate this target's contribution into the running sum
