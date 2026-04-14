@@ -54,7 +54,7 @@ params = {
     "convolution": True,   # use convolution-based processing
     "convolution_linear": True,  # use linear convolution instead of circular
     "specular": False,     # use specular computation methods for specific circumstances only
-    "lossless": False,      # simulate without loss (spreading not included)
+    "lossless": True,      # simulate without loss (spreading not included)
 
 }
 

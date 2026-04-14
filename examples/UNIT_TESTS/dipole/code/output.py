@@ -35,6 +35,14 @@ plt.xlim(20, 30)
 plt.savefig("figures/Ptarg.png")
 plt.close()
 
+for i in range(46, 55):
+    fdat = load_complex(f"rdrgrm/PTTmp_s0000{i}_t00.txt")
+    plt.plot(np.arange(len(fdat)) * dt, np.abs(fdat), linewidth=1, label=i)
+plt.xlim(25.5, 27)
+plt.legend()
+plt.savefig("figures/PTtmp.png")
+plt.close()
+
 surf_dat = load_complex("rdrgrm/Psurf_s000050.txt")
 fig, ax = plt.subplots(1, 1, figsize=(10, 4))
 ax.plot(np.arange(len(surf_dat)) * dt, np.abs(surf_dat), color="black", linewidth=1, label="Surface")

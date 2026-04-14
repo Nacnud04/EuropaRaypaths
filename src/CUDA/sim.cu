@@ -448,22 +448,18 @@ int main(int argc, const char* argv[])
     // array for power function at target
     cuFloatComplex* d_Ptarg;
     cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
 
     // array for power function at source
     cuFloatComplex* d_Psour;
     cudaMalloc((void**)&d_Psour, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
 
     // tmp for phasor trace
     cuFloatComplex* d_PTTmp;
     cudaMalloc((void**)&d_PTTmp, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
 
     // tmp for surf phasor trace
     cuFloatComplex* d_PSurf;
     cudaMalloc((void**)&d_PSurf, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
     // refracted signal
     cuFloatComplex* d_refr_sig;
@@ -616,6 +612,12 @@ int main(int argc, const char* argv[])
     std::cout << "Number of range bins: " << par.nr << std::endl;
 
     for (int is=0; is<par.ns; is++) {
+
+        // first clear phasor buffers
+        cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
         // update par.rst
         if (rxWindowPositionFileProvided) {
