@@ -705,13 +705,15 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float* d_Ith, float*
 
         //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(1, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]) / (4 * nfacets);
+        float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]) / (4 * nfacets);
+        //float Pray = doubleFriis(par.P, par.lam, d_Itd[id], d_Ttd[id]) / (4 * nfacets);
 
-        // account for prop through facet
+        // account for gains
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
                       facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
+        //Pray = Pray * G_fct * par.Grefr_lin * G_dipole;
 
         // account for losses
         if (!par.lossless) {
@@ -761,13 +763,14 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
 
         // STRAIGHT TO SOURCE FROM TARGET
-        // DOES NOT ACCOUNT FOR FACET LOSSES
-        float Pray   = friis(par.P, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]) / (4 * nfacets);
+        float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]) / (4 * nfacets);
+        //float Pray = doubleFriis(1, par.lam, d_Itd[id], d_Ttd[id]) / (4 * nfacets);
 
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
                       facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
+        //Pray = Pray * G_fct * par.Grefr_lin * G_dipole;
 
         // losses
         if (!par.lossless) {
