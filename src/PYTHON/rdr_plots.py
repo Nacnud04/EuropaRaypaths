@@ -39,7 +39,7 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=
            extent=[xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]])
     plt.colorbar(label='Power [dB]')
     plt.xlabel("Azimuth [km]")
-    plt.ylabel("Range [us]")
+    plt.ylabel("Range [m]")
     if title:
         plt.title(title)
     plt.savefig(path)

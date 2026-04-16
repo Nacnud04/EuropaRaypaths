@@ -35,9 +35,9 @@ params = {
     # source parameters 
     "sy": 0,                # source y location       [m]
     "sz": 10e3,             # source z location       [m]
-    "sdx": 100,              # source x discretization [m]
+    "sdx": 10,              # source x discretization [m]
     "sx0": -5e3,            # source x origin         [m]
-    "ns": 100,             # source count            [.]
+    "ns": 1000,             # source count            [.]
 
     # facet array params
     "ox": -5e3,

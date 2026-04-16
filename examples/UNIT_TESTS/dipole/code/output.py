@@ -47,6 +47,8 @@ surf_dat = load_complex("rdrgrm/Psurf_s000050.txt")
 fig, ax = plt.subplots(1, 1, figsize=(10, 4))
 ax.plot(np.arange(len(surf_dat)) * dt, np.abs(surf_dat), color="black", linewidth=1, label="Surface")
 ax.plot(np.arange(len(fdat)) * dt, np.abs(fdat), color="red", linewidth=1, label="Subsurface")
+ax.set_xlabel("Time [us]")
+ax.set_ylabel("Power [w]")
 plt.savefig("figures/PTComparison.png")
 plt.close()
 
@@ -59,7 +61,7 @@ rp.simple_rdrgrm(rdrgrm, params, "figures/rdrgrm.png", title="Very basic radargr
 focused = sf.full_focus_at_center(rdrgrm, params)
 #focused[:500] = rdrgrm[:500]
 
-rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=10)
+rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=0)
 
 params['aspect'] = 'auto'
 rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=-10, vminfoc=10)
