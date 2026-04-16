@@ -835,7 +835,7 @@ int main(int argc, const char* argv[])
                 // this is the inward phasor trace
                 accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, d_Ith, d_Iph, d_Itd,
                                                            d_Tth, d_Tph, d_Ttd,
-                                                           d_fRefrEI, d_fRfrSR,
+                                                           d_TargetTh, d_fRefrEI, d_fRfrSR,
                                                            par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
@@ -860,7 +860,7 @@ int main(int argc, const char* argv[])
                 // --- CALCULATE OUTWARD PHASOR TRACE ---
                 radiateTarget<<<numBlocks, blockSize>>>(d_Psour, d_Ith, d_Iph, d_Itd,
                                                         d_Tth, d_Tph, d_Ttd,
-                                                        d_fRefrEO, d_fRfrSR,
+                                                        d_TargetTh, d_fRefrEO, d_fRfrSR,
                                                         par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("radiateTarget kernel");

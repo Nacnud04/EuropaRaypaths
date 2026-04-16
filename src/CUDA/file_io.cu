@@ -389,6 +389,12 @@ __host__ void loadTargetFile(FILE* file, const int nt,
                 &h_tx[i],   &h_ty[i],  &h_tz[i],
                 &h_tnx[i], &h_tny[i], &h_tnz[i]);
         }
+        // if there are 7 entries there is a normal vector and a target type provided
+        else if (comma_count == 6) {
+            sscanf(line, "%f,%f,%f,%f,%f,%f,%hhu",
+                &h_tx[i],   &h_ty[i],  &h_tz[i],
+                &h_tnx[i], &h_tny[i], &h_tnz[i], &h_ttype[i]);
+        }
         else {
             std::cerr << "Error: Target file line number=" << i+1 << " has incorrect number of entries." << std::endl;
             break;

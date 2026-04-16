@@ -688,9 +688,10 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
 }
 
 // this function sums input ray weights to get current the target
-__global__ void accumulateTarget(cuFloatComplex* d_PTarget, float* d_Ith, float* d_Iph, float* d_Itd,
+__global__ void accumulateTarget(cuFloatComplex* d_PTarget, 
+                                 float* d_Ith, float* d_Iph, float* d_Itd,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
-                                 float* d_fRefrEI, float* d_fRfrSR, 
+                                 float* d_Tarth, float* d_fRefrEI, float* d_fRfrSR, 
                                  SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -701,7 +702,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float* d_Ith, float*
         //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // find the gain in the inbound ray direction
-        float G_dipole = hertz_dipole(d_Tth[id] + (3.141559/2));
+        float G_dipole = hertz_dipole(d_Tarth[id]);
 
         //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
         // STRAIGHT TO SOURCE FROM TARGET
@@ -744,7 +745,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget, float* d_Ith, float*
 __global__ void radiateTarget(cuFloatComplex* d_Psource, 
                               float* d_Ith, float* d_Iph, float* d_Itd,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
-                              float* d_fRefrEO, float* d_fRfrSR, 
+                              float* d_Tarth, float* d_fRefrEO, float* d_fRfrSR, 
                               SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -760,7 +761,7 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         // Solid angle weight [spat]
         //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
 
-        float G_dipole = hertz_dipole(d_Tth[id] + (pi/2));
+        float G_dipole = hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
         float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]) / (4 * nfacets);
