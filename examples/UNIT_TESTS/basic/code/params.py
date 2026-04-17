@@ -10,7 +10,7 @@ params = {
     "frequency": 9e6,         # Radar frequency [Hz]
     "bandwidth": 1e6,         # Radar bandwidth [Hz]
     "surface_gain": 36,       # Antenna gain [dB]
-    "subsurface_gain": 47,   # Subsurface antenna gain [dB]
+    "subsurface_gain": 49,   # Subsurface antenna gain [dB]
     "range_resolution": 300,  # range resolution [m]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
     "aperture": 2,           # aperture (from nadir->edge) [deg]
@@ -51,8 +51,10 @@ params = {
     "rerad_funct": 2,  # 1-degree boxcar
 
     # processing parameters (BOOLEAN)
-    "convolution": True,   # use convolution-based processing
+    "convolution": True,         # use convolution-based processing
     "convolution_linear": True,  # use linear convolution instead of circular
+    "specular": True,            # use specular computation method
+    "lossless": False,           # simulate with loss
 
 }
 

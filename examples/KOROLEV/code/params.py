@@ -49,8 +49,10 @@ params = {
     "rerad_funct": 1,  # 3-degree boxcar
 
     # processing parameters (BOOLEAN)
-    "convolution": True,   # use convolution-based processing
+    "convolution": True,         # use convolution-based processing
     "convolution_linear": True,  # use linear convolution instead of circular
+    "specular": True,            # use specular computation method
+    "lossless": False,           # simulate with loss
 
 }
 

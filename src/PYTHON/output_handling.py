@@ -16,7 +16,7 @@ def compile_rdrgrm(path, par, rx_win_file=None):
     for i, f in enumerate(filenames):
         if i < par['ns']:
             index = int(f.split("/")[-1][1:-4])
-            print(f"Compiling radargram... {index}/{par['ns']}", end="           \r")
+            print(f"Compiling radargram... {index+1}/{par['ns']}", end="           \r")
             arr = np.loadtxt(f).T
             col = arr[0] + 1j * arr[1]
             if rx_win_file:
