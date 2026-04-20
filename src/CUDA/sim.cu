@@ -773,11 +773,12 @@ int main(int argc, const char* argv[])
             convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
             checkCUDAError("convolvePhasorChirpLinear Reflected process");
             // write out surface phasor
+            /*
             char* Psurf_filename = (char*)malloc(64 * sizeof(char));
             sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
             saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
             free(Psurf_filename);
-            checkCUDAError("exportingSurfacePhasor kernel");
+            checkCUDAError("exportingSurfacePhasor kernel");*/
         }
         
         for (int it=0; it<ntargets; it++) {
@@ -840,11 +841,11 @@ int main(int argc, const char* argv[])
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
                 // write out d_Ptarg to file for debugging
-                char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
+                /*char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
                 sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
                 saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
                 free(Ptarg_filename);
-                checkCUDAError("exportingTargetPower kernel");
+                checkCUDAError("exportingTargetPower kernel");*/
             }
 
             // --- COMPUTE UPWARD TRANSMITTED RAYS ---
@@ -865,21 +866,21 @@ int main(int argc, const char* argv[])
                 cudaDeviceSynchronize();
                 checkCUDAError("radiateTarget kernel");
                 // write out d_Psour to file for debugging
-                char* Psour_filename = (char*)malloc(64 * sizeof(char));
+                /*char* Psour_filename = (char*)malloc(64 * sizeof(char));
                 sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
                 saveSignalToFile(Psour_filename, d_Psour, par.nr);
                 free(Psour_filename);
-                checkCUDAError("exportingSourcePower kernel");
+                checkCUDAError("exportingSourcePower kernel");*/
                 
                 // --- CONVOLVE INTO FULL PHASOR TRACE ---
                 convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
                 checkCUDAError("convolve kernel");
                 // write out d_PTTmp to file for debugging
-                char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
+                /*char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
                 sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
                 saveSignalToFile(PTTmp_filename, d_PTTmp, par.nr);
                 free(PTTmp_filename);
-                checkCUDAError("exportingPhasorTrace kernel");
+                checkCUDAError("exportingPhasorTrace kernel");*/
             
             }
             

@@ -5,6 +5,9 @@ def compile_rdrgrm(path, par, rx_win_file=None):
 
     filenames = glob.glob(f"{path}/s*.txt")
 
+    if len(filenames) == 0:
+        raise ValueError(f"No files found in {path} with pattern s*.txt")
+
     # sort filenames to ensure correct order
     filenames.sort()
 

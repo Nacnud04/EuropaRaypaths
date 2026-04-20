@@ -16,8 +16,11 @@
 """
 
 # imports 
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.colors as colors
 from gstools import SRF, TPLStable
 from shapely import Polygon, Point
 
@@ -66,7 +69,7 @@ origin_y         = 0.0
 origin           = (origin_x, origin_y)
 
 # facet size [m]
-facet_size       = 50.0
+facet_size       = 100.0
 Nfct_x           = int(domain_size_x / facet_size)
 Nfct_y           = int(domain_size_y / facet_size)
 Nfct             = Nfct_x * Nfct_y
@@ -152,7 +155,7 @@ for i in range(nblocks):
 block_mask = np.ones_like(XX) * -1 # -1 indicates matrix material, block index otherwise
 
 for i in range(nblocks):
-    print(f"Masking block {i+1:2d}/{nblocks:2d}...")
+    print(f"Masking block {i+1:2d}/{nblocks:2d}...", end="       \r")
     # generate shapely polygon for block
     block_poly = Polygon([blockTLs[i], blockTRs[i], blockBRs[i], blockBLs[i]])
     # make a meshgrid for the polygon
@@ -188,6 +191,102 @@ ZZ = matrix_mean + matrix_noise
 for i in range(nblocks):
     reduced_mask = block_mask == i
     ZZ[reduced_mask] = blockHs[i] + block_noise[reduced_mask]
+
+
+# --- COMPUTE ORTHONORMAL BASIS ---
+
+# first compute surface normals via central differences
+dZdx = np.zeros_like(ZZ)
+dZdy = np.zeros_like(ZZ)
+dZdx[:, 1:-1] = (ZZ[:, 2:] - ZZ[:, :-2]) / (2 * facet_size)
+dZdy[1:-1, :] = (ZZ[2:, :] - ZZ[:-2, :]) / (2 * facet_size)
+
+# fill in edges with copy
+dZdx[:, 0] = dZdx[:, 1]
+dZdx[:, -1] = dZdx[:, -2]
+dZdy[0, :] = dZdy[1, :]
+dZdy[-1, :] = dZdy[-2, :]
+
+# compute normal vectors
+norms = np.sqrt(dZdx**2 + dZdy**2 + 1)
+n_hat = np.zeros((Nfct_y, Nfct_x, 3))
+n_hat[:, :, 0] = -dZdx / norms
+n_hat[:, :, 1] = -dZdy / norms
+n_hat[:, :, 2] = 1 / norms
+
+# generate other two basis using reference vector (pointing in x direction)
+ref = np.zeros_like(n_hat)
+ref[:, :, 0] = 1
+
+# if n_hat is nearly parallel with ref, switch to y direction
+parallel_mask = np.abs(n_hat[:, :, 0]) > 0.9
+ref[parallel_mask, :] = [0, 1, 0]
+
+# get first tangent with cross product
+u_hat = np.cross(ref, n_hat)
+u_hat /= np.linalg.norm(u_hat, axis=2, keepdims=True)
+
+# get second tangent with cross product
+v_hat = np.cross(n_hat, u_hat)
+
+# flatten into output arrays
+fxs = XX.flatten()
+fys = YY.flatten()
+fzs = ZZ.flatten()
+fnxs = n_hat[:,:,0].flatten()
+fnys = n_hat[:,:,1].flatten()
+fnzs = n_hat[:,:,2].flatten()
+fuxs = u_hat[:,:,0].flatten()
+fuys = u_hat[:,:,1].flatten()
+fuzs = u_hat[:,:,2].flatten()
+fvxs = v_hat[:,:,0].flatten()
+fvys = v_hat[:,:,1].flatten()
+fvzs = v_hat[:,:,2].flatten()
+
+def export_obj_points_colored(filename, xs, ys, zs, values, nxs, nys, nzs, cmap_name="magma", vmin=None, vmax=None, nscale=0.5e3):
+    # Normalize values to [0, 1]
+    if vmin and vmax:
+        norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    else:
+        norm = colors.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
+    cmap = matplotlib.colormaps.get_cmap(cmap_name)
+
+    print(f"Exporting to: {filename}")
+
+    with open(filename, "w") as f:
+        f.write("# Point cloud OBJ with vertex colors\n")
+        i = 0
+        for x, y, z, v, nx, ny, nz in zip(xs, ys, zs, values, nxs, nys, nzs):
+            r, g, b, _ = cmap(norm(v))
+            f.write(f"v {x:.6f} {y:.6f} {z:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
+            f.write(f"v {x+nx*nscale:.6f} {y+ny*nscale:.6f} {z+nz*nscale:.6f} {r:.6f} {g:.6f} {b:.6f}\n")
+            f.write(f"l {i+1} {i+2}\n")
+            i += 2
+            if i % 66 == 0:
+                print(f"Writing out facet data ... {i}/{len(xs)*2}", end="      \r")
+
+
+export_obj_points_colored(
+    "figures/chaos_facets.obj",
+    fxs, fys, fzs,
+    fzs,
+    fnxs, fnys, fnzs,
+    cmap_name="magma", nscale=80
+)
+
+
+# export into facet file
+facet_file = "inputs/facets.fct"
+
+with open(facet_file, 'w') as f:
+    i = 0
+    for x, y, z, nx, ny, nz, ux, uy, uz, vx, vy, vz in zip(fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs):
+        if i != len(fxs) - 1:
+            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}\n")
+        else:
+            f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
+        i += 1
+    print(f"Exported facet data to: {facet_file}")
 
 
 # --- EXPORT TO OBJ FILE ---
@@ -248,4 +347,5 @@ for a in ax:
     a.set_xlim(origin_x/1e3, (origin_x + domain_size_x)/1e3)
     a.set_ylim(origin_y/1e3, (origin_y + domain_size_y)/1e3)
 plt.tight_layout()
+plt.savefig("figures/chaos_terrain_construction.png", dpi=300)
 plt.show()

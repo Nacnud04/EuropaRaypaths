@@ -25,7 +25,7 @@ matplotlib.rcParams.update({
 })
 
 
-def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=None):
+def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=None, figsize=None):
 
     if linspace:
         xmin = par['sx0']
@@ -34,6 +34,9 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=
         xmin = 0
         xmax = rdrgrm.shape[1]
         #raise NotImplementedError("Cannot handle uneven source spacing yet.")
+
+    if figsize:
+        plt.figure(figsize=figsize, dpi=300)
 
     plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, vmax=vmax,
            extent=[xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]])
@@ -659,7 +662,7 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
     plt.colorbar(im2, label="Power [dB]", pad=0.01)
 
     # labels
-    for a in ax: a.set_ylabel("Range [$\mu$s]")
+    for a in ax: a.set_ylabel(r"Range [$\mu$s]")
     ax[2].set_xlabel("Latitude [deg]")
 
     labels = ["(a) 2D Slice","(b) Unfocused", "(c) Focused"]
