@@ -69,7 +69,7 @@ origin_y         = 0.0
 origin           = (origin_x, origin_y)
 
 # facet size [m]
-facet_size       = 100.0
+facet_size       = 50.0
 Nfct_x           = int(domain_size_x / facet_size)
 Nfct_y           = int(domain_size_y / facet_size)
 Nfct             = Nfct_x * Nfct_y

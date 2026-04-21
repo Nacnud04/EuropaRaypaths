@@ -10,7 +10,7 @@ pars = {
     "surface_gain":           7.3,   # Antenna gain        [dBi]
     "subsurface_gain":        7.3,   # Antenna gain        [dBi]
     "polarization":          "HH",   # Polarization (dont matter)
-    "aperture":               0.5,   # Processing aperture [deg]
+    "aperture":                 2,   # Processing aperture [deg]
 
     # source parameters 
     "sy":                   2.5e3,   # source y location       [m]
@@ -28,7 +28,7 @@ pars = {
     "rms_height":             0.4,   # Facet roughness         [m]
     "buff":                   1.1,   # Buffer for memory alloc [.]
     "altitude":              25e3,   # Approx. alt (for focus) [m]
-    "fs":                     100,   # Facet size              [m]
+    "fs":                      50,   # Facet size              [m]
 
     # atmosphere/subsurface parameters
     "eps_1":                  1.0,   # permittivity of medium 1 
