@@ -10,14 +10,14 @@ pars = {
     "surface_gain":           7.3,   # Antenna gain        [dBi]
     "subsurface_gain":        7.3,   # Antenna gain        [dBi]
     "polarization":          "HH",   # Polarization (dont matter)
-    "aperture":                 2,   # Processing aperture [deg]
+    "aperture":                 3,   # Processing aperture [deg]
 
     # source parameters 
     "sy":                   2.5e3,   # source y location       [m]
     "sz":                    25e3,   # source z location       [m]
-    "sdx":                     50,   # source x discretization [m]
+    "sdx":                     25,   # source x discretization [m]
     "sx0":                      0,   # source x origin         [m]
-    "ns":                    1000,   # source count            [.]
+    "ns":                    2000,   # source count            [.]
 
     # receive window parameters
     "rx_window_offset_m": 24.75e3,   # Rx opening window delay [m]

@@ -251,7 +251,7 @@ def focus_window(rdrgrm, par, win_center, win_width, c1=299792458, sx_linspace=T
 
 
 # function to focus entire image with a given aperture
-def focus_rdrgrm(rdrgrm, par, st=None, en=None):
+def focus_rdrgrm(rdrgrm, par, st=None, en=None, return_shifts=False, return_match_filter=False):
 
     # NOTE: This function requires some additional parameters. Such as:
     # spacing: approximate spacing between sources
@@ -288,8 +288,14 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None):
         sltrng = est_slant_range(sx, sz, tx, tz, par["eps_1"], par["eps_2"], trim=False, clutter=True)
         sltrng_rb = uc.slantrange_to_rangebin(sltrng, par)
 
+        if return_shifts == True:
+            return sltrng_rb
+
         # turn slant range into matched filter
         mth_filt = uc.match_filter(sltrng, par)
+
+        if return_match_filter == True:
+            return mth_filt
 
         # iterate over every single trace
         for j in range(Na):
@@ -302,6 +308,7 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None):
             # range correction
             # NOTE: to be proper I should crop the slantrange array to work for edges
             shift_amounts = sltrng_rb - i
+
             rdr_rcmc = np.array([
                 np.roll(window[:, k], -int(shift_amounts[k]))
                 for k in range(window.shape[1])

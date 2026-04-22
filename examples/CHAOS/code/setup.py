@@ -348,4 +348,4 @@ for a in ax:
     a.set_ylim(origin_y/1e3, (origin_y + domain_size_y)/1e3)
 plt.tight_layout()
 plt.savefig("figures/chaos_terrain_construction.png", dpi=300)
-plt.show()
+plt.close()
