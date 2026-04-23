@@ -13,7 +13,7 @@ params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 rdrgrm = oh.compile_rdrgrm("radargram", params)
 print(f"Radargram shape: {rdrgrm.shape}")
 
-rp.simple_rdrgrm(rdrgrm, params, "figures/radargram.png", linspace=True, figsize=(9, 3))
+rp.simple_rdrgrm(rdrgrm, params, "figures/radargram.png", linspace=True, figsize=(9, 4))
 
 np.save("radargram/radargram.npy", rdrgrm)
 
@@ -36,6 +36,6 @@ plt.show()
 """
 focused = sf.focus_rdrgrm(rdrgrm, params)
 
-rp.simple_rdrgrm(focused, params, "figures/focused.png", linspace=True, figsize=(9, 3))
+rp.simple_rdrgrm(focused, params, "figures/focused.png", linspace=True, figsize=(9, 4))
 
 np.save("radargram/focused.npy", focused)
