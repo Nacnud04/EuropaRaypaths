@@ -773,12 +773,12 @@ int main(int argc, const char* argv[])
             convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
             checkCUDAError("convolvePhasorChirpLinear Reflected process");
             // write out surface phasor
-            /*
+            
             char* Psurf_filename = (char*)malloc(64 * sizeof(char));
             sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
             saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
             free(Psurf_filename);
-            checkCUDAError("exportingSurfacePhasor kernel");*/
+            checkCUDAError("exportingSurfacePhasor kernel");
         }
         
         for (int it=0; it<ntargets; it++) {

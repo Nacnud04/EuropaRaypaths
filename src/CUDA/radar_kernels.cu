@@ -615,14 +615,16 @@ __device__ float hertz_dipole(float th) {
     return 1.5 * powf(sinf(th), 2);
 }
 
-// reradiation pattern for facet
+// directivity pattern for facet
 __device__ float facet_G(float th, float ph,  
                                   float lam, float fs){
 
+    float piLlam = (pi * fs) / lam;
+
     // np.sinc(((r) / lam) * np.sin(ph) * np.cos(th))
-    float sinc1 = sinc((fs / lam) * sinGPU(th) * cosGPU(ph));
+    float sinc1 = sinc(piLlam * sinGPU(th) * cosGPU(ph));
     // np.sinc(((r) / lam) * np.sin(ph) * np.sin(th))
-    float sinc2 = sinc((fs / lam) * sinGPU(th) * sinGPU(ph));
+    float sinc2 = sinc(piLlam * sinGPU(th) * sinGPU(ph));
 
     // combine all together
     // note it is squared to convert from field strength to power
@@ -638,7 +640,7 @@ __device__ float facet_G(float th, float ph,
 
 // phasor from range
 __device__ cuFloatComplex phasor(float r, float lam) {
-    float phase = (4.0f * 3.14159265f / lam) * r;
+    float phase = -(2.0f * 3.14159265f / lam) * r;
     float c, s;
     sincosf(phase, &s, &c);
     return make_cuFloatComplex(c, s);
@@ -651,9 +653,6 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id < nfacets) {
-
-        // get solid angle ray weight at facet
-        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // facet gain in inbound direction
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
@@ -662,8 +661,7 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
         float Pfacet = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
 
         // FRIIS outward
-        // we normalize here (dont know why but 4x nfacets is needed)
-        float Psrc   = friis(Pfacet, G_fct, par.Grefr_lin, par.lam, d_Itd[id]) / (4 * nfacets);
+        float Psrc   = friis(Pfacet, G_fct, par.Grefr_lin, par.lam, d_Itd[id]);
 
         // account for losses
         if (!par.lossless) {
@@ -678,7 +676,8 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(d_Itd[id], par.lam), make_cuFloatComplex(Psrc, 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(2 * d_Itd[id], par.lam), make_cuFloatComplex(sqrtf(Psrc), 0.0f));
+            //cuFloatComplex contrib = cuCmulf(make_cuFloatComplex(1.0f, 0.0f), make_cuFloatComplex(Psrc, 0.0f));
             atomicAdd(&(d_Psurface[bin].x), contrib.x); // add real components together
             atomicAdd(&(d_Psurface[bin].y), contrib.y); // add imag components together
         }
