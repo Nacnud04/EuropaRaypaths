@@ -112,6 +112,9 @@ struct SimulationParameters {
     bool specular;
     bool lossless;
 
+    // debug parameters
+    bool debug_surface = false;
+
 };
 
 __host__ SimulationParameters parseSimulationParameters(const std::string& filename) {
@@ -231,6 +234,9 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.convolution_linear = j["convolution_linear"];
     params.specular = j["specular"];
     params.lossless = j["lossless"];
+
+    // debug parameters
+    params.debug_surface = j.value("debug_surface", false);
     
     return params;
 }

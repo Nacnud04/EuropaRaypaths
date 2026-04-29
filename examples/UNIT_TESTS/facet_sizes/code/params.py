@@ -55,6 +55,9 @@ params = {
     "specular": False,     # use specular computation methods for specific circumstances only
     "lossless": True,      # simulate without loss (spreading not included)
 
+    # enable debug to see surface response phasor trace
+    "debug_surface": True,
+
 }
 
 fss = (25, 50, 100, 150, 250)
