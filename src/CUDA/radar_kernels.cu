@@ -646,6 +646,31 @@ __device__ cuFloatComplex phasor(float r, float lam) {
     return make_cuFloatComplex(c, s);
 }
 
+// random phasor (incoherent)
+__device__ cuFloatComplex randomPhasor(int seed) {
+
+    // if seed is 0 use a new random seed
+    if (seed == 0) {
+        seed = clock64(); // use clock as a source of variability
+    }
+
+    // simple hash function to generate a pseudo-random number from the seed
+    unsigned int x = seed;
+    x ^= x >> 13;
+    x ^= x << 17;
+    x ^= x >> 5;
+
+    // convert to float in [0, 1)
+    float randVal = (x & 0xFFFFFF) / (float)(0x1000000);
+
+    // map to [0, 2*pi)
+    float phase = randVal * 2.0f * 3.14159265f;
+
+    float c, s;
+    sincosf(phase, &s, &c);
+    return make_cuFloatComplex(c, s);
+}
+
 // function to generate surface phasor trace
 __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph, float* d_Itd,
                           float* d_fReflE, SimulationParameters par, int nfacets) {
@@ -670,16 +695,22 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
 
         // get range bin location
         short bin = (short)((d_Itd[id] - par.rst) / par.dr);
+        float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
 
         // atomic add into range bin
-        if ((bin < 0) || (bin >= par.nr)) {
+        if ((bin < 0) || (bin > par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(2 * d_Itd[id], par.lam), make_cuFloatComplex(sqrtf(Psrc), 0.0f));
-            //cuFloatComplex contrib = cuCmulf(make_cuFloatComplex(1.0f, 0.0f), make_cuFloatComplex(Psrc, 0.0f));
-            atomicAdd(&(d_Psurface[bin].x), contrib.x); // add real components together
-            atomicAdd(&(d_Psurface[bin].y), contrib.y); // add imag components together
+            //cuFloatComplex contrib = cuCmulf(randomPhasor(0), make_cuFloatComplex(sqrtf(Psrc), 0.0f));
+            // add contribution into starting range bin
+            atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            // add remaining contribution into adjcacent range bin
+            atomicAdd(&(d_Psurface[bin+1].x), contrib.x * bin_float); // add real components together
+            atomicAdd(&(d_Psurface[bin+1].y), contrib.y * bin_float); // add imag components together
+
         }
 
     }
