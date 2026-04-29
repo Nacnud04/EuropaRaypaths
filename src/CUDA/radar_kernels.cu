@@ -697,13 +697,20 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
         short bin = (short)((d_Itd[id] - par.rst) / par.dr);
         float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
 
+        // evaluate phasor
+        cuFloatComplex phasor_val;
+        if (par.incoherent) {
+            phasor_val = randomPhasor(0);
+        } else {
+            phasor_val = phasor(2 * d_Itd[id], par.lam);
+        }
+
         // atomic add into range bin
         if ((bin < 0) || (bin > par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(2 * d_Itd[id], par.lam), make_cuFloatComplex(sqrtf(Psrc), 0.0f));
-            //cuFloatComplex contrib = cuCmulf(randomPhasor(0), make_cuFloatComplex(sqrtf(Psrc), 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor_val, make_cuFloatComplex(sqrtf(Psrc), 0.0f));
             // add contribution into starting range bin
             atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
             atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together

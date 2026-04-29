@@ -111,6 +111,7 @@ struct SimulationParameters {
     bool convolution_linear;
     bool specular;
     bool lossless;
+    bool incoherent = false;
 
     // debug parameters
     bool debug_surface = false;
@@ -234,6 +235,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.convolution_linear = j["convolution_linear"];
     params.specular = j["specular"];
     params.lossless = j["lossless"];
+    params.incoherent = j.value("incoherent", false);
 
     // debug parameters
     params.debug_surface = j.value("debug_surface", false);

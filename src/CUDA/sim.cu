@@ -150,7 +150,6 @@ int main(int argc, const char* argv[])
     bool gainPatternProvided = false;
 
     float *h_gRefl; float *h_gRefr;
-    float gRefl; float gRefr;
 
     if (par.gainFile != "NONE") {
     
