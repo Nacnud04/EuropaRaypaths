@@ -38,8 +38,13 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=
     if figsize:
         plt.figure(figsize=figsize, dpi=300)
 
+    if 'rx_window_offset_m' in par.keys():
+        extent = [xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]]
+    else:
+        extent = (xmin/1e3, xmax/1e3, rdrgrm.shape[1],0)
+
     plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, vmax=vmax,
-           extent=[xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]])
+           extent=extent)
     plt.colorbar(label='Power [dB]')
     plt.xlabel("Azimuth [km]")
     plt.ylabel("Range [m]")
@@ -59,8 +64,11 @@ def IGARSS2026_rdrgrm_focused(rdrgrm, focused, par, az_s1, az_s2, rng_s1, rng_s2
     
     rb = int((par["rx_window_m"] / c1) / (1 / par["rx_sample_rate"]))
     
-    extent = (azmin/1e3, azmax/1e3, 2*((par['rx_window_offset_m'] + par['rx_window_m'])/c1)*10**6,
-        2*(par['rx_window_offset_m']/c1)*10**6)
+    if 'rx_window_offset_m' in par.keys():
+        extent = (azmin/1e3, azmax/1e3, 2*((par['rx_window_offset_m'] + par['rx_window_m'])/c1)*10**6,
+            2*(par['rx_window_offset_m']/c1)*10**6)
+    else:
+        extent = (azmin/1e3, azmax/1e3, rdrgrm.shape[1],0)
 
     fig, ax = plt.subplots(3, 1, figsize=(4, 6), constrained_layout=True, dpi=300)
 

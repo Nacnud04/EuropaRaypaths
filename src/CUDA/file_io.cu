@@ -208,16 +208,19 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     params.rxWindowPositionFile = j.value("rx_window_position_file", std::string("NONE"));
 
-    if (params.rxWindowPositionFile == "NONE") {
-        std::cout << "No Rx window position file found, using static offset." << std::endl;
-        params.rst = float(j["rx_window_offset_m"]);
-    }
-
     params.nr  = (float(j["rx_window_m"]) / 299792480.0f) * params.smpl;
     params.dr  = float(j["rx_window_m"]) / float(params.nr);
 
+    if (params.rxWindowPositionFile == "NONE") {
+        std::cout << "No Rx window position file found, using static offset." << std::endl;
+        params.rst = float(j["rx_window_offset_m"]);
+        std::cout << "Sampling window: " << params.rst << " to " << float(j["rx_window_offset_m"]) + float(j["rx_window_m"]) << " m, ";
+    } else {
+        std::cout << "Using Rx window position file: " << params.rxWindowPositionFile << std::endl;
+        params.rst = 0.0f; // overriden by positions in file later
+    }
+
     // report sampling window
-    std::cout << "Sampling window: " << params.rst << " to " << float(j["rx_window_offset_m"]) + float(j["rx_window_m"]) << " m, ";
     std::cout << params.nr << " samples at " << params.smpl << " Hz" << std::endl;
 
     // load facet params
