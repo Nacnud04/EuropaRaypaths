@@ -33,7 +33,7 @@ params = {
     "mu_2": 1.0,             # permeability of medium 2
 
     # source parameters 
-    "ns": 500,               # source count            [.]
+    "ns": 2000,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
 
     # facet array params
@@ -52,6 +52,7 @@ params = {
     "convolution_linear": True,  # use linear convolution instead of circular
     "specular": False,     # use specular computation methods for specific circumstances only
     "lossless": True,      # simulate without loss (spreading not included)
+    "incoherent": False,
 
     # enable debug to see surface response phasor trace
     "debug_surface": False,
@@ -60,10 +61,18 @@ params = {
 
 # --- SAVE PARAMS ---
 
-with open("inputs/params.json", "w") as f:
+with open("inputs/co_params.json", "w") as f:
     json.dump(params, f, indent=4)
 
-with open("inputs/params.pkl", 'wb') as hdl:
+with open("inputs/co_params.pkl", 'wb') as hdl:
+    pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
+
+params['incoherent'] = True
+
+with open("inputs/inco_params.json", "w") as f:
+    json.dump(params, f, indent=4)
+
+with open("inputs/inco_params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
 # --- MAKE FACETS ---
