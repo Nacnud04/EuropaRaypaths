@@ -58,5 +58,23 @@ ax[1].set_ylabel("Max Power [W]")
 ax[1].legend()
 ax[1].set_title(f"Incoherent Facets\nMean max power over 50 instances")
 
-plt.savefig("figures/CoherentAreaScaling.png", dpi=300)
+plt.savefig("figures/AreaScaling.png", dpi=300)
+plt.show()
+
+# --- Does this match Haynes? ---
+
+c = 299792458
+f = 60e6
+G = 10**(7.3/10)
+refl = 1
+R = 200e3
+P_t = 100
+
+lam = c / f
+A = np.array(areas)
+
+# first for coherent
+component = ((refl**2 * A**2) / ((4 * np.pi)**2 * lam**2)) * (1/R**4)
+coh_analytic_Pr =  component * (P_t * G**2 * lam**2)
+plt.plot(A, c_Pmaxs / coh_analytic_Pr)
 plt.show()
