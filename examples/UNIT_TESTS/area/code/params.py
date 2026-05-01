@@ -92,13 +92,20 @@ for i, o in enumerate(origin):
     params["oy"] = o
     params["nx"] = int((np.abs(o) * 2) / params['fs'])
     params["ny"] = int((np.abs(o) * 2) / params['fs'])
+    params['incoherent'] = True
 
-    with open(f"inputs/params{i}.json", "w") as f:
+    with open(f"inputs/incoh_params{i}.json", "w") as f:
         json.dump(params, f, indent=4)
 
-    with open(f"inputs/params{i}.pkl", 'wb') as hdl:
+    with open(f"inputs/incoh_params{i}.pkl", 'wb') as hdl:
         pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
+    params['incoherent'] = False
+    with open(f"inputs/coh_params{i}.json", "w") as f:
+        json.dump(params, f, indent=4)
+
+    with open(f"inputs/coh_params{i}.pkl", 'wb') as hdl:
+        pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
     
     fxs = np.arange(params["nx"])*params["fs"] + params["ox"]
     fys = np.arange(params["ny"])*params["fs"] + params["oy"]
