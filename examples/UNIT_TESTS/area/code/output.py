@@ -76,5 +76,20 @@ A = np.array(areas)
 # first for coherent
 component = ((refl**2 * A**2) / ((4 * np.pi)**2 * lam**2)) * (1/R**4)
 coh_analytic_Pr =  component * (P_t * G**2 * lam**2)
-plt.plot(A, c_Pmaxs / coh_analytic_Pr)
+plt.plot(A/(1e3*1e3), c_Pmaxs / coh_analytic_Pr)
+plt.title(r"Simulation$\times\left(\frac{P_tG_tG_r\Gamma^2A^2}{(4\pi)^2R^4}\right)^{-1}$")
+plt.ylabel("Simulator / Analytic")
+plt.xlabel("Area [km^2]")
+plt.subplots_adjust(top=0.85)
+plt.show()
+
+# then for incoherent
+sig_0 = 1
+component = ((sig_0 * A) / ((4 * np.pi)**3)) * (1/R**4)
+incoh_analytic_Pr =  component * (P_t * G**2 * lam**2)
+plt.plot(A/(1e3*1e3), i_Pmaxs / incoh_analytic_Pr)
+plt.title(r"Simulation$\times\left(\frac{P_tG_tG_r\sigma_0A}{(4\pi)^3R^4}\right)^{-1}$")
+plt.ylabel("Simulator / Analytic")
+plt.xlabel("Area [km^2]")
+plt.subplots_adjust(top=0.85)
 plt.show()

@@ -53,3 +53,37 @@ for a in ax: a.legend()
 
 plt.savefig("figures/FalloffComparison.png", dpi=300)
 plt.close()
+
+# --- Does this match Haynes? ---
+
+c = 299792458
+f = 60e6
+G = 10**(7.3/10)
+refl = 1
+R = alts*1e3
+P_t = 100
+
+lam = c / f
+A = 10e3*10e3
+
+# first for coherent
+component = ((refl**2 * A**2) / ((4 * np.pi)**2 * lam**2)) * (1/R**4)
+coh_analytic_Pr =  component * (P_t * G**2 * lam**2)
+
+plt.plot(R/1e3, co_PP / coh_analytic_Pr)
+plt.title(r"Simulation$\times\left(\frac{P_tG_tG_r\Gamma^2A^2}{(4\pi)^2R^4}\right)^{-1}$")
+plt.ylabel("Simulator / Analytic")
+plt.xlabel("Range [km]")
+plt.subplots_adjust(top=0.85)
+plt.show()
+
+# then for incoherent
+sig_0 = 1
+component = ((sig_0 * A) / ((4 * np.pi)**3)) * (1/R**4)
+incoh_analytic_Pr =  component * (P_t * G**2 * lam**2)
+plt.plot(R/1e3, inco_rolling / incoh_analytic_Pr)
+plt.title(r"Simulation$\times\left(\frac{P_tG_tG_r\sigma_0A}{(4\pi)^3R^4}\right)^{-1}$")
+plt.ylabel("Simulator / Analytic")
+plt.xlabel("Range [km]")
+plt.subplots_adjust(top=0.85)
+plt.show()
