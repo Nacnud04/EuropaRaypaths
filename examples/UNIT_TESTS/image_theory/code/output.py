@@ -41,7 +41,7 @@ ax[0].plot(h/1e3, P_num*1e9, label="Numerical", color="black", linewidth=1)
 ax[0].plot(h/1e3, P_r*1e9, color="red", linestyle="--", label="Analytic", linewidth=1)
 ax[0].set_ylabel("Maximum Power [nW]")
 ax[0].legend()
-ax[0].set_title("Comparison of Numerical Sim vs Image Method Radar Equation")
+ax[0].set_title("Coherent Surface with Infinite Area")
 
 # plot error
 ax[1].plot(h/1e3, error, color="blue", label="Error (%)", linewidth=1)

@@ -32,6 +32,7 @@
 
 #include <cuComplex.h>
 #include <math.h>
+#include <limits>
 
 // thrust includes for aperture cropping
 #include <thrust/device_vector.h>
@@ -58,8 +59,15 @@ __host__ int nIlluminatedFacets(float sz, float fz, float fs, float theta, float
     // get the amount of illuminated facets
     float nfacets;
     nfacets = A / (fs * fs);
+    nfacets = nfacets * buff;
 
-    return nfacets * buff;
+    // make sure int doesn't overflow
+    int intmax = std::numeric_limits<int>::max();
+    if (nfacets >= intmax) {
+        return intmax;
+    } else {
+        return (int)nfacets;
+    }
 
 }
 
