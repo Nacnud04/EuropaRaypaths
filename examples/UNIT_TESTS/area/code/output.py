@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-origin = np.linspace(-10e3, -0.25e3, 100)
+origin = np.linspace(-2e3, -0.05e3, 100)
 
 # load in all incoherent simulation outputs
 i_Pmaxs = []
@@ -10,7 +10,7 @@ for i in range(50):
 i_Pmaxs = np.array(i_Pmaxs)
 
 # load in areas
-areas = np.load("incoh_outputs/areas.npy")
+areas = origin ** 2 #np.load("incoh_outputs/areas.npy")
 
 i_Pmaxs = np.nanmean(i_Pmaxs, axis=0)
 
@@ -25,8 +25,6 @@ for i, area in enumerate(areas):
 
     c_Pmaxs.append(np.max(np.abs(sig)**2))
 
-    print(f"area = {area:.0f} m², max abs={np.max(np.abs(sig))**2:.3e}")
-
 # fit an A^2 curve
 c_coeffs = np.polyfit(np.array(areas)/(1e3*1e3), c_Pmaxs, 2)
 c_poly = np.poly1d(c_coeffs)
@@ -35,13 +33,24 @@ c_poly = np.poly1d(c_coeffs)
 i_coeffs = np.polyfit(np.array(areas)/(1e3*1e3), i_Pmaxs, 1)
 i_poly = np.poly1d(i_coeffs)
 
+# compute fresnel zone radius at 200 km altitude
+c = 299792458
+f = 60e6
+lam = c / f
+alt = 200e3
+F = np.sqrt((alt + lam / 4)**2 - alt**2)
+FA = np.pi * F**2
+
 # -- PLOT ---
 fig, ax = plt.subplots(1, 2, figsize=(10, 6))
 
 ax[0].plot(np.array(areas)/(1e3*1e3), c_Pmaxs, color="black", label="Simulation")
-ax[0].plot(np.array(areas)/(1e3*1e3), c_poly(np.array(areas)/(1e3*1e3)), color="red", 
-           linestyle="--", 
-           label=f"P = {c_coeffs[0]:.2e} * A^2 + \n       {c_coeffs[1]:.2e} * A + \n        {c_coeffs[2]:.2e}")
+#ax[0].plot(np.array(areas)/(1e3*1e3), c_poly(np.array(areas)/(1e3*1e3)), color="red", 
+#           linestyle="--", 
+#           label=f"P = {c_coeffs[0]:.2e} * A^2 + \n       {c_coeffs[1]:.2e} * A + \n        {c_coeffs[2]:.2e}")
+
+# add fresnel zone radius
+ax[0].axvline(FA/(1e3*1e3), color="blue", linestyle=":", label=f"Fresnel Zone Area at 200 km = {FA/1e6:.2f} km²")
 
 ax[1].plot(np.array(areas)/(1e3*1e3), i_Pmaxs, color="black", label="Simulation")
 ax[1].plot(np.array(areas)/(1e3*1e3), i_poly(np.array(areas)/(1e3*1e3)), color="red", 

@@ -41,7 +41,7 @@ params = {
 
     # facet array params
     "oz": 0,
-    "fs": 100,
+    "fs": 10,
 
     # target params
     "rerad_funct": 2,  # 1-degree boxcar
@@ -58,7 +58,7 @@ params = {
 
 }
 
-origin = np.linspace(-10e3, -0.25e3, 100)
+origin = np.linspace(-2e3, -0.05e3, 100)
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -116,7 +116,7 @@ for i, o in enumerate(origin):
     fxys = np.sqrt(fxxs**2 + fyys**2)
     R = params["sz"]   # or whatever radius you want
     r2 = fxxs**2 + fyys**2
-    fzzs = R - np.sqrt(np.maximum(0, R**2 - r2))
+    fzzs = np.zeros_like(fxys) # R - np.sqrt(np.maximum(0, R**2 - r2))
 
     # generate facet normals
     # first compute surface normals via central differences
@@ -186,9 +186,9 @@ for i, o in enumerate(origin):
         i = 0
         for x, y, z, nx, ny, nz, ux, uy, uz, vx, vy, vz in zip(fxs, fys, fzs, fnxs, fnys, fnzs, fuxs, fuys, fuzs, fvxs, fvys, fvzs):
             if i != len(fxs) - 1:
-                f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}\n")
+                f.write(f"{x:.6f},{y:.6f},{z:.6f}:{nx:.6f},{ny:.6f},{nz:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}\n")
             else:
-                f.write(f"{x:.6f},{y:.6f},{z:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
+                f.write(f"{x:.6f},{y:.6f},{z:.6f}:{nx:.6f},{ny:.6f},{nz:.6f}:{ux:.6f},{uy:.6f},{uz:.6f}:{vx:.6f},{vy:.6f},{vz:.6f}")
             i += 1
         print(f"Exported facet data to: {facet_file}")
 
