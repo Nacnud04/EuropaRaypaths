@@ -8,7 +8,7 @@ import output_handling as oh
 
 params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 
-h = np.linspace(250e3, 150e3, 500)
+h = np.linspace(200e3, 50e3, 500)
 
 # get analytic result
 lam = 299792458 / params["frequency"]
@@ -20,7 +20,7 @@ P_r = (P_t * G**2 * lam**2) / ((4 * np.pi)**2 * (2*h)**2)
 P_num = np.zeros_like(h)
 
 for i, alt in enumerate(h):
-    f = f"coRDR/Psurf_s{i:06d}.txt"
+    f = f"coRDR/s{i:06d}.txt"
     arr = np.loadtxt(f).T
     sig = arr[0] + 1j * arr[1]
     P_num[i] = np.max(np.abs(sig)**2)

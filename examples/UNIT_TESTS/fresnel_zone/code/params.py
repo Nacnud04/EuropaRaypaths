@@ -30,7 +30,6 @@ sourcepar = {
 
 otherpar = {
     "lossless": True,
-    "debug_surface": True,
 }
 
 params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
@@ -46,9 +45,12 @@ szs = pg.vert_source_path(sp_par, minZ, maxZ, "source_path")
 # --- MAKE FACETS and WRITE PARAMS ---
 
 for i, sz in enumerate(szs): 
+    params['incoherent'] = False
     params['sz'] = sz
     params['altitude'] = sz
     params['rx_window_offset_m'] = sz - 250
     pg.export_params(params, f"params{i}")
-    #ss.make_surface(params, "fresnel", f"inputs/facets{i}.fct")
+    params['incoherent'] = True
+    pg.export_params(params, f"inc-params{i}")
+    ss.make_surface(params, "fresnel", f"inputs/facets{i}.fct")
     ss.make_surface(params, "fresnel-convex", f"inputs/facets-conv-{i}.fct")

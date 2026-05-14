@@ -8,9 +8,9 @@ domainpar = {
     "ox": -10e3,
     "oy": -10e3,
     "oz": 0,
-    "fs": 50,
-    "nx": 400,
-    "ny": 400,
+    "fs": 20,
+    "nx": 1000,
+    "ny": 1000,
 }
 
 recpar = {
@@ -27,7 +27,6 @@ sourcepar = {
 
 otherpar = {
     "lossless": True,
-    "debug_surface": True,
 }
 
 params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
@@ -40,8 +39,8 @@ ss.make_surface(params, "flat", "inputs/facets.fct")
 
 # --- MAKE SOURCE PATH ---
 
-maxZ = 150e3 # maximum altitude of source path [m]
-minZ = 250e3 # minimum altitude of source path [m]
+maxZ = 50e3 # maximum altitude of source path [m]
+minZ = 200e3 # minimum altitude of source path [m]
 
 sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
