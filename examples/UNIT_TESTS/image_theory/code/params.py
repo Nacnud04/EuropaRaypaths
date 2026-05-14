@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 
 sys.path.append("../../../src/PYTHON")
 import simple_surfaces as ss
@@ -29,17 +30,27 @@ otherpar = {
     "lossless": True,
 }
 
+# first export basic single example stuff
 params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
+pg.export_params(params, f"co_params")
+ss.make_surface(params, "flat", f"inputs/facets.fct")
 
-pg.export_params(params, "co_params")
+side_len = 2*abs(domainpar['ox'])
+fs_range = np.linspace(10, 100, 25).astype(int)
+nfs      = (side_len / fs_range).astype(int)
 
-# --- MAKE FACETS ---
+for i, (fs, nf) in enumerate(zip(fs_range, nfs)):
 
-ss.make_surface(params, "flat", "inputs/facets.fct")
+    params['fs'] = int(fs)
+    params['nx'] = int(nf)
+    params['ny'] = int(nf)
+    pg.export_params(params, f"co_params{i}")
+
+    ss.make_surface(params, "flat", f"inputs/facets{i}.fct")
 
 # --- MAKE SOURCE PATH ---
 
-maxZ = 50e3 # maximum altitude of source path [m]
+maxZ = 25e3 # maximum altitude of source path [m]
 minZ = 200e3 # minimum altitude of source path [m]
 
 sz = pg.vert_source_path(params, minZ, maxZ, "source_path")

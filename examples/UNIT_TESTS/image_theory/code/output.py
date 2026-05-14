@@ -8,7 +8,7 @@ import output_handling as oh
 
 params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
 
-h = np.linspace(200e3, 50e3, 500)
+h = np.linspace(200e3, 25e3, 500)
 
 # get analytic result
 lam = 299792458 / params["frequency"]
@@ -20,7 +20,7 @@ P_r = (P_t * G**2 * lam**2) / ((4 * np.pi)**2 * (2*h)**2)
 P_num = np.zeros_like(h)
 
 for i, alt in enumerate(h):
-    f = f"coRDR/s{i:06d}.txt"
+    f = f"coRDR/rdr20m/s{i:06d}.txt"
     arr = np.loadtxt(f).T
     sig = arr[0] + 1j * arr[1]
     P_num[i] = np.max(np.abs(sig)**2)
@@ -52,4 +52,62 @@ ax[1].set_ylim(0, 5)
 plt.xlim(h[-1]/1e3, h[0]/1e3)
 
 plt.savefig("figures/ImageMethodComparison.png", dpi=300)
-plt.show()
+plt.close()
+
+# now see how those big error spikes change with facet size
+
+errors = []
+
+for j in range(10):
+    P_num = np.zeros_like(h)
+    for i, alt in enumerate(h):
+        f = f"coRDR/rdr{j}/s{i:06d}.txt"
+        arr = np.loadtxt(f).T
+        sig = arr[0] + 1j * arr[1]
+        P_num[i] = np.max(np.abs(sig)**2)
+    error = np.abs(P_num - P_r) / P_r * 100
+    errors.append(error)
+    print(j)
+    
+errors = np.array(errors)
+
+extent = (200, 25, 100, 10)
+
+fig, ax = plt.subplots(constrained_layout=True)
+
+im = ax.imshow(
+    errors,
+    aspect="auto",
+    extent=extent,
+    cmap="magma",
+    vmax=7.5
+)
+
+plt.colorbar(im, label="Error [%]")
+
+# Primary axes labels
+ax.set_xlabel("Altitude [km]")
+ax.set_ylabel("Facet size [m]")
+
+# --- Secondary X-axis: altitude in wavelengths ---
+def km_to_lam(x):
+    return (x * 1000) / lam
+
+def lam_to_km(x):
+    return (x * lam) / 1000
+
+secax_x = ax.secondary_xaxis("top", functions=(km_to_lam, lam_to_km))
+secax_x.set_xlabel("Altitude [λ]")
+
+# --- Secondary Y-axis: facet size in wavelengths ---
+def m_to_lam(y):
+    return y / lam
+
+def lam_to_m(y):
+    return y * lam
+
+secax_y = ax.secondary_yaxis("right", functions=(m_to_lam, lam_to_m))
+secax_y.set_ylabel("Facet size [λ]")
+
+plt.savefig("figures/ErrorFSvsALT.png")
+plt.close()
