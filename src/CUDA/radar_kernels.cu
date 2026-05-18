@@ -706,7 +706,7 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
         }
 
         // atomic add into range bin
-        if ((bin < 0) || (bin > par.nr)) {
+        if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
@@ -734,24 +734,18 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id < nfacets) {
-
-        // get solid angle ray weight (known as spat)
-        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
         
         // find the gain in the inbound ray direction
-        float G_dipole = hertz_dipole(d_Tarth[id]);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
-        //wr = (fs * fs) / (d_Ttd[id] * d_Ttd[id] * 4.0f * pi);
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]) / (4 * nfacets);
-        //float Pray = doubleFriis(par.P, par.lam, d_Itd[id], d_Ttd[id]) / (4 * nfacets);
+        float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]);
 
         // account for gains
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
                       facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
-        //Pray = Pray * G_fct * par.Grefr_lin * G_dipole;
 
         // account for losses
         if (!par.lossless) {
@@ -760,17 +754,25 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
-        float rngt = d_Itd[id] + d_Ttd[id] * (par.c / par.c_2);
+        float rngt = d_Itd[id] + d_Ttd[id] * sqrtf(par.eps_2);
         short bin = (short)((rngt - par.rst) / par.dr);
-        
+        float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
+
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(Pray, 0.0f));
-            atomicAdd(&(d_PTarget[bin].x), contrib.x); // add real components together
-            atomicAdd(&(d_PTarget[bin].y), contrib.y); // add imag components together
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray), 0.0f));
+            // add contribution into starting range bin
+            atomicAdd(&(d_PTarget[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            atomicAdd(&(d_PTarget[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            // add remaining contribution into adjcacent range bin
+            atomicAdd(&(d_PTarget[bin+1].x), contrib.x * bin_float); // add real components together
+            atomicAdd(&(d_PTarget[bin+1].y), contrib.y * bin_float); // add imag components together
+
+            //atomicAdd(&(d_PTarget[bin].x), contrib.x); // add real components together
+            //atomicAdd(&(d_PTarget[bin].y), contrib.y); // add imag components together
         }
 
     }
@@ -795,20 +797,16 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
 
         // --- TARGET -> FACET ---
 
-        // Solid angle weight [spat]
-        //float wr = (fs * fs) / (d_Itd[id] * d_Itd[id] * 4.0f * pi);
 
-        float G_dipole = hertz_dipole(d_Tarth[id]);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]) / (4 * nfacets);
-        //float Pray = doubleFriis(1, par.lam, d_Itd[id], d_Ttd[id]) / (4 * nfacets);
+        float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
 
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
                       facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
-        //Pray = Pray * G_fct * par.Grefr_lin * G_dipole;
 
         // losses
         if (!par.lossless) {
@@ -819,15 +817,23 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         // note that this is all halved b/c one way propagation into the subsurface
         float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (par.c / par.c_2);
         short bin = (short)((rngt - par.rst) / par.dr);
-        
+        float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
+
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(Pray, 0.0f));
-            atomicAdd(&(d_Psource[bin].x), contrib.x); // add real components together
-            atomicAdd(&(d_Psource[bin].y), contrib.y); // add imag components together
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray), 0.0f));
+            // add contribution into starting range bin
+            atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            // add remaining contribution into adjcacent range bin
+            atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
+            atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
+
+            //atomicAdd(&(d_Psource[bin].x), contrib.x); // add real components together
+            //atomicAdd(&(d_Psource[bin].y), contrib.y); // add imag components together
         }
 
     }
