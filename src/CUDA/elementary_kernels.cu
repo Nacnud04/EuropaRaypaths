@@ -224,9 +224,36 @@ __global__ void complexPointwiseMul(cuFloatComplex* a, const cuFloatComplex* b, 
     }
 }
 
+__global__ void squareComplex(cuFloatComplex* in,
+                              cuFloatComplex* out,
+                              int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        cuFloatComplex z = in[i];
+
+        float a = cuCrealf(z);
+        float b = cuCimagf(z);
+
+        // (a + bi)^2 = (a^2 - b^2) + i(2ab)
+        out[i] = make_cuFloatComplex(a * a - b * b,
+                                     2.0f * a * b);
+    }
+}
+
+void launchSquare(cuFloatComplex* d_in,
+                  cuFloatComplex* d_out,
+                  int n)
+{
+    int blockSize = 256;
+    int gridSize = (n + blockSize - 1) / blockSize;
+
+    squareComplex<<<gridSize, blockSize>>>(d_in, d_out, n);
+}
+
 
 // --- CONVOLUTION ---
-
 
 // convolve two 1D complex signals of the same length. Downsample at end.
 void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
@@ -275,5 +302,24 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cudaFree(d_signalPad);
     cudaFree(d_kernelPad);
     cufftDestroy(plan);
+
+}
+
+// square and then convolve complex signals
+void convolveComplexSquare(cuFloatComplex* d_sig1E, cuFloatComplex* d_sig2E,
+                     cuFloatComplex* d_output, int nr) {
+
+    // temporarily allocate memory for squared output
+    cuFloatComplex* d_sig1P;
+    cuFloatComplex* d_sig2P;
+    cudaMalloc(&d_sig1P, nr * sizeof(cuFloatComplex));
+    cudaMalloc(&d_sig2P, nr * sizeof(cuFloatComplex));
+
+    // square both values
+    launchSquare(d_sig1E, d_sig1P, nr);
+    launchSquare(d_sig2E, d_sig2P, nr);
+
+    // then convolve into output array
+    convolveComplex(d_sig1P, d_sig2P, d_output, nr);
 
 }

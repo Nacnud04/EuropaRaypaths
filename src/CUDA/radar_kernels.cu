@@ -728,6 +728,7 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
 __global__ void accumulateTarget(cuFloatComplex* d_PTarget, 
                                  float* d_Ith, float* d_Iph, float* d_Itd,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
+                                 float* d_Rth,
                                  float* d_Tarth, float* d_fRefrEI, float* d_fRfrSR, 
                                  SimulationParameters par, int nfacets) {
 
@@ -739,7 +740,10 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]);
+        //float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]);
+        float Pray = friisSubsurf(par.P, par.Grefr_lin, G_dipole, par.lam, d_Itd[id], d_Ttd[id] * sqrtf(par.eps_2));
+
+        float dTh = d_Rth[id] + d_Tth[id];
 
         // account for gains
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
@@ -756,7 +760,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         // note that this is all halved b/c one way propagation into the subsurface
         float rngt = d_Itd[id] + d_Ttd[id] * sqrtf(par.eps_2);
         short bin = (short)((rngt - par.rst) / par.dr);
-        float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
+        float bin_float = 0.0f;//((rngt - par.rst) / par.dr) - (int)bin;
 
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
@@ -770,9 +774,6 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
             // add remaining contribution into adjcacent range bin
             atomicAdd(&(d_PTarget[bin+1].x), contrib.x * bin_float); // add real components together
             atomicAdd(&(d_PTarget[bin+1].y), contrib.y * bin_float); // add imag components together
-
-            //atomicAdd(&(d_PTarget[bin].x), contrib.x); // add real components together
-            //atomicAdd(&(d_PTarget[bin].y), contrib.y); // add imag components together
         }
 
     }
@@ -784,6 +785,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
 __global__ void radiateTarget(cuFloatComplex* d_Psource, 
                               float* d_Ith, float* d_Iph, float* d_Itd,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
+                              float* d_Rth,
                               float* d_Tarth, float* d_fRefrEO, float* d_fRfrSR, 
                               SimulationParameters par, int nfacets) {
 
@@ -801,12 +803,17 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
-        float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
+        //float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
+        float Pray = friisSubsurf(1, G_dipole, par.Grefr_lin, par.lam, d_Itd[id], d_Ttd[id] * sqrtf(par.eps_2));
+
+        float dTh = d_Rth[id] + d_Tth[id];
 
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
                       facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
+
+        printf("DEBUG: id=%d, Ith=%f, h=%e, d=%e, G_fct=%e, G_T=%e, P_target=%e\n", id, d_Ith[id], d_Itd[id], d_Ttd[id], G_fct, G_dipole, Pray);
 
         // losses
         if (!par.lossless) {
@@ -815,9 +822,9 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
 
         // identify exact range bin to add into
         // note that this is all halved b/c one way propagation into the subsurface
-        float rngt = (d_fRfrSR[id] - d_Ttd[id]) + d_Ttd[id] * (par.c / par.c_2);
+        float rngt = d_Itd[id] + d_Ttd[id] * sqrtf(par.eps_2);
         short bin = (short)((rngt - par.rst) / par.dr);
-        float bin_float = ((d_Itd[id] - par.rst) / par.dr) - (int)bin;
+        float bin_float = 0.0f;//((rngt - par.rst) / par.dr) - (int)bin;
 
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
@@ -831,9 +838,6 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
             // add remaining contribution into adjcacent range bin
             atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
             atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
-
-            //atomicAdd(&(d_Psource[bin].x), contrib.x); // add real components together
-            //atomicAdd(&(d_Psource[bin].y), contrib.y); // add imag components together
         }
 
     }

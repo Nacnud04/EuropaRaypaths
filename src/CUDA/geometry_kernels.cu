@@ -398,7 +398,6 @@ __device__ float beaconEq(float P, float G, float fs, float lam, float dist, int
     // note here we multiply by nfacets to account for coherent summation of facets
     // where the RCS scales by nfacets^2 instead of nfacets
     return num / denom;
-    //return nfacets * (num / denom);
 
 }
 
@@ -408,6 +407,10 @@ __device__ float beaconPowerDensity(float P, float G, float dist) {
 
 __device__ float friis(float P, float Gt, float Gr, float lam, float dist) {
     return (P * lam * lam * Gt * Gr) / (pow(4 * 3.14159, 2) * dist * dist); 
+}
+
+__device__ float friisSubsurf(float P, float Gt, float Gr, float lam, float d1, float d2) {
+    return (P * pow(lam, 4) * Gt * Gr) / (pow(4 * 3.14159, 4) * pow(d1 * d2, 2)); 
 }
 
 __device__ float doubleFriis(float P, float lam, float D1, float D2) {

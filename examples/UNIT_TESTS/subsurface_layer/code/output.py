@@ -19,7 +19,34 @@ P_r = (P_t * G**2 * lam**2) / ((4 * np.pi)**2 * (2*h)**2)
 
 # load radargram
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
-plt.imshow(np.abs(rdrgrm)**2)
+#plt.imshow(np.abs(rdrgrm)**2)
+#plt.show()
+
+f = f"rdrgrm/Ptarg_s000000_t00.txt"
+arr = np.loadtxt(f).T
+sig = arr[0] + 1j * arr[1]
+sig = np.abs(sig)
+print(f"Ptarg Signal max: {np.sum(sig)**2}")
+
+f = f"rdrgrm/Psour_s000000_t00.txt"
+arr = np.loadtxt(f).T
+sig = arr[0] + 1j * arr[1]
+sig = np.abs(sig)
+print(f"Psour Signal max: {np.sum(sig)**2}")
+
+f = f"rdrgrm/PTTmp_s000000_t00.txt"
+arr = np.loadtxt(f).T
+sig = arr[0] + 1j * arr[1]
+sig = np.abs(sig)
+print(f"PTTmp Signal max: {np.sum(sig)}")
+
+f = f"rdrgrm/s000000.txt"
+arr = np.loadtxt(f).T
+sig = arr[0] + 1j * arr[1]
+sig = np.abs(sig)
+print(f"Signal max: {np.max(sig)}")
+
+plt.plot(sig)
 plt.show()
 
 P_num = np.zeros_like(h)
@@ -29,10 +56,6 @@ for i, alt in enumerate(h):
     arr = np.loadtxt(f).T
     sig = arr[0] + 1j * arr[1]
     P_num[i] = np.max(np.abs(sig)**2)
-    plt.plot(np.abs(sig)**2)
-    plt.show()
-    plt.plot(np.abs(sig[:100])**2)
-    plt.show()
 
 error = np.abs(P_num - P_r) / P_r * 100
 

@@ -612,10 +612,9 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
+        if (is > 0) {break;}
+
         // first clear phasor buffers
-        cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
         cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
         // update par.rst
@@ -769,8 +768,6 @@ int main(int argc, const char* argv[])
                 
             }
         } else {
-            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
-            checkCUDAError("convolvePhasorChirpLinear Reflected process");
 
             // if debug, write out surface phasor
             if (par.debug_surface) {
@@ -780,9 +777,21 @@ int main(int argc, const char* argv[])
                 free(Psurf_filename);
                 checkCUDAError("exportingSurfacePhasor kernel");
             }
+
+            // square d_PSurf to turn into power from E-field
+            launchSquare(d_PSurf, d_PSurf, par.nr);
+            //cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
+            checkCUDAError("reflected signal squareComplex Kernel");
+            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
+            checkCUDAError("convolvePhasorChirpLinear Reflected process");
+
         }
         
         for (int it=0; it<ntargets; it++) {
+
+            cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
+            cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
+            cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
 
             // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
             // should probably be offloaded to GPU at some point
@@ -822,7 +831,6 @@ int main(int argc, const char* argv[])
                                                     d_fRefrEI, d_fRefrEO);
             checkCUDAError("compTargetRays kernel");
 
-
             // --- CONSTRUCT REFRACTED WEIGHTS INWARDS ---
             compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rth, d_Itd, d_Iph,
                                                     d_Ttd, d_Tth, d_Tph, d_fRfrC,
@@ -836,7 +844,7 @@ int main(int argc, const char* argv[])
                 // --- CALCULATE POWER AT TARGET ---
                 // this is the inward phasor trace
                 accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, d_Ith, d_Iph, d_Itd,
-                                                           d_Tth, d_Tph, d_Ttd,
+                                                           d_Tth, d_Tph, d_Ttd, d_Rth,
                                                            d_TargetTh, d_fRefrEI, d_fRfrSR,
                                                            par, valid_facets);
                 cudaDeviceSynchronize();
@@ -863,7 +871,7 @@ int main(int argc, const char* argv[])
 
                 // --- CALCULATE OUTWARD PHASOR TRACE ---
                 radiateTarget<<<numBlocks, blockSize>>>(d_Psour, d_Ith, d_Iph, d_Itd,
-                                                        d_Tth, d_Tph, d_Ttd,
+                                                        d_Tth, d_Tph, d_Ttd, d_Rth,
                                                         d_TargetTh, d_fRefrEO, d_fRfrSR,
                                                         par, valid_facets);
                 cudaDeviceSynchronize();
@@ -878,8 +886,8 @@ int main(int argc, const char* argv[])
                 }
                 
                 // --- CONVOLVE INTO FULL PHASOR TRACE ---
-                convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
-                checkCUDAError("convolve kernel");
+                convolveComplexSquare(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+                checkCUDAError("convolveComplexSquare kernel");
                 // write out d_PTTmp to file for debugging
                 if (par.debug_surface) {
                     char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
