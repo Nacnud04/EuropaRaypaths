@@ -740,16 +740,23 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
+        float n = sqrtf(par.eps_2);
         //float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]);
-        float Pray = friisSubsurf(par.P, par.Grefr_lin, G_dipole, par.lam, d_Itd[id], d_Ttd[id] * sqrtf(par.eps_2));
+        float Pray = friisSubsurf(par.P, par.Grefr_lin, G_dipole, par.lam, d_Itd[id], d_Ttd[id] / n);
 
         float dTh = d_Rth[id] + d_Tth[id];
 
         // account for gains
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
-                      facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
+                      facet_G(dTh, d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
+
+        //printf("DEBUG: id=%d, Tth=%f, Rth=%f, dTh=%f, h=%e, d=%e, G_fct=%e, G_T=%e, P_target=%e\n", id, d_Tth[id], d_Rth[id], dTh, d_Itd[id], d_Ttd[id], G_fct, G_dipole, Pray);
+
+        // temporarily convert into power density
+        float Ae = effectiveArea(G_dipole, par.lam);
+        Pray = Pray / Ae;
 
         // account for losses
         if (!par.lossless) {
@@ -800,20 +807,20 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         // --- TARGET -> FACET ---
 
 
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 50);//hertz_dipole(d_Tarth[id]);
+
+        float n = sqrtf(par.eps_2);
 
         // STRAIGHT TO SOURCE FROM TARGET
         //float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
-        float Pray = friisSubsurf(1, G_dipole, par.Grefr_lin, par.lam, d_Itd[id], d_Ttd[id] * sqrtf(par.eps_2));
+        float Pray = friisSubsurf(1, G_dipole, par.Grefr_lin, par.lam, d_Itd[id], d_Ttd[id] * n);
 
         float dTh = d_Rth[id] + d_Tth[id];
 
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
-                      facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
+                      facet_G(dTh, d_Tph[id], par.lam, par.fs);
 
         Pray = Pray * G_fct;
-
-        printf("DEBUG: id=%d, Ith=%f, h=%e, d=%e, G_fct=%e, G_T=%e, P_target=%e\n", id, d_Ith[id], d_Itd[id], d_Ttd[id], G_fct, G_dipole, Pray);
 
         // losses
         if (!par.lossless) {

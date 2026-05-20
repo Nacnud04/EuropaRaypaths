@@ -417,6 +417,9 @@ __device__ float doubleFriis(float P, float lam, float D1, float D2) {
     return P * pow(lam/(4 * 3.14159),4) / (pow(D1 * D2, 2));
 }
 
+__device__ float effectiveArea(float G, float lam) {
+    return G * ((lam * lam) / (4 * 3.14159));
+}
 
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,

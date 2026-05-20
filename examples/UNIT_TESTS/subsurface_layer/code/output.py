@@ -26,7 +26,8 @@ f = f"rdrgrm/Ptarg_s000000_t00.txt"
 arr = np.loadtxt(f).T
 sig = arr[0] + 1j * arr[1]
 sig = np.abs(sig)
-print(f"Ptarg Signal max: {np.sum(sig)**2}")
+print(f"Ptarg Signal max: {np.max(sig**2)}")
+print(f"Ptarg Signal sum: {np.sum(sig**2)}")
 
 f = f"rdrgrm/Psour_s000000_t00.txt"
 arr = np.loadtxt(f).T
@@ -45,9 +46,7 @@ arr = np.loadtxt(f).T
 sig = arr[0] + 1j * arr[1]
 sig = np.abs(sig)
 print(f"Signal max: {np.max(sig)}")
-
-plt.plot(sig)
-plt.show()
+sys.exit()
 
 P_num = np.zeros_like(h)
 
