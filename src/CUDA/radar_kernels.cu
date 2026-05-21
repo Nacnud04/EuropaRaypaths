@@ -742,21 +742,27 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         // STRAIGHT TO SOURCE FROM TARGET
         float n = sqrtf(par.eps_2);
         //float Pray   = friis(par.P, par.Grefr_lin, G_dipole, par.lam, d_fRfrSR[id]);
-        float Pray = friisSubsurf(par.P, par.Grefr_lin, G_dipole, par.lam, d_Itd[id], d_Ttd[id] / n);
+        //float Pray = friisSubsurf(par.P, par.Grefr_lin, G_dipole, par.lam, d_Itd[id], d_Ttd[id] / n);
 
         float dTh = d_Rth[id] + d_Tth[id];
 
         // account for gains
-        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
-                      facet_G(dTh, d_Tph[id], par.lam, par.fs);
+        //float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
+        //              facet_G(dTh, d_Tph[id], par.lam, par.fs);
 
-        Pray = Pray * G_fct;
+        //Pray = Pray * G_fct;
 
-        //printf("DEBUG: id=%d, Tth=%f, Rth=%f, dTh=%f, h=%e, d=%e, G_fct=%e, G_T=%e, P_target=%e\n", id, d_Tth[id], d_Rth[id], dTh, d_Itd[id], d_Ttd[id], G_fct, G_dipole, Pray);
+        // TEMP (break down into two steps)
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
+        float Pray   = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
+        G_fct = facet_G(dTh, d_Tph[id], par.lam, par.fs);
+        Pray = friis(Pray, G_fct, G_dipole, par.lam, d_Ttd[id]);
 
         // temporarily convert into power density
         float Ae = effectiveArea(G_dipole, par.lam);
         Pray = Pray / Ae;
+        
+        //printf("DEBUG: id=%d, Ith=%f, Tth=%f, Rth=%f, dTh=%f, h=%e, d=%e, G_fct=%e, G_T=%e, S_target=%e\n", id, d_Ith[id], d_Tth[id], d_Rth[id], dTh, d_Itd[id], d_Ttd[id], G_fct, G_dipole, Pray);
 
         // account for losses
         if (!par.lossless) {

@@ -33,19 +33,21 @@ f = f"rdrgrm/Psour_s000000_t00.txt"
 arr = np.loadtxt(f).T
 sig = arr[0] + 1j * arr[1]
 sig = np.abs(sig)
-print(f"Psour Signal max: {np.sum(sig)**2}")
+print(f"Psour Signal max: {np.sum(sig**2)}")
 
 f = f"rdrgrm/PTTmp_s000000_t00.txt"
 arr = np.loadtxt(f).T
 sig = arr[0] + 1j * arr[1]
 sig = np.abs(sig)
-print(f"PTTmp Signal max: {np.sum(sig)}")
+print(f"PTTmp Signal max: {np.sum(sig**2)}")
 
 f = f"rdrgrm/s000000.txt"
 arr = np.loadtxt(f).T
 sig = arr[0] + 1j * arr[1]
 sig = np.abs(sig)
-print(f"Signal max: {np.max(sig)}")
+plt.plot(sig**2)
+plt.show()
+print(f"Signal max: {np.max(sig**2)}")
 sys.exit()
 
 P_num = np.zeros_like(h)

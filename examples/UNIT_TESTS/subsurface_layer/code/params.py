@@ -6,12 +6,12 @@ import simple_surfaces as ss
 import param_gen       as pg
 
 domainpar = {
-    "ox": -2.5e3,
-    "oy": -2.5e3,
+    "ox": -1.25e3,
+    "oy": -1.25e3,
     "oz": 0,
-    "fs": 50,
-    "nx": 100,
-    "ny": 100,
+    "fs": 50/3,
+    "nx": 150,
+    "ny": 150,
 }
 
 recpar = {
@@ -49,4 +49,4 @@ sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
 # --- RX OPENING WINDOW FILE ---
 
-pg.track_Z_rxwin(sz, -1500, "rx_window_positions")
+pg.track_Z_rxwin(sz, (-1500 * np.sqrt(3.15)) + 500, "rx_window_positions")
