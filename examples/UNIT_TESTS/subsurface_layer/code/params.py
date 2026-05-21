@@ -6,12 +6,12 @@ import simple_surfaces as ss
 import param_gen       as pg
 
 domainpar = {
-    "ox": -1.25e3,
-    "oy": -1.25e3,
+    "ox": -10e3,
+    "oy": -10e3,
     "oz": 0,
-    "fs": 50/3,
-    "nx": 150,
-    "ny": 150,
+    "fs": 100,
+    "nx": 200,
+    "ny": 200,
 }
 
 recpar = {
@@ -39,8 +39,8 @@ ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
 
 # --- MAKE SOURCE PATH ---
 
-maxZ = 25e3 # maximum altitude of source path [m]
-minZ = 100e3 # minimum altitude of source path [m]
+maxZ = 100e3 # maximum altitude of source path [m]
+minZ = 25e3 # minimum altitude of source path [m]
 
 params['sz'] = minZ
 Fr = ss.calc_fresnel(params)
@@ -49,4 +49,4 @@ sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
 # --- RX OPENING WINDOW FILE ---
 
-pg.track_Z_rxwin(sz, (-1500 * np.sqrt(3.15)) + 500, "rx_window_positions")
+pg.track_Z_rxwin(sz, (-0 * np.sqrt(3.15)) + 500, "rx_window_positions")

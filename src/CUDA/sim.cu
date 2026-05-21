@@ -612,7 +612,7 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
-        if (is > 0) {break;}
+        //if (is > 0) {break;}
 
         // first clear phasor buffers
         cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
@@ -779,7 +779,7 @@ int main(int argc, const char* argv[])
             }
 
             // square d_PSurf to turn into power from E-field
-            launchSquare(d_PSurf, d_PSurf, par.nr);
+            //launchSquare(d_PSurf, d_PSurf, par.nr);
             //cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
             checkCUDAError("reflected signal squareComplex Kernel");
             convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
