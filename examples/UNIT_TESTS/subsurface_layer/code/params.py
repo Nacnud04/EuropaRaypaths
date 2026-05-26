@@ -6,12 +6,12 @@ import simple_surfaces as ss
 import param_gen       as pg
 
 domainpar = {
-    "ox": -10e3,
-    "oy": -10e3,
+    "ox": -4e3,
+    "oy": -4e3,
     "oz": 0,
-    "fs": 100,
-    "nx": 200,
-    "ny": 200,
+    "fs": 10,
+    "nx": 800,
+    "ny": 800,
 }
 
 recpar = {
@@ -32,7 +32,7 @@ otherpar = {
 }
 
 # first export basic single example stuff
-params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
+params = pg.gen_params("REASON_VHF", "vacuum", domainpar, recpar, sourcepar, par=otherpar)
 pg.export_params(params, f"params")
 ss.make_surface(params, "flat", f"inputs/facets.fct")
 ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
@@ -40,7 +40,7 @@ ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
 # --- MAKE SOURCE PATH ---
 
 maxZ = 100e3 # maximum altitude of source path [m]
-minZ = 25e3 # minimum altitude of source path [m]
+minZ = 10e3 # minimum altitude of source path [m]
 
 params['sz'] = minZ
 Fr = ss.calc_fresnel(params)
@@ -49,4 +49,4 @@ sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
 # --- RX OPENING WINDOW FILE ---
 
-pg.track_Z_rxwin(sz, (-0 * np.sqrt(3.15)) + 500, "rx_window_positions")
+pg.track_Z_rxwin(sz, -10e3 + 500, "rx_window_positions")

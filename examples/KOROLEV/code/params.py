@@ -62,6 +62,18 @@ with open("data/params.json", "w") as f:
 with open("data/params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
 
+#params['source_path_file'] = "data/single_trace_srcs.txt"
+#params['rx_window_position_file'] = "data/single_trc_rx_positions.txt"
+params['specular'] = False
+params['lossless'] = True
+del params['gain_pattern_file']
+
+with open("data/single_trc_params.json", "w") as f:
+    json.dump(params, f, indent=4)
+
+with open("data/single_trc_params.pkl", 'wb') as hdl:
+    pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
+
 # --- EXPORT RX OPENING WINDOW ---
 
 NS = 3000

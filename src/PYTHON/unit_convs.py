@@ -10,6 +10,9 @@ def lin_to_db(x, warning=False):
         x = np.maximum(x, np.min(x[x>0]))  # Avoid log(0)
     return 10 * np.log10(x)
 
+def db_to_lin(x):
+    return 10 ** (x / 10)
+
 def c2(params, c1=299792458):
     return c1 / np.sqrt(params['eps_2'])
 

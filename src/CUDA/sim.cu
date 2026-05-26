@@ -944,7 +944,9 @@ int main(int argc, const char* argv[])
 
                 // for all other targets
                 else {
-                    convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                    //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                    // TEMPORARY: DO NOT FORGET I CHANGED TO THE BELOW LINE
+                    convolvePhasorChirpLinear(d_Ptarg, d_chirp, d_refr_temp, par.nr);
                     checkCUDAError("refracted convolve kernel");
                 }
 
