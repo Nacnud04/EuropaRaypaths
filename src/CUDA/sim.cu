@@ -780,7 +780,7 @@ int main(int argc, const char* argv[])
 
             // square d_PSurf to turn into power from E-field
             //launchSquare(d_PSurf, d_PSurf, par.nr);
-            //cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
+            cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
             checkCUDAError("reflected signal squareComplex Kernel");
             convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
             checkCUDAError("convolvePhasorChirpLinear Reflected process");
@@ -886,7 +886,7 @@ int main(int argc, const char* argv[])
                 }
                 
                 // --- CONVOLVE INTO FULL PHASOR TRACE ---
-                convolveComplexSquare(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+                convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
                 checkCUDAError("convolveComplexSquare kernel");
                 // write out d_PTTmp to file for debugging
                 if (par.debug_surface) {
@@ -944,9 +944,9 @@ int main(int argc, const char* argv[])
 
                 // for all other targets
                 else {
-                    //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                    convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
                     // TEMPORARY: DO NOT FORGET I CHANGED TO THE BELOW LINE
-                    convolvePhasorChirpLinear(d_Ptarg, d_chirp, d_refr_temp, par.nr);
+                    //convolvePhasorChirpLinear(d_Ptarg, d_chirp, d_refr_temp, par.nr);
                     checkCUDAError("refracted convolve kernel");
                 }
 
