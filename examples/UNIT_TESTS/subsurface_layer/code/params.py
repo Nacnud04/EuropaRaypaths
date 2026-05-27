@@ -29,6 +29,7 @@ sourcepar = {
 otherpar = {
     "lossless": True,
     "debug_surface": True,
+    "disable_surface": True,
 }
 
 # first export basic single example stuff
@@ -49,4 +50,4 @@ sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
 # --- RX OPENING WINDOW FILE ---
 
-pg.track_Z_rxwin(sz, -10e3 * np.sqrt(3.15) + 500, "rx_window_positions")
+pg.track_Z_rxwin(sz, -1e3 * np.sqrt(3.15) + 500, "rx_window_positions")

@@ -112,6 +112,7 @@ struct SimulationParameters {
     bool specular;
     bool lossless;
     bool incoherent = false;
+    bool disable_surface = false;
 
     // debug parameters
     bool debug_surface = false;
@@ -239,6 +240,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     params.specular = j["specular"];
     params.lossless = j["lossless"];
     params.incoherent = j.value("incoherent", false);
+    params.disable_surface = j.value("disable_surface", false);
 
     // debug parameters
     params.debug_surface = j.value("debug_surface", false);
