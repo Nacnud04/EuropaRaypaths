@@ -753,8 +753,9 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         //Pray = Pray * G_fct;
 
         // TEMP (break down into two steps)
-        float G_fct = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
-        float Pray   = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Ttd[id]);
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
+        float Pray   = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
+        G_fct = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
         Pray = friis(Pray, G_fct, par.Grefr_lin, par.lam, d_Ttd[id]);
 
         // temporarily convert into power density
@@ -780,7 +781,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         } else {
             // if within range take phasor and multiply by power contribution
             //cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray), 0.0f));
-            cuFloatComplex contrib = cuCmulf(phasor(2 * d_Ttd[id], par.lam), make_cuFloatComplex(sqrtf(Pray), 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray), 0.0f));
             // add contribution into starting range bin
             atomicAdd(&(d_PTarget[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
             atomicAdd(&(d_PTarget[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together

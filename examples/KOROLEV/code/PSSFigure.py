@@ -40,10 +40,12 @@ xs = np.arange(st, en)
 # normalize for plotting
 norm_foc_rdr = focused_db - np.max(focused_db)
 
-fig, ax = plt.subplots(4, sharex=True, figsize=(9, 12), constrained_layout=True)
+fn = 15
+
+fig, ax = plt.subplots(4, sharex=True, figsize=(9, fn), constrained_layout=True)
 im = ax[0].imshow(norm_foc_rdr, aspect="auto", extent=extent, vmin=-30, vmax=-5)
 #ax[0].set_ylim(1060, 1050)
-ax[0].set_ylabel("Range [us]", fontsize=10)
+ax[0].set_ylabel("Range [us]", fontsize=fn)
 fig.colorbar(im, ax=ax[0], label="Normalized Power [dB]", pad=0.01)
 
 # --- PANEL 1 ---
@@ -57,28 +59,28 @@ surface_max -= sMax
 sMaxLoc = np.argmax(surface_max)
 print(f"Maximum surface power is {sMax:.2f} dB at trace {sMaxLoc}")
 
-ax[1].plot(xs, surface_max, color="red")
-ax[1].set_ylabel(r"$P-P_{max}$ [dB]", fontsize=10)
+ax[1].plot(xs, surface_max, color="black")
+ax[1].set_ylabel(r"$P-P_{max}$ [dB]", fontsize=fn)
 
 # --- PANEL 2 ---
 # the ratio of power is equivalent to the ratio of squared areas
 # so the square root of the power ratio is the ratio of areas
 # (assuming everything else is constant)
 area_ratio = np.sqrt(uc.db_to_lin(surface_max))
-ax[2].fill_between(xs, np.ones_like(area_ratio), area_ratio, color="red", alpha=0.2)
-ax[2].plot(xs, area_ratio, color="red")
+ax[2].fill_between(xs, np.ones_like(area_ratio), area_ratio, color="black", alpha=0.2)
+ax[2].plot(xs, area_ratio, color="black")
 ax[2].axhline(1, color="black", linewidth=2)
-ax[2].set_ylabel(r"$A_c\;/\;A_{c,max}$", fontsize=10)
+ax[2].set_ylabel(r"$A_c\;/\;A_{c,max}$", fontsize=fn)
 
 # --- PANEL 3 ---
 # assuming everything else is constant, the ratio of power is  
 # equivalent to the ratio of reflection coefficients.
 refl_ratio = uc.db_to_lin(surface_max)
-ax[3].fill_between(xs, np.ones_like(refl_ratio), refl_ratio, color="red", alpha=0.2)
-ax[3].plot(xs, refl_ratio, color="red")
+ax[3].fill_between(xs, np.ones_like(refl_ratio), refl_ratio, color="black", alpha=0.2)
+ax[3].plot(xs, refl_ratio, color="black")
 ax[3].axhline(1, color="black", linewidth=2)
-ax[3].set_ylabel(r"$|\Gamma^2|\;/\;|\Gamma^2|_{max}$", fontsize=10)
-ax[3].set_xlabel("Trace number", fontsize=10)
+ax[3].set_ylabel(r"$|\Gamma|^2\;/\;|\Gamma|^2_{max}$", fontsize=fn)
+ax[3].set_xlabel("Trace number", fontsize=fn)
 
 # add subplot labels
 labels = ["a", "b", "c", "d"]
