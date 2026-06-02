@@ -747,7 +747,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
 
         // Subsurface step
         G_fct = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
-        Pray = friis(Pray, G_fct, par.Grefr_lin, par.lam, d_Ttd[id]);
+        Pray = friis(Pray, G_fct, G_dipole, par.lam, d_Ttd[id]);
 
         // account for losses
         if (!par.lossless) {
@@ -798,7 +798,6 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         // --- TARGET -> FACET ---
 
         /*
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 50);//hertz_dipole(d_Tarth[id]);
 
         // STRAIGHT TO SOURCE FROM TARGET
         //float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
@@ -812,6 +811,8 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         Pray = Pray * G_fct;
         */
         
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
+
         float n = sqrtf(par.eps_2);
 
         // Surface step
@@ -820,7 +821,7 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
 
         // Subsurface step
         G_fct = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
-        Pray = friis(Pray, G_fct, par.Grefr_lin, par.lam, d_Ttd[id]);
+        Pray = friis(Pray, G_fct, G_dipole, par.lam, d_Ttd[id]);
 
         // losses
         if (!par.lossless) {
