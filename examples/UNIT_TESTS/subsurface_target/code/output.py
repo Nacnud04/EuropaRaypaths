@@ -28,6 +28,8 @@ def get_analytic(params, h, d):
 
     return P_r
 
+plt.rcParams.update({'font.size': 14})
+
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
 depths = (5000, 2500, 1000, 500, 250)

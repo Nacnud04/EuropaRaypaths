@@ -60,6 +60,8 @@ coh_analytic_Pr = (P_t * G**2 * lam**2 * A**2) / ((4 * np.pi)**2 * lam**2 * R**4
 
 error = np.abs(co_PP - coh_analytic_Pr) / coh_analytic_Pr * 100
 
+plt.rcParams.update({'font.size': 14})
+
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
 # plot Pmax vs altitude

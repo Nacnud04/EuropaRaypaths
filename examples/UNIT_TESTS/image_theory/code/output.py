@@ -34,6 +34,8 @@ print(f"Fresnel zone radius at {h[0]/1e3:.0f} km: {rF:.2f} m")
 rF = np.sqrt((h[0] + lam / 4)**2 - h[0]**2)
 print(f"Fresnel zone radius at {h[0]/1e3:.0f} km (approach 2): {rF:.2f} m")
 
+plt.rcParams.update({'font.size': 14})
+
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
 # plot Pmax vs altitude
