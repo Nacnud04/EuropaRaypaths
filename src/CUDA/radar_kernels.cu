@@ -760,6 +760,12 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         short bin = (short)((rngt - par.rst) / par.dr);
         float bin_float = ((rngt - par.rst) / par.dr) - (int)bin;
 
+        // print phasor info
+        //if (d_Tth[id] < 0.01f) {
+        //    cuFloatComplex phasor_val = phasor(rngt, par.lam);
+        //    printf("Facet %d: Ith=%.6f, Tth=%.6f, rngt=%.2f, lam=%.6f, phasor=(%.6f,%.6f)\n", id, d_Ith[id], d_Tth[id], rngt, par.lam, phasor_val.x, phasor_val.y);
+        //}
+
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
@@ -796,20 +802,6 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         //       So [W] -> [.], [W/m^2] -> [1/m^2]
 
         // --- TARGET -> FACET ---
-
-        /*
-
-        // STRAIGHT TO SOURCE FROM TARGET
-        //float Pray   = friis(1, G_dipole, par.Grefr_lin, par.lam, d_fRfrSR[id]);
-        float Pray = friisSubsurf(1, G_dipole, par.Grefr_lin, par.lam, d_Itd[id], d_Ttd[id] * n);
-
-        float dTh = d_Rth[id] + d_Tth[id];
-
-        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs) * \
-                      facet_G(dTh, d_Tph[id], par.lam, par.fs);
-
-        Pray = Pray * G_fct;
-        */
         
         float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 

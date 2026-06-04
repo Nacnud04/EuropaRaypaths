@@ -612,6 +612,10 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
+        //if (is > 0) {
+        //    break;
+        //}
+
         // first clear phasor buffers
         cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
