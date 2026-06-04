@@ -30,7 +30,7 @@ recpar = {
 }
 
 sourcepar = {
-    "ns": 10,               # source count            [.]
+    "ns": 25,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
     "aperture": 70,
 }

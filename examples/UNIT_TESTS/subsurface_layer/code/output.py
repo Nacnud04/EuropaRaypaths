@@ -7,7 +7,7 @@ sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 import unit_convs      as uc
 
-h = np.linspace(30e3, 20e3, 10)
+h = np.linspace(30e3, 20e3, 25)
 
 def get_analytic(params, h, d):
 
@@ -74,32 +74,19 @@ for i in range(rdrgrm.shape[1]):
     sig = arr[:, 0] + 1j * arr[:, 1]
     idx = np.argmax(np.abs(sig))
     angle = np.degrees(np.angle(sig[idx]))
-    #a_o = np.degrees(np.angle(sig[idx]*-1))
-    a_o = (angle + 360) % 360 - 180
     print(f"TRC {i}: \n\
           Max norm signal is {sig[idx]/np.abs(sig[idx])}\n\
-          With angle {angle:.2f} ({a_o:.2f}) degrees\n\
+          With angle {angle:.2f} degrees\n\
           At altitude: {h[i]} m\n")
     a_ss.append(angle)
-    a_os.append(a_o)
-    """
-    fig, ax = plt.subplots(2)
-    xs = range(len(sig))
-    ax[0].plot(xs, np.real(sig), color="red", label="real E")
-    ax[0].plot(xs, np.imag(sig), color="blue", label="imag E")
-    ax[1].plot(xs, np.degrees(np.angle(sig)), color="purple", label="phase E")
-    ax[1].set_ylim(-180, 180)
-    plt.show()
-    """
+
 
 fig, ax = plt.subplots(2)
 ana_phs = get_target_phase(params, h, d)
-ax[0].plot(h/1e3, a_ss, label="True Sim Phase")
-ax[0].plot(h/1e3, a_os, label="Corrected Sim Phase")
+ax[0].plot(h/1e3, a_ss, label="Sim Phase")
 ax[0].plot(h/1e3, ana_phs, label="Analytic Phase")
 ax[0].legend()
-ax[1].plot(h/1e3, a_ss - ana_phs, label="True Sim Phase - Analytic Phase")
-ax[1].plot(h/1e3, a_os - ana_phs, label="Corrected Sim Phase - Analytic Phase")
+ax[1].plot(h/1e3, a_ss - ana_phs, label="Sim Phase - Analytic Phase")
 ax[1].legend()
 plt.show()
     

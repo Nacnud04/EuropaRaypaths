@@ -831,7 +831,7 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
             // out of range, do nothing
         } else {
             // if within range take phasor and multiply by power contribution
-            cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
+            cuFloatComplex contrib = cuCmulf(phasor(rngt - (par.lam / 2.0f), par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
             atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
             atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
