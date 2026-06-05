@@ -761,9 +761,9 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         float bin_float = ((rngt - par.rst) / par.dr) - (int)bin;
 
         // print phasor info
-        //if (d_Tth[id] < 0.01f) {
-        //    cuFloatComplex phasor_val = phasor(rngt, par.lam);
-        //    printf("Facet %d: Ith=%.6f, Tth=%.6f, rngt=%.2f, lam=%.6f, phasor=(%.6f,%.6f)\n", id, d_Ith[id], d_Tth[id], rngt, par.lam, phasor_val.x, phasor_val.y);
+        //if (abs(d_Tth[id] - d_Ith[id]) < 0.000001f) {
+        //if (abs(d_Tth[id] - 0.0208303) < 0.00001f) {
+        //    printf("Facet %d: Ith=%.6f, Itd=%.2f, Tth=%.6f, Ttd=%.2f, G_T=%.6f, G_F=%.6f, rngt=%.2f, pray=%.6e\n", id, d_Ith[id], d_Itd[id], d_Tth[id], d_Ttd[id], G_dipole, G_fct, rngt, Pray);
         //}
 
         // atomic add into range bin

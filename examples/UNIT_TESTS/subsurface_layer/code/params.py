@@ -30,13 +30,13 @@ recpar = {
 }
 
 sourcepar = {
-    "ns": 25,               # source count            [.]
+    "ns": 10,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
     "aperture": 70,
 }
 
 otherpar = {
-    "lossless": True,
+    "lossless": False,
     "debug_surface": False,
     "disable_surface": True,
 }
@@ -56,7 +56,7 @@ ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
 maxZ = 20e3 # maximum altitude of source path [m]
 minZ = 30e3 # minimum altitude of source path [m]
 
-params['sz'] = minZ
+params['sz'] = minZ + depth
 Fr = ss.calc_fresnel(params)
 print(f"Fresnel zone radius for maximum altitude of {minZ} m is {Fr:.2f} m")
 sz = pg.vert_source_path(params, minZ, maxZ, "source_path")

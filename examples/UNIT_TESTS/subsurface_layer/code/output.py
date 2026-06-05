@@ -7,7 +7,7 @@ sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 import unit_convs      as uc
 
-h = np.linspace(30e3, 20e3, 25)
+h = np.linspace(30e3, 20e3, 10)
 
 def get_analytic(params, h, d):
 
@@ -63,7 +63,7 @@ rdrgrm = oh.compile_rdrgrm(f"rdrgrm/", params)
 
 max_row = np.argmax(np.abs(rdrgrm)**2, axis=0)
 Emax = rdrgrm[max_row, np.arange(rdrgrm.shape[1])]
-
+"""
 a_ss = []
 a_os = []
 
@@ -89,22 +89,24 @@ ax[0].legend()
 ax[1].plot(h/1e3, a_ss - ana_phs, label="Sim Phase - Analytic Phase")
 ax[1].legend()
 plt.show()
+"""
     
 P_num = np.max(np.abs(rdrgrm)**2, axis=0)
 print(P_num)
 
-#err_mean = np.mean(P_num / P_r_layer)
-err_mean = np.mean(P_num / P_r)
+err_mean = np.mean(P_num / P_r_layer)
+#err_mean = np.mean(P_num / P_r)
 print(err_mean)
 
-error = np.abs(P_num - P_r) / P_r * 100
+#error = np.abs(P_num - P_r) / P_r * 100
+error = np.abs(P_num - P_r_layer) / P_r_layer * 100
 print(np.mean(error)/100)
 
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
 ax[0].plot(h/1e3, uc.lin_to_db(P_num), label=f"Numerical: d={d} m", color=c, linewidth=1)
-ax[0].plot(h/1e3, uc.lin_to_db(P_r), color=cont, linestyle="--", label=f"Analytic: d={d} m", linewidth=1)
-#ax[0].plot(h/1e3, uc.lin_to_db(P_r_layer), color=cont, linestyle="-.", label=f"Layer: d={d} m", linewidth=1)
+#ax[0].plot(h/1e3, uc.lin_to_db(P_r), color=cont, linestyle="--", label=f"Analytic: d={d} m", linewidth=1)
+ax[0].plot(h/1e3, uc.lin_to_db(P_r_layer), color=cont, linestyle="-.", label=f"Layer: d={d} m", linewidth=1)
 
 ax[1].plot(h/1e3, error, color=c, label=f"Error (%): d={d} m", linewidth=1)
 
