@@ -114,11 +114,11 @@ def gen_params(platform, media, domainpar, recpar, sourcepar, par=None):
 
     return pars
 
-def vert_source_path(params, minZ, maxZ, filename, direct="inputs"):
+def vert_source_path(params, minZ, maxZ, filename, direct="inputs", xoff=0, yoff=0):
 
     sz = np.linspace(minZ, maxZ, params['ns'])
-    sy = np.zeros_like(sz)
-    sx = np.zeros_like(sz)
+    sy = np.zeros_like(sz) + yoff
+    sx = np.zeros_like(sz) + xoff
 
     with open(f"{direct}/{filename}.txt", 'w') as f:
         for i in range(params['ns']):
