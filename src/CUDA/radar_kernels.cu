@@ -730,6 +730,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
                                  float* d_Rth,
                                  float* d_Tarth, float* d_fRefrEI, float* d_fRfrSR, 
+                                 float* d_fx, float* d_fy, float* d_fz, 
                                  SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -737,16 +738,18 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
     if (id < nfacets) {
         
         // find the gain in the inbound ray direction
-        float G_dipole = 1; //facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         float n = sqrtf(par.eps_2);
 
         // Surface step
         float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
+        //float G_fin = G_fct;
         float Pray   = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
 
         // Subsurface step
         G_fct = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
+        //float G_fout = G_fct;
         Pray = friis(Pray, G_fct, G_dipole, par.lam, d_Ttd[id]);
 
         // account for losses
@@ -763,7 +766,9 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         // print phasor info
         //if (abs(d_Tth[id] - d_Ith[id]) < 0.000001f) {
         //if (abs(d_Tth[id] - 0.0208303) < 0.00001f) {
-        //    printf("Facet %d: Ith=%.6f, Itd=%.2f, Tth=%.6f, Ttd=%.2f, G_T=%.6f, G_F=%.6f, rngt=%.2f, pray=%.6e\n", id, d_Ith[id], d_Itd[id], d_Tth[id], d_Ttd[id], G_dipole, G_fct, rngt, Pray);
+        //if (abs(d_fx[id] - 103.333f) < 0.1f && d_fy[id] == 0) {
+        //if (Pray > 4.6057e-14) {
+        //    printf("Facet %d: f_loc=(%.3f, %.3f, %.3f), Itd=%.2f, Ttd=%.2f, G_T=%.6f, G_Fin=%.6f, G_Fout=%.6f, rngt=%.2f, pray=%.6e\n", id, d_fx[id], d_fy[id], d_fz[id], d_Itd[id], d_Ttd[id], G_dipole, G_fin, G_fout, rngt, Pray);
         //}
 
         // atomic add into range bin
@@ -803,7 +808,7 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
 
         // --- TARGET -> FACET ---
         
-        float G_dipole = 1; //facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);//hertz_dipole(d_Tarth[id]);
 
         float n = sqrtf(par.eps_2);
 

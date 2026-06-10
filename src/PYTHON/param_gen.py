@@ -49,6 +49,20 @@ def gen_params(platform, media, domainpar, recpar, sourcepar, par=None):
         pars["surface_gain"] = 7.3
         pars["subsurface_gain"] = pars["surface_gain"]
         pars["polarization"] = "HH"
+    elif platform == "REASON_HF":
+        pars["power"] = 100
+        pars["frequency"] = 9e6
+        pars["bandwidth"] = 1e6
+        pars["surface_gain"] = 4.0
+        pars["subsurface_gain"] = pars["surface_gain"]
+        pars["polarization"] = "HH"
+    elif platform == "1MHz":
+        pars["power"] = 100
+        pars["frequency"] = 1e6
+        pars["bandwidth"] = 1e5
+        pars["surface_gain"] = 4.0
+        pars["subsurface_gain"] = pars["surface_gain"]
+        pars["polarization"] = "HH"
     else:
         raise ValueError(f"platform {platform} not recognized.")
     

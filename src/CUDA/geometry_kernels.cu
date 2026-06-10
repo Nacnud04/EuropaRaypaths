@@ -108,17 +108,19 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
                                  float* d_Itd, float* d_Iph, float* d_Ith,
                                  int nfacets) {
 
-    pointDistanceBulk(sx, sy, sz,
-                      d_fx, d_fy, d_fz,
-                      d_Itd, nfacets);
-
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
+        float dx = d_fx[idx] - sx;
+        float dy = d_fy[idx] - sy;
+        float dz = d_fz[idx] - sz;
+
+        d_Itd[idx] = sqrt(dx*dx+dy*dy+dz*dz);
+
         // get incident cartesian vector
-        float Ix = (d_fx[idx] - sx) / d_Itd[idx];
-        float Iy = (d_fy[idx] - sy) / d_Itd[idx];
-        float Iz = (d_fz[idx] - sz) / d_Itd[idx];
+        float Ix = dx / d_Itd[idx];
+        float Iy = dy / d_Itd[idx];
+        float Iz = dz / d_Itd[idx];
 
         // incident inclination
         // NOTE: this is clamped to -1 to 1 b/c floating point errors can cause perfectly

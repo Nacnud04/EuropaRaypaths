@@ -699,7 +699,7 @@ int main(int argc, const char* argv[])
         }
 
         int numBlocks = (nfacets + blockSize - 1) / blockSize;
-        
+
         // --- COMP INCIDENT RAYS ---
         compIncidentRays<<<numBlocks, blockSize>>>(sx, sy, sz,
                             d_fx,  d_fy,   d_fz,
@@ -850,6 +850,7 @@ int main(int argc, const char* argv[])
                 accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, d_Ith, d_Iph, d_Itd,
                                                            d_Tth, d_Tph, d_Ttd, d_Rth,
                                                            d_TargetTh, d_fRefrEI, d_fRfrSR,
+                                                           d_fx, d_fy, d_fz,
                                                            par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
