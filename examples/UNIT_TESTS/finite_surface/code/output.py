@@ -44,7 +44,6 @@ alts /= 1e3
 # --- Does this match Haynes? ---
 
 c = 299792458
-f = 60e6
 refl = 1
 R = alts*1e3
 

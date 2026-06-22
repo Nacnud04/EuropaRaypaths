@@ -73,7 +73,7 @@ ax[0].set_title("Individual Subsurface Target (Facet)")
 
 ax[1].set_xlabel("Altitude [km]")
 ax[1].set_ylabel("Error (%)")
-ax[1].set_ylim(0, 10)
+#ax[1].set_ylim(0, 10)
 
 plt.xlim(h[-1]/1e3, h[0]/1e3)
 plt.savefig("figures/SubsurfaceFacet.png", dpi=300)

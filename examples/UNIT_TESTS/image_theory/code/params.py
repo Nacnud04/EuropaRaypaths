@@ -33,6 +33,7 @@ otherpar = {
 # first export basic single example stuff
 params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
 pg.export_params(params, f"co_params")
+print(f"Expored coherent parameters")
 ss.make_surface(params, "flat", f"inputs/facets.fct")
 
 side_len = 2*abs(domainpar['ox'])

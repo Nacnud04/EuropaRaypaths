@@ -447,6 +447,9 @@ void genPhasorTrace(cuFloatComplex* d_phasorTrace,
 
 }
 
+__device__ float chirp(float cen, float offset, float rng_res) {
+    return sinc((cen + offset) / rng_res);
+}
 
 __global__ void genChirp(float* d_chirp, float rst, float dr, int nr, float range_res){
 
@@ -837,6 +840,7 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         } else {
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(rngt - (par.lam / 2.0f), par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
+            //cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
             atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
             atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
@@ -845,6 +849,61 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
             atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
         }
 
+    }
+
+}
+
+
+__global__ void evaluateSubsurface(cuFloatComplex* signal,
+                                   float* d_Ith, float* d_Iph, float* d_Itd,
+                                   float* d_Tth, float* d_Tph, float* d_Ttd,
+                                   float* d_Rth, float* d_Tarth, float* d_fRefrEO,
+                                   float* d_fRfrSR, SimulationParameters par, int nfacets) {
+
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id < nfacets) {
+
+        float n = sqrtf(par.eps_2);
+
+        // SOURCE -> FACET
+        float G_fct = facet_G(d_Ith[id], d_Iph[id], par.lam, par.fs);
+        float Pray  = friis(par.P, par.Grefr_lin, G_fct, par.lam, d_Itd[id]);
+
+        // FACET -> TARGET
+        float G_T   = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        G_fct       = facet_G(d_Tth[id], d_Tph[id], par.lam, par.fs);
+        Pray        = friis(Pray, G_fct, G_T, par.lam, d_Ttd[id]);
+
+        // TARGET -> FACET
+        Pray        = friis(Pray, G_T, G_fct, par.lam, d_Ttd[id]);
+
+        // FACET -> SOURCE
+        Pray        = friis(Pray, G_fct, par.Grefr_lin, par.lam, d_Itd[id]);
+
+        // FIND APPROPRIATE RANGE BIN
+        float rngt = d_Itd[id] + d_Ttd[id] * n;
+        short bin  = (short)((rngt - par.rst) / par.dr);  
+        float bin_float = ((rngt - par.rst) / par.dr) - (int)bin;
+        
+        int rng_win = 20; 
+
+        // iterate over range bins within the evaluation range bin window
+        for (int bid = -1*rng_win; bid < rng_win; bid++) {
+            // atomic add into range bin
+            if ((bin + bid < 0) || (bin + bid >= par.nr)) {
+                // out of range, do nothing
+            } else {
+                // evaluate and fill in with chirp
+                float mag = sqrtf(Pray * n) * chirp(rngt, bid * par.dr, par.rng_res);
+                // evaluate phasor
+                cuFloatComplex phsr = phasor(2 * rngt, par.lam);
+                cuFloatComplex Cmag = cuCmulf(phsr, make_cuFloatComplex(mag, 0.0f));
+                // combine and put into range bin
+                atomicAdd(&(signal[bin + bid].x), Cmag.x);
+                atomicAdd(&(signal[bin + bid].y), Cmag.y);
+            }
+        }
     }
 
 }

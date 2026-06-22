@@ -5,18 +5,20 @@ sys.path.append("../../../src/PYTHON")
 import simple_surfaces as ss
 import param_gen       as pg
 
+fct = 3
+
 domainpar = {
     "ox": -2e3,
     "oy": -2e3,
     "oz": 0,
-    "fs": 10/3,
-    "nx": 400*3,
-    "ny": 400*3,
+    "fs": 10 / fct,
+    "nx": int(400 * fct),
+    "ny": int(400 * fct),
 }
 
 recpar = {
     "rx_window_m": 1.25e3,         # receive window size [m]
-    "rx_sample_rate": 60e6,       # receive sample rate [Hz]
+    "rx_sample_rate": 80e6,       # receive sample rate [Hz]
     "rx_window_position_file": "inputs/rx_window_positions.txt",
 }
 
@@ -28,7 +30,7 @@ sourcepar = {
 
 otherpar = {
     "lossless": True,
-    "debug_surface": False,
+    "debug_surface": True,
     "disable_surface": True,
 }
 
@@ -40,8 +42,8 @@ for depth in tdepths:
     params["rx_window_position_file"] = f"inputs/rx_window_positions_{abs(int(depth)):04d}.txt"
     pg.export_params(params, f"params_{abs(int(depth)):04d}")
 
-ss.make_surface(params, "flat", f"inputs/facets.fct")
-ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
+#ss.make_surface(params, "flat", f"inputs/facets.fct")
+#ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
 
 # --- MAKE SOURCE PATH ---
 

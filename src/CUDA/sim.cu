@@ -951,7 +951,10 @@ int main(int argc, const char* argv[])
                 else {
                     convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
                     // TEMPORARY: DO NOT FORGET I CHANGED TO THE BELOW LINE
-                    //convolvePhasorChirpLinear(d_Ptarg, d_chirp, d_refr_temp, par.nr);
+                    //evaluateSubsurface<<<numBlocks, blockSize>>>(d_refr_temp, d_Ith, d_Iph, d_Itd,
+                    //                                             d_Tth, d_Tph, d_Ttd, d_Rth,
+                    //                                             d_TargetTh, d_fRefrEO, d_fRfrSR,
+                    //                                             par, valid_facets);
                     checkCUDAError("refracted convolve kernel");
                 }
 

@@ -118,7 +118,7 @@ def gen_params(platform, media, domainpar, recpar, sourcepar, par=None):
     if par is not None:
         for k in par.keys():
             pars[k] = par[k]
-
+    
     # some additional parameters for ease of calculation later
     pars['lam'] = 299792458 / pars['frequency']
     pars['k']   = (2 * np.pi) / pars['lam']
