@@ -50,6 +50,9 @@ for d, c, cont in zip(depths, colors, contrast):
     params = oh.load_params(f"inputs/params_{d:04d}.pkl", "inputs/layer.txt")
 
     P_r = get_analytic(params, h, d)
+    print(np.sqrt(P_r))
+    print(np.sqrt(P_r[0]))
+    print(np.sqrt(P_r[-1]))
 
     # load radargram
     rdrgrm = oh.compile_rdrgrm(f"rdrgrm/{d:04d}", params)

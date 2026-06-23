@@ -18,7 +18,7 @@ domainpar = {
 
 recpar = {
     "rx_window_m": 1.25e3,         # receive window size [m]
-    "rx_sample_rate": 80e6,       # receive sample rate [Hz]
+    "rx_sample_rate": 30e6,       # receive sample rate [Hz]
     "rx_window_position_file": "inputs/rx_window_positions.txt",
 }
 

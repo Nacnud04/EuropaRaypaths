@@ -42,7 +42,7 @@ def gauss(x, cen, width):
 f_0 = 60e6
 B   = 10e6
 c   = 299792458
-smp = 80e6
+smp = 30e6
 
 dt      = 1 / smp
 rng_res = c / B
@@ -50,7 +50,7 @@ rng_res = c / B
 smpls = np.arange(250) * dt * c
 offset = np.mean(smpls) - smpls
 
-chirp_f = chirp(0, offset, rng_res)
+chirp_f = chirp(0, offset, rng_res * 2)
 #chirp_f = chirp(0, smpls, rng_res)
 half_chirp = make_half_chirp(chirp_f)
 
@@ -104,8 +104,6 @@ def plot_fft(signal, axis, title, fs, color="black"):
 
     axis.plot(freqs/1e6, np.abs(fft_vals), color=color)
     axis.set_title(title)
-    axis.set_xlabel("Frequency (MHz)")
-    axis.set_ylabel("|FFT|")
 
     axis.set_xlim(-1*fs/2e6, fs/2e6)
 
@@ -113,21 +111,6 @@ def plot_components(signal, axis, linestyle=None):
 
     axis.plot(np.real(signal), color="red", linewidth=1, linestyle=linestyle)
     axis.plot(np.imag(signal), color="blue", linewidth=1, linestyle=linestyle)
-
-reconstructed = np.convolve(
-    half_chirp,
-    half_chirp,
-    mode="same"
-)
-"""
-fig, ax = plt.subplots(1,2)
-ax[0].plot(chirp_f, label="chirp")
-ax[0].plot(reconstructed, '--', label="h*h")
-plot_fft(chirp_f, ax[1], "", smp, color="blue")
-plot_fft(reconstructed, ax[1], "", smp, color="orange")
-plt.legend()
-plt.show()
-"""
 
 for TRCID in np.arange(0, 500, 100):
 
@@ -137,62 +120,85 @@ for TRCID in np.arange(0, 500, 100):
 
     signal = load_sig(f"rdrgrm/{DEPTH:04d}/s{TRCID:06d}.txt")
     
-    fig, ax = plt.subplots(4, 3, figsize=(12, 8))
+    fig, ax = plt.subplots(4, 3, figsize=(12, 8), sharex='col')
 
-    #inConv = np.convolve(ptTarg, chirp_f / 2, mode="same")
-    #inConv = np.convolve(ptTarg, half_chirp, mode="same")
-    #inConv = fft_convolve(ptTarg, chirp_f)
-    #inConv = fft_convolve(ptTarg, half_chirp)
+    # force everything into scientific notation
+    for a in ax.flatten(): 
+        a.ticklabel_format(axis='both', style='sci', scilimits=(0,0))
+
     inConv = fft_convolve(ptTarg, chirp_f)
     ax[0,0].plot(np.abs(inConv), color="red")
     ax[0,0].plot(np.abs(ptTarg), color="black")
-    ax[0,0].set_title("Phasor trace @ target (time)")
+    for r in (0, 2): ax[0,r].set_xlim(0, len(inConv))
     plot_components(inConv, ax[0,2], linestyle="--")
     plot_components(ptTarg, ax[0,2], linestyle=None)
 
-    #outConv = np.convolve(ptSour, chirp_f / 2, mode="same")
-    #outConv = np.convolve(ptSour, half_chirp, mode="same")
-    #outConv = fft_convolve(ptSour, chirp_f)
-    #outConv = fft_convolve(ptSour, half_chirp)
     outConv = ptSour
     ax[1,0].plot(np.abs(outConv), color="red")
     ax[1,0].plot(np.abs(ptSour), color="black")
-    ax[1,0].set_title("Phasor trace @ source (time)")
     plot_components(outConv, ax[1,2], linestyle="--")
     plot_components(ptSour, ax[1,2], linestyle=None)
 
-    fConv = np.convolve(inConv, outConv, mode="same")
+    #fConv = fft_convolve(inConv, outConv)
+    fConv = np.convolve(inConv, outConv, mode="full")[::2]
     ax[2,0].plot(np.abs(fConv), color="red")
     ax[2,0].plot(np.abs(ptTmp), color="black")
-    ax[2,0].set_title("2‑way phasor trace (time)")
     plot_components(fConv, ax[2,2], linestyle="--")
     plot_components(ptTmp, ax[2,2], linestyle=None)
 
-    #final = np.convolve(fConv, chirp_f, mode="same")
     ax[3,0].plot(np.abs(fConv), color="red")
     ax[3,0].plot(np.abs(signal), color="black")
-    ax[3,0].set_title("Final signal")
+
     plot_components(fConv, ax[3,2], linestyle="--")
     plot_components(signal, ax[3,2], linestyle=None)
 
-    plot_fft(ptTarg, ax[0,1], "Phasor trace @ target", smp, color="black")
-    plot_fft(ptSour, ax[1,1], "Phasor trace @ source", smp, color="black")
-    plot_fft(ptTmp,  ax[2,1], "2-Way phasor trace", smp, color="black")
-    plot_fft(signal, ax[3,1], "Final signal", smp, color="black")
+    plot_fft(ptTarg, ax[0,1], "", smp, color="black")
+    plot_fft(ptSour, ax[1,1], "", smp, color="black")
+    plot_fft(ptTmp,  ax[2,1], "", smp, color="black")
+    plot_fft(signal, ax[3,1], "", smp, color="black")
 
-    plot_fft(inConv, ax[0,1], "Target phasor (frequency)", smp, color="red")
-    plot_fft(outConv, ax[1,1], "Source phasor (frequency)", smp, color="red")
-    plot_fft(fConv, ax[2,1], "2‑way phasor (frequency)", smp, color="red")
-    #plot_fft(final, ax[3,1], "Final signal (frequency)", smp, color="red")
-    plot_fft(fConv, ax[3,1], "Final signal (frequency)", smp, color="red")
+    plot_fft(inConv, ax[0,1], "", smp, color="red")
+    plot_fft(outConv, ax[1,1], "", smp, color="red")
+    plot_fft(fConv, ax[2,1], "", smp, color="red")
+    plot_fft(fConv, ax[3,1], "", smp, color="red")
 
-    plt.tight_layout()
-    plt.show()
+    for r in range(0, 4):
+        ax[r,1].axvline(-B/2e6, color="grey", alpha=0.7)
+        ax[r,1].axvline(B/2e6, color="grey", alpha=0.7)
+
+    # column headers
+    headers = ("Power", "Frequency", "Components")
+    for c, h in enumerate(headers):
+        ax[0,c].set_title(h, fontsize=14, fontweight="bold")
+
+    # row headers
+    headers = ("Inward Trc", "Outward PT", "Joint", "Final Signal")
+    ys      = [np.max(np.abs(ptTarg))/2, np.max(np.abs(ptSour))/2, np.max(np.abs(ptTmp))/2, np.max(np.abs(signal))/2]
+    xpos    = -0.2 * len(fConv)
+    for r, (h, y) in enumerate(zip(headers, ys)):
+        ax[r,0].text(xpos, y, s=h, fontsize=14, fontweight="bold", rotation=90, verticalalignment="center")
+
+    # x labels
+    labels = ("Sample #", "Freq [MHz]", "Sample #")
+    for c, l in enumerate(labels):
+        ax[3,c].set_xlabel(l)
 
     print(f"Maximum amplitude of simulator output is: {np.max(np.abs(signal))}")
     print(f"Maximum ampltiude of new method is: {np.max(np.abs(fConv))}")
     print(f"Maximum power of simulator output is: {np.max(np.abs(signal)**2)}")
     print(f"Maximum power of new method is: {np.max(np.abs(fConv)**2)}")
+
+    max_old = np.max(np.abs(signal))
+    max_new = np.max(np.abs(fConv))
+    trueV   = 2.5308183001e-9
+
+    plt.suptitle(f"OLD: {max_old:.4E}      NEW: {max_new:.4E}      TRUE: {trueV:.4E}",
+                 fontweight="bold", fontsize=14)
+
+    #plt.tight_layout()
+    plt.subplots_adjust(hspace=0.2, wspace=0.2)
+    plt.savefig("figures/ConvDebug.png")
+    plt.close()
 
     import sys
     sys.exit()
