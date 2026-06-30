@@ -255,12 +255,35 @@ void launchSquare(cuFloatComplex* d_in,
 
 // --- CONVOLUTION ---
 
+__global__
+void cropSpectrum(cuFloatComplex *X,
+                  int N,
+                  float Fs,
+                  float B)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (k >= N)
+        return;
+
+    float freq;
+
+    if (k <= N/2)
+        freq = k * Fs / N;
+    else
+        freq = (k - N) * Fs / N;
+
+    if (fabsf(freq) > B)
+        X[k] = make_cuFloatComplex(0.0f, 0.0f);
+}
+
 // convolve two 1D complex signals of the same length. Downsample at end.
 void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
-                     cuFloatComplex* d_output, int nr) {
+                     cuFloatComplex* d_output, SimulationParameters par, 
+                     const char* argv[], int is, int it) {
 
     // convolution in here
-    int nrPad = 2 * nr; // zero-pad to avoid circular convolution
+    int nrPad = 2 * par.nr - 1; // zero-pad to avoid circular convolution
 
     // allocate device memory for padded signal and kernel
     cuFloatComplex* d_signalPad;
@@ -273,8 +296,8 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cudaMemset(d_kernelPad, 0, nrPad * sizeof(cuFloatComplex));
 
     // move signal and kernel into padded arrays
-    cudaMemcpy(d_signalPad, d_signal, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(d_kernelPad, d_kernel, nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_signalPad, d_signal, par.nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_kernelPad, d_kernel, par.nr * sizeof(cuFloatComplex), cudaMemcpyDeviceToDevice);
 
     // create FFT plan for padded length
     cufftHandle plan;
@@ -284,9 +307,27 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
     cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
 
+    char* sPad_filename = (char*)malloc(64 * sizeof(char));
+    sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
+    saveSignalToFile(sPad_filename, d_signalPad, nrPad);
+    free(sPad_filename);
+
+    char* kPad_filename = (char*)malloc(64 * sizeof(char));
+    sprintf(kPad_filename, "%s/kPad_s%06d_t%02d.txt", argv[4], is, it);
+    saveSignalToFile(kPad_filename, d_kernelPad, nrPad);
+    free(kPad_filename);
+
     // pointwise multiply in frequency domain
     int blocks = (nrPad + THREADS - 1) / THREADS;
+    cropSpectrum<<<blocks, THREADS>>>(d_kernelPad, nrPad, par.smpl, par.B);
     complexPointwiseMul<<<blocks, THREADS>>>(d_signalPad, d_kernelPad, nrPad);
+
+    char* mPad_filename = (char*)malloc(64 * sizeof(char));
+    sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
+    saveSignalToFile(mPad_filename, d_signalPad, nrPad);
+    free(mPad_filename);
+
+    cudaDeviceSynchronize();
 
     // inverse FFT to get the convolved signal
     cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_INVERSE);
@@ -295,8 +336,10 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     float scale = 1.0f / nrPad;
     scaleComplex<<<blocks, THREADS>>>(d_signalPad, nrPad, scale);
 
+    cudaDeviceSynchronize();
+
     // downsample the convolved signal by taking every other sample of valid region
-    takeEveryOtherComplex<<<blocks, THREADS>>>(d_signalPad, d_output, nr);
+    takeEveryOtherComplex<<<blocks, THREADS>>>(d_signalPad, d_output, par.nr);
 
     // free device memory and destroy FFT plan
     cudaFree(d_signalPad);
@@ -304,7 +347,7 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cufftDestroy(plan);
 
 }
-
+/*
 // square and then convolve complex signals
 void convolveComplexSquare(cuFloatComplex* d_sig1E, cuFloatComplex* d_sig2E,
                      cuFloatComplex* d_output, int nr) {
@@ -323,3 +366,4 @@ void convolveComplexSquare(cuFloatComplex* d_sig1E, cuFloatComplex* d_sig2E,
     convolveComplex(d_sig1P, d_sig2P, d_output, nr);
 
 }
+*/

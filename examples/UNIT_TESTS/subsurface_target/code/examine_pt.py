@@ -42,7 +42,7 @@ def gauss(x, cen, width):
 f_0 = 60e6
 B   = 10e6
 c   = 299792458
-smp = 30e6
+smp = 120e6
 
 dt      = 1 / smp
 rng_res = c / B
@@ -58,7 +58,7 @@ half_chirp = make_half_chirp(chirp_f)
 TARID = 0
 DEPTH = 5000
 
-def fft_convolve(x, h):
+def fft_convolve(x, h, full=False):
     N = len(x)
     M = len(h)
     L = N + M - 1
@@ -77,9 +77,13 @@ def fft_convolve(x, h):
     Y = X * H
     y_full = np.fft.ifft(Y)
 
-    # Crop to same length as x (same behavior as linear convolution)
-    start = (M - 1) // 2
-    return y_full[start:start + N]
+    if full == False:
+
+        # Crop to same length as x (same behavior as linear convolution)
+        start = (M - 1) // 2
+        return y_full[start:start + N]
+    
+    return y_full
 
 def fft_deconvolve(y, h, eps=1e-8):
     N = len(y)
@@ -115,8 +119,13 @@ def plot_components(signal, axis, linestyle=None):
 for TRCID in np.arange(0, 500, 100):
 
     ptTarg = load_sig(f"rdrgrm/{DEPTH:04d}/Ptarg_s{TRCID:06d}_t{TARID:02d}.txt")
+    ptTargSAVE = load_sig(f"tmp/Ptarg_s{TRCID:06d}_t{TARID:02d}.txt")
     ptSour = load_sig(f"rdrgrm/{DEPTH:04d}/Psour_s{TRCID:06d}_t{TARID:02d}.txt")
     ptTmp  = load_sig(f"rdrgrm/{DEPTH:04d}/PTTmp_s{TRCID:06d}_t{TARID:02d}.txt")
+
+    sPad = load_sig(f"rdrgrm/{DEPTH:04d}/sPad_s{TRCID:06d}_t{TARID:02d}.txt")
+    kPad = load_sig(f"rdrgrm/{DEPTH:04d}/kPad_s{TRCID:06d}_t{TARID:02d}.txt")
+    mPad = load_sig(f"rdrgrm/{DEPTH:04d}/mPad_s{TRCID:06d}_t{TARID:02d}.txt")
 
     signal = load_sig(f"rdrgrm/{DEPTH:04d}/s{TRCID:06d}.txt")
     
@@ -126,7 +135,8 @@ for TRCID in np.arange(0, 500, 100):
     for a in ax.flatten(): 
         a.ticklabel_format(axis='both', style='sci', scilimits=(0,0))
 
-    inConv = fft_convolve(ptTarg, chirp_f)
+    inConv = fft_convolve(ptTargSAVE, chirp_f, full=False)
+    #inConv = ptTarg
     ax[0,0].plot(np.abs(inConv), color="red")
     ax[0,0].plot(np.abs(ptTarg), color="black")
     for r in (0, 2): ax[0,r].set_xlim(0, len(inConv))
@@ -139,8 +149,8 @@ for TRCID in np.arange(0, 500, 100):
     plot_components(outConv, ax[1,2], linestyle="--")
     plot_components(ptSour, ax[1,2], linestyle=None)
 
-    #fConv = fft_convolve(inConv, outConv)
-    fConv = np.convolve(inConv, outConv, mode="full")[::2]
+    fConv = fft_convolve(inConv, outConv, full=True)[::2]
+    #fConv = np.convolve(inConv, outConv, mode="full")[::2]
     ax[2,0].plot(np.abs(fConv), color="red")
     ax[2,0].plot(np.abs(ptTmp), color="black")
     plot_components(fConv, ax[2,2], linestyle="--")
@@ -161,6 +171,12 @@ for TRCID in np.arange(0, 500, 100):
     plot_fft(outConv, ax[1,1], "", smp, color="red")
     plot_fft(fConv, ax[2,1], "", smp, color="red")
     plot_fft(fConv, ax[3,1], "", smp, color="red")
+
+    freqs = np.fft.fftshift(np.fft.fftfreq(len(signal)*2-1, d=1/smp))
+
+    ax[1,1].plot(freqs/1e6, np.fft.fftshift(np.abs(sPad)), color="blue", linewidth=1)
+    ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(kPad)), color="blue", linewidth=1)
+    ax[2,1].plot(freqs/1e6, np.fft.fftshift(np.abs(mPad)), color="blue", linewidth=1)
 
     for r in range(0, 4):
         ax[r,1].axvline(-B/2e6, color="grey", alpha=0.7)
@@ -198,7 +214,8 @@ for TRCID in np.arange(0, 500, 100):
     #plt.tight_layout()
     plt.subplots_adjust(hspace=0.2, wspace=0.2)
     plt.savefig("figures/ConvDebug.png")
-    plt.close()
+    plt.show()
+    #plt.close()
 
     import sys
     sys.exit()

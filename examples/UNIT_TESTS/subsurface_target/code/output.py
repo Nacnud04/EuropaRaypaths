@@ -36,7 +36,7 @@ def get_target_phase(params, h, d):
 
 plt.rcParams.update({'font.size': 14})
 
-fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
+fig, ax = plt.subplots(2, 2, figsize=(14, 8), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
 depths = (5000, 2500, 1000, 500, 250)
 colors = ["red", "blue", "green", "purple", "blue"]
@@ -50,9 +50,6 @@ for d, c, cont in zip(depths, colors, contrast):
     params = oh.load_params(f"inputs/params_{d:04d}.pkl", "inputs/layer.txt")
 
     P_r = get_analytic(params, h, d)
-    print(np.sqrt(P_r))
-    print(np.sqrt(P_r[0]))
-    print(np.sqrt(P_r[-1]))
 
     # load radargram
     rdrgrm = oh.compile_rdrgrm(f"rdrgrm/{d:04d}", params)
@@ -65,42 +62,16 @@ for d, c, cont in zip(depths, colors, contrast):
 
     error = np.abs(P_num - P_r) / P_r * 100
 
-    ax[0].plot(h/1e3, uc.lin_to_db(P_num), label=f"Numerical: d={d} m", color=c, linewidth=1)
-    ax[0].plot(h/1e3, uc.lin_to_db(P_r), color=cont, linestyle="--", label=f"Analytic: d={d} m", linewidth=1)
+    ax[0,0].plot(h/1e3, uc.lin_to_db(P_num), label=f"Numerical: d={d} m", color=c, linewidth=1)
+    ax[0,0].plot(h/1e3, uc.lin_to_db(P_r), color=cont, linestyle="--", label=f"Analytic: d={d} m", linewidth=1)
 
-    ax[1].plot(h/1e3, error, color=c, label=f"Error (%): d={d} m", linewidth=1)
-
-ax[0].set_ylabel("Maximum Power [dBW]")
-ax[0].legend()
-ax[0].set_title("Individual Subsurface Target (Facet)")
-
-ax[1].set_xlabel("Altitude [km]")
-ax[1].set_ylabel("Error (%)")
-#ax[1].set_ylim(0, 10)
-
-plt.xlim(h[-1]/1e3, h[0]/1e3)
-plt.savefig("figures/SubsurfaceFacet.png", dpi=300)
-
-plt.show()
-
-fig, ax = plt.subplots(figsize=(8, 5))
-
-ax.set_xlim(h[-1]/1e3, h[0]/1e3)
-
-for d, c, cont in zip(depths, colors, contrast):
-
-    if d != 5000 and d != 250:
-        continue
-
-    ana_phse = get_target_phase(params, h, d)
-
-    # load radargram
-    rdrgrm = oh.compile_rdrgrm(f"rdrgrm/{d:04d}", params)
+    ax[1,0].plot(h/1e3, error, color=c, label=f"Error (%): d={d} m", linewidth=1)
 
     # find the phase of the maximum signal for each trace
     argmax = np.argmax(np.abs(rdrgrm), axis=0)
     phse   = np.degrees(np.angle(rdrgrm[argmax, range(rdrgrm.shape[1])]))
 
+    ana_phse = get_target_phase(params, h, d)
     phase_error = phse - ana_phse
 
     # make sure phase error is between -180 and 180
@@ -109,15 +80,28 @@ for d, c, cont in zip(depths, colors, contrast):
     # mean phase error
     mean_error = np.mean(np.abs(phase_error))
 
-    # line showing mean error with text at end
-    ax.axhline(mean_error, color=c, alpha=0.5, linestyle="--")
-    ax.text(h[0]/1e3 + 1, mean_error, f"{mean_error:.2f}\ndeg", color=c, alpha=0.7, fontsize=12, verticalalignment="center")
+    ax[0,1].axhline(mean_error, color=c, alpha=0.5, linestyle="--")
+    ax[0,1].axhline(0, color="black", linestyle="--")
+    ax[0,1].text(h[0]/1e3 + 1, mean_error, f"{mean_error:.2f}\ndeg", color=c, alpha=0.7, fontsize=12, verticalalignment="center")
 
-    ax.plot(h/1e3, phase_error, label=f"Target depth: {d} m", color=c)
+    ax[0,1].plot(h/1e3, phase_error, label=f"Target depth: {d} m", color=c)
 
-ax.set_ylabel("Phase Error (deg)")
-ax.set_xlabel("Altitude [km]")
-ax.legend()
-ax.set_title("Phase Error of Subsurface Facet")
-plt.savefig("figures/SubsurfaceFacet_PhaseError.png", dpi=300)
+    ax[0,1].set_ylabel("Phase Error (deg)")
+    ax[0,1].set_xlabel("Altitude [km]")
+    ax[0,1].legend()
+    ax[0,1].set_title("Phase Error of Subsurface Facet")
+
+ax[0,0].set_ylabel("Maximum Power [dBW]")
+ax[0,0].legend()
+ax[0,0].set_title("Individual Subsurface Target (Facet)")
+
+ax[1,0].set_xlabel("Altitude [km]")
+ax[1,0].set_ylabel("Error (%)")
+#ax[1].set_ylim(0, 10)
+
+ax[1,1].set_axis_off()
+
+plt.xlim(h[-1]/1e3, h[0]/1e3)
+plt.savefig("figures/SubsurfaceFacet.png", dpi=300)
+
 plt.show()

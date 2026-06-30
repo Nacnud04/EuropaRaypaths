@@ -445,6 +445,8 @@ int main(int argc, const char* argv[])
     }
     
     // array for power function at target
+    cuFloatComplex* d_PTtarg;
+    cudaMalloc((void**)&d_PTtarg, par.nr * sizeof(cuFloatComplex));
     cuFloatComplex* d_Ptarg;
     cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(cuFloatComplex));
 
@@ -771,6 +773,11 @@ int main(int argc, const char* argv[])
             }
         } else {
 
+            // Generate chirp
+            int paddedNr = 2 * par.nr;
+            genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
+            checkCUDAError("genCenteredChirpPadded kernel");
+
             // if debug, write out surface phasor
             if (par.debug_surface) {
                 char* Psurf_filename = (char*)malloc(64 * sizeof(char));
@@ -793,6 +800,7 @@ int main(int argc, const char* argv[])
         
         for (int it=0; it<ntargets; it++) {
 
+            cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
@@ -842,18 +850,26 @@ int main(int argc, const char* argv[])
                                                     par, valid_facets);
             checkCUDAError("compRefrEnergyIn kernel");
 
+            if (!par.specular) {
+                // Generate chirp with half bandwidth
+                int paddedNr = 2 * par.nr;
+                genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
+                checkCUDAError("genCenteredChirpPadded kernel");
+            }
+
             // loop for all non-specular target types
             if (h_ttype[it] != 0) {
 
                 // --- CALCULATE POWER AT TARGET ---
                 // this is the inward phasor trace
-                accumulateTarget<<<numBlocks, blockSize>>>(d_Ptarg, d_Ith, d_Iph, d_Itd,
+                accumulateTarget<<<numBlocks, blockSize>>>(d_PTtarg, d_Ith, d_Iph, d_Itd,
                                                            d_Tth, d_Tph, d_Ttd, d_Rth,
                                                            d_TargetTh, d_fRefrEI, d_fRfrSR,
                                                            d_fx, d_fy, d_fz,
                                                            par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
+                convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr);
                 // write out d_Ptarg to file for debugging
                 if (par.debug_surface) {
                     char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
@@ -891,13 +907,14 @@ int main(int argc, const char* argv[])
                 }
                 
                 // --- CONVOLVE INTO FULL PHASOR TRACE ---
-                convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+                //convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+                convolveComplex(d_Psour, d_Ptarg, d_refr_temp, par, argv, is, it);
                 checkCUDAError("convolveComplexSquare kernel");
                 // write out d_PTTmp to file for debugging
                 if (par.debug_surface) {
                     char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
                     sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
-                    saveSignalToFile(PTTmp_filename, d_PTTmp, par.nr);
+                    saveSignalToFile(PTTmp_filename, d_refr_temp, par.nr);
                     free(PTTmp_filename);
                     checkCUDAError("exportingPhasorTrace kernel");
                 }
@@ -949,7 +966,7 @@ int main(int argc, const char* argv[])
 
                 // for all other targets
                 else {
-                    convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                    //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
                     // TEMPORARY: DO NOT FORGET I CHANGED TO THE BELOW LINE
                     //evaluateSubsurface<<<numBlocks, blockSize>>>(d_refr_temp, d_Ith, d_Iph, d_Itd,
                     //                                             d_Tth, d_Tph, d_Ttd, d_Rth,
