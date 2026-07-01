@@ -307,25 +307,29 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
     cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
 
-    char* sPad_filename = (char*)malloc(64 * sizeof(char));
-    sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
-    saveSignalToFile(sPad_filename, d_signalPad, nrPad);
-    free(sPad_filename);
+    if (par.debug_surface) {
+        char* sPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(sPad_filename, d_signalPad, nrPad);
+        free(sPad_filename);
 
-    char* kPad_filename = (char*)malloc(64 * sizeof(char));
-    sprintf(kPad_filename, "%s/kPad_s%06d_t%02d.txt", argv[4], is, it);
-    saveSignalToFile(kPad_filename, d_kernelPad, nrPad);
-    free(kPad_filename);
+        char* kPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(kPad_filename, "%s/kPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(kPad_filename, d_kernelPad, nrPad);
+        free(kPad_filename);
+    }
 
     // pointwise multiply in frequency domain
     int blocks = (nrPad + THREADS - 1) / THREADS;
     cropSpectrum<<<blocks, THREADS>>>(d_kernelPad, nrPad, par.smpl, par.B);
     complexPointwiseMul<<<blocks, THREADS>>>(d_signalPad, d_kernelPad, nrPad);
 
-    char* mPad_filename = (char*)malloc(64 * sizeof(char));
-    sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
-    saveSignalToFile(mPad_filename, d_signalPad, nrPad);
-    free(mPad_filename);
+    if (par.debug_surface) {
+        char* mPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(mPad_filename, d_signalPad, nrPad);
+        free(mPad_filename);
+    }
 
     cudaDeviceSynchronize();
 

@@ -78,7 +78,9 @@ for d, c, cont in zip(depths, colors, contrast):
     phase_error = (phase_error + 180) % 360 - 180
 
     # mean phase error
-    mean_error = np.mean(np.abs(phase_error))
+    mean_error = np.median(np.abs(phase_error))
+
+    print(f"Median errors for d={d} m: {np.median(error):.2f} %, {mean_error:.2f} deg")
 
     ax[0,1].axhline(mean_error, color=c, alpha=0.5, linestyle="--")
     ax[0,1].axhline(0, color="black", linestyle="--")
