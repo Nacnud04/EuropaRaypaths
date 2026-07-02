@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import root_scalar
 import matplotlib.pyplot as plt
 
 sys.path.append("../../../src/PYTHON")
@@ -62,15 +62,43 @@ def get_analytic(params, h, d, xoff):
 
     return P_r
 
+def refracted_angle(th_r, xoff, h, d, eps_2):
+
+    y = np.arcsin(np.sqrt(eps_2) * np.sin(th_r))
+
+    return h * np.tan(y) + d * np.tan(th_r) - xoff
+
 def get_target_phase(params, h, d, xoff):
 
-    #rng = h + np.sqrt(params["eps_2"]) * d
-    rng = h + d
-    rng = np.sqrt(rng**2 + xoff**2)
-    subsurf_ratio = d / (h + d)
-    corrected_rng = rng * (1 - subsurf_ratio) + rng * subsurf_ratio * np.sqrt(params["eps_2"])
+    if xoff != 0:
+
+        # first find the refracted angle numerically
+        th_r = np.zeros_like(h)
+        for i, height in enumerate(h):
+            sol = root_scalar(refracted_angle,
+                            args=(xoff, height, d, params["eps_2"]), bracket=[0, np.radians(20)],
+                            method='brentq'
+                            )
+            
+            th_r[i] = sol.root
+
+        th_i = np.arcsin(np.sqrt(params["eps_2"]) * np.sin(th_r))
+        #print(th_r)
+        #print(th_i)
+
+        r1   = h / np.cos(th_i)
+        r2   = d / np.cos(th_r)
+
+        corrected_rng = r1 + r2 * np.sqrt(params["eps_2"])
+        #print(corrected_rng)
+    else: 
+
+        corrected_rng = h + np.sqrt(params["eps_2"]) * d
+    
     cmplx = np.exp(((-4j * np.pi) / params['lam']) * corrected_rng)
+
     return np.degrees(np.angle(cmplx))
+
 
 plt.rcParams.update({'font.size': 14})
 
@@ -79,6 +107,14 @@ xoff = 2000
 depths = (5000, 1000, 500, 250)
 colors = ["red", "green", "purple", "blue"]
 contrast = ["maroon", "lime", "fuchsia", "cyan"]
+
+z = np.linspace(0, np.radians(20), 500)
+
+f = refracted_angle(z, xoff, h[0], 250, 3.15)
+
+plt.plot(np.degrees(z), f)
+plt.axhline(0, color='k')
+plt.show()
 
 for d, c, cont in zip(depths, colors, contrast):
 
