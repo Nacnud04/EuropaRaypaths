@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -7,7 +8,7 @@ sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 import unit_convs      as uc
 
-h = np.linspace(100e3, 19e3, 500)
+h = np.linspace(300e3, 19e3, 250)
 
 def get_analytic(params, h, d):
 
@@ -81,6 +82,9 @@ for d, c, cont in zip(depths, colors, contrast):
     mean_error = np.median(np.abs(phase_error))
 
     print(f"Median errors for d={d} m: {np.median(error):.2f} %, {mean_error:.2f} deg")
+
+    df = pd.DataFrame({"ALT": h, "NUM_POW": P_num, "ANA_POW": P_r, "ERR_POW": error, "ERR_PHS": phase_error})
+    df.to_csv(f"figures/nadir_{d:04d}.csv", index=False)
 
     ax[0,1].axhline(mean_error, color=c, alpha=0.5, linestyle="--")
     ax[0,1].axhline(0, color="black", linestyle="--")

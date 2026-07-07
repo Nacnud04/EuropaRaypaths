@@ -7,7 +7,7 @@ sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 import unit_convs      as uc
 
-h = np.linspace(30e3, 20e3, 10)
+h = np.linspace(100e3, 20e3, 80)
 
 def get_analytic(params, h, d):
 

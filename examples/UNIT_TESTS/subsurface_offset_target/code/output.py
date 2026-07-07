@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 from scipy.optimize import root_scalar
 import matplotlib.pyplot as plt
 
@@ -141,6 +142,20 @@ for d, c, cont in zip(depths, colors, contrast):
     phse   = np.degrees(np.angle(rdrgrm[argmax, range(rdrgrm.shape[1])]))
 
     error = np.abs(P_num - P_r) / P_r * 100
+
+    ana_phse = get_target_phase(params, h, d, xoff)
+
+    # find the phase of the maximum signal for each trace
+    argmax = np.argmax(np.abs(rdrgrm), axis=0)
+    phse   = np.degrees(np.angle(rdrgrm[argmax, range(rdrgrm.shape[1])]))
+
+    phase_error = phse - ana_phse
+
+    # make sure phase error is between -180 and 180
+    phase_error = (phase_error + 180) % 360 - 180
+
+    df = pd.DataFrame({"ALT": h, "NUM_POW": P_num, "ANA_POW": P_r, "ERR_POW": error, "ERR_PHS": phase_error})
+    df.to_csv(f"figures/nadir_{d:04d}.csv", index=False)
 
     fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 

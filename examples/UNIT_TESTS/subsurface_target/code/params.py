@@ -5,15 +5,15 @@ sys.path.append("../../../src/PYTHON")
 import simple_surfaces as ss
 import param_gen       as pg
 
-fct = 3
+fct = 4
 
 domainpar = {
-    "ox": -2e3,
-    "oy": -2e3,
+    "ox": -1e3,
+    "oy": -1e3,
     "oz": 0,
     "fs": 10 / fct,
-    "nx": int(400 * fct),
-    "ny": int(400 * fct),
+    "nx": int(200 * fct),
+    "ny": int(200 * fct),
 }
 
 recpar = {
@@ -23,7 +23,7 @@ recpar = {
 }
 
 sourcepar = {
-    "ns": 500,               # source count            [.]
+    "ns": 250,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
     "aperture": 70,
 }
@@ -42,13 +42,13 @@ for depth in tdepths:
     params["rx_window_position_file"] = f"inputs/rx_window_positions_{abs(int(depth)):04d}.txt"
     pg.export_params(params, f"params_{abs(int(depth)):04d}")
 
-#ss.make_surface(params, "flat", f"inputs/facets.fct")
+ss.make_surface(params, "flat", f"inputs/facets.fct")
 #ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
 
 # --- MAKE SOURCE PATH ---
 
 maxZ = 19e3 # maximum altitude of source path [m]
-minZ = 100e3 # minimum altitude of source path [m]
+minZ = 300e3 # minimum altitude of source path [m]
 
 params['sz'] = minZ
 Fr = ss.calc_fresnel(params)

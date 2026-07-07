@@ -30,7 +30,7 @@ recpar = {
 }
 
 sourcepar = {
-    "ns": 10,               # source count            [.]
+    "ns": 80,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
     "aperture": 70,
 }
@@ -54,7 +54,7 @@ ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
 # --- MAKE SOURCE PATH ---
 
 maxZ = 20e3 # maximum altitude of source path [m]
-minZ = 30e3 # minimum altitude of source path [m]
+minZ = 100e3 # minimum altitude of source path [m]
 
 params['sz'] = minZ + depth
 Fr = ss.calc_fresnel(params)
