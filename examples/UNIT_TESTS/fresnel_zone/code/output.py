@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -34,6 +35,10 @@ P_r = (P_t * G**2 * lam**2) / ((4 * np.pi)**2 * (alts)**2)
 # find error
 error = np.abs(P_num - P_r) / P_r * 100
 print(f"Error Average: {np.mean(error):.2f} %")
+
+# write out as CSV
+df = pd.DataFrame({"ALT":alts,"NUM_POW":P_num,"ANA_POW":P_r,"ERR":error})
+df.to_csv("figures/fresnel_coherent.csv", index=False)
 
 plt.rcParams.update({'font.size': 14})
 
@@ -95,6 +100,10 @@ label_poly = f"Analytic: $\sigma_0$ = {sigma_0:.2f}"
 
 error = np.abs(P_num - fit) / fit * 100
 print(f"Error Average: {np.mean(error):.2f} %")
+
+# write out as CSV
+df = pd.DataFrame({"ALT":alts,"NUM_POW":P_num,"ANA_POW":fit,"SIG0":np.ones_like(P_num)*sigma_0,"ERR":error})
+df.to_csv("figures/fresnel_incoherent.csv", index=False)
 
 # plot
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})

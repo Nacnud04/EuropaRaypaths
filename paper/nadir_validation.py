@@ -66,5 +66,5 @@ for c, head in enumerate(headers):
 
 plt.tight_layout()
 
-plt.savefig("TargetValidation.pdf")
+plt.savefig("Figures/TargetValidation.pdf")
 plt.close()

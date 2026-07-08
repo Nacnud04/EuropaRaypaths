@@ -48,8 +48,8 @@ params = pg.gen_params("REASON_VHF", "vacuum", domainpar, recpar, sourcepar, par
 params["rx_window_position_file"] = f"inputs/rx_window_positions.txt"
 pg.export_params(params, f"params")
 
-ss.make_surface(params, "flat", f"inputs/facets.fct")
-ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
+#ss.make_surface(params, "flat", f"inputs/facets.fct")
+#ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
 
 # --- MAKE SOURCE PATH ---
 
@@ -58,7 +58,7 @@ minZ = 100e3 # minimum altitude of source path [m]
 
 params['sz'] = minZ + depth
 Fr = ss.calc_fresnel(params)
-print(f"Fresnel zone radius for maximum altitude of {minZ} m is {Fr:.2f} m")
+print(f"Fresnel zone radius for maximum altitude of {minZ + depth} m is {Fr:.2f} m")
 sz = pg.vert_source_path(params, minZ, maxZ, "source_path")
 
 # --- RX OPENING WINDOW FILE ---

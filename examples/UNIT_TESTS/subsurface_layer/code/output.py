@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -63,33 +64,6 @@ rdrgrm = oh.compile_rdrgrm(f"rdrgrm/", params)
 
 max_row = np.argmax(np.abs(rdrgrm)**2, axis=0)
 Emax = rdrgrm[max_row, np.arange(rdrgrm.shape[1])]
-"""
-a_ss = []
-a_os = []
-
-#f = "rdrgrm/Ptarg_s000000_t00.txt"
-for i in range(rdrgrm.shape[1]):
-    f = f"rdrgrm/s{i:06d}.txt"
-    arr = np.loadtxt(f)
-    sig = arr[:, 0] + 1j * arr[:, 1]
-    idx = np.argmax(np.abs(sig))
-    angle = np.degrees(np.angle(sig[idx]))
-    print(f"TRC {i}: \n\
-          Max norm signal is {sig[idx]/np.abs(sig[idx])}\n\
-          With angle {angle:.2f} degrees\n\
-          At altitude: {h[i]} m\n")
-    a_ss.append(angle)
-
-
-fig, ax = plt.subplots(2)
-ana_phs = get_target_phase(params, h, d)
-ax[0].plot(h/1e3, a_ss, label="Sim Phase")
-ax[0].plot(h/1e3, ana_phs, label="Analytic Phase")
-ax[0].legend()
-ax[1].plot(h/1e3, a_ss - ana_phs, label="Sim Phase - Analytic Phase")
-ax[1].legend()
-plt.show()
-"""
     
 P_num = np.max(np.abs(rdrgrm)**2, axis=0)
 print(P_num)
@@ -101,6 +75,10 @@ print(err_mean)
 #error = np.abs(P_num - P_r) / P_r * 100
 error = np.abs(P_num - P_r_layer) / P_r_layer * 100
 print(np.mean(error)/100)
+
+# export as csv
+df = pd.DataFrame({"ALT":h,"NUM_POW":P_num,"ANA_POW":P_r_layer,"ERR":error})
+df.to_csv("figures/subsurface_layer.csv", index=False)
 
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 

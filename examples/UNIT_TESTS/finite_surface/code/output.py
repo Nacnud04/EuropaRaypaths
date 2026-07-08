@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -59,6 +60,10 @@ coh_analytic_Pr = (P_t * G**2 * lam**2 * A**2) / ((4 * np.pi)**2 * lam**2 * R**4
 
 error = np.abs(co_PP - coh_analytic_Pr) / coh_analytic_Pr * 100
 
+# write out as csv
+df = pd.DataFrame({"ALT":R,"NUM_POW":co_PP,"ANA_POW":coh_analytic_Pr,"ERR":error})
+df.to_csv("figures/finite_coherent.csv", index=False)
+
 plt.rcParams.update({'font.size': 14})
 
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
@@ -96,6 +101,10 @@ sigma_0 = (C * (4 * np.pi)**3) / (P_t * G**2 * lam**2 * A)
 label_poly = f"Analytic: $\sigma_0$ = {sigma_0:.2f}"
 
 error = np.abs(inco_PP - fit) / fit * 100
+
+# write out as csv
+df = pd.DataFrame({"ALT":R,"NUM_POW":inco_PP,"ANA_POW":fit,"SIG0":np.ones_like(inco_PP)*sigma_0,"ERR":error})
+df.to_csv("figures/finite_incoherent.csv", index=False)
 
 fig, ax = plt.subplots(2, figsize=(8, 5), sharex=True, gridspec_kw={'height_ratios': [4, 1]})
 
