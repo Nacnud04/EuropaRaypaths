@@ -42,7 +42,7 @@ def gauss(x, cen, width):
 f_0 = 60e6
 B   = 10e6
 c   = 299792458
-smp = 120e6
+smp = 60e6
 
 dt      = 1 / smp
 rng_res = c / B

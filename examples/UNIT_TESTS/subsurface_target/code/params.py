@@ -30,7 +30,7 @@ sourcepar = {
 
 otherpar = {
     "lossless": True,
-    "debug_surface": False,
+    "debug_surface": True,
     "disable_surface": True,
 }
 
