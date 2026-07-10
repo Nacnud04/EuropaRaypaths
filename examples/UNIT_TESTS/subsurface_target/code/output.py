@@ -48,7 +48,7 @@ for d, c, cont in zip(depths, colors, contrast):
     if d != 5000 and d != 250:
         continue
 
-    params = oh.load_params(f"inputs/params_{d:04d}.pkl", "inputs/layer.txt")
+    params = oh.load_params(f"inputs/params_{d:04d}.pkl", f"inputs/target{d:04d}.txt")
 
     P_r = get_analytic(params, h, d)
 

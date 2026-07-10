@@ -7,6 +7,10 @@ def load_sig(f):
     out = sig[:,0] + 1j * sig[:,1]
     return out
 
+def load_floats(f):
+    sig = np.loadtxt(f)
+    return sig
+
 def sinc(x):
     mask = x != 0
     output = np.ones_like(x)
@@ -42,7 +46,7 @@ def gauss(x, cen, width):
 f_0 = 60e6
 B   = 10e6
 c   = 299792458
-smp = 120e6
+smp = 60e6
 
 dt      = 1 / smp
 rng_res = c / B
@@ -119,7 +123,7 @@ def plot_components(signal, axis, linestyle=None):
 for TRCID in np.arange(0, 500, 100):
 
     ptTarg = load_sig(f"rdrgrm/{DEPTH:04d}/Ptarg_s{TRCID:06d}_t{TARID:02d}.txt")
-    ptTargSAVE = load_sig(f"tmp/Ptarg_s{TRCID:06d}_t{TARID:02d}.txt")
+    ptTargSAVE = ptTarg#load_sig(f"tmp/Ptarg_s{TRCID:06d}_t{TARID:02d}.txt")
     ptSour = load_sig(f"rdrgrm/{DEPTH:04d}/Psour_s{TRCID:06d}_t{TARID:02d}.txt")
     ptTmp  = load_sig(f"rdrgrm/{DEPTH:04d}/PTTmp_s{TRCID:06d}_t{TARID:02d}.txt")
 
@@ -174,9 +178,13 @@ for TRCID in np.arange(0, 500, 100):
 
     freqs = np.fft.fftshift(np.fft.fftfreq(len(signal)*2-1, d=1/smp))
 
-    ax[1,1].plot(freqs/1e6, np.fft.fftshift(np.abs(sPad)), color="blue", linewidth=1)
-    ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(kPad)), color="blue", linewidth=1)
-    ax[2,1].plot(freqs/1e6, np.fft.fftshift(np.abs(mPad)), color="blue", linewidth=1)
+    #ax[1,1].plot(freqs/1e6, np.fft.fftshift(np.abs(sPad)), color="blue", linewidth=1)
+    #ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(kPad)), color="blue", linewidth=1)
+    #ax[2,1].plot(freqs/1e6, np.fft.fftshift(np.abs(mPad)), color="blue", linewidth=1)
+
+    ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(sPad[:-1])), color="cyan", linewidth=1)
+    ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(kPad[:-1])), color="magenta", linewidth=1)
+    ax[0,1].plot(freqs/1e6, np.fft.fftshift(np.abs(mPad[:-1])), color="lime", linewidth=1)
 
     for r in range(0, 4):
         ax[r,1].axvline(-B/2e6, color="grey", alpha=0.7)

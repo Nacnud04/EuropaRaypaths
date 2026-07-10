@@ -10,4 +10,10 @@ elif [ "$(hostname)" = "CCAR-L-006" ]; then
     echo "Compiling for CCAR-L-006"
     nvcc sim.cu -O3 -lineinfo -o sim -lcufft \
     -allow-unsupported-compiler
+
+elif [ "$(hostname)" = "passiveradarlab" ]; then
+    echo "Compiling for passiveradarlab"
+    nvcc sim.cu -O3 -lineinfo -o sim -lcufft \
+    -ccbin g++-10
+
 fi

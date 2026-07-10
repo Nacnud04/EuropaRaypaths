@@ -766,7 +766,7 @@ int main(int argc, const char* argv[])
                     //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
                     checkCUDAError("convolvePhasorChirp Reflected process");
                 } else {
-                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
                     checkCUDAError("convolvePhasorChirpLinear Reflected process");
                 }
                 
@@ -793,7 +793,7 @@ int main(int argc, const char* argv[])
                 cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
             }
             checkCUDAError("reflected signal squareComplex Kernel");
-            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr);
+            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
             checkCUDAError("convolvePhasorChirpLinear Reflected process");
 
         }
@@ -869,13 +869,14 @@ int main(int argc, const char* argv[])
                                                            par, valid_facets);
                 cudaDeviceSynchronize();
                 checkCUDAError("accumulateTarget kernel");
-                convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr);
+                convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr, par, argv, is, it);
                 // write out d_Ptarg to file for debugging
                 if (par.debug_surface) {
                     char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
                     sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
-                    saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
-                    free(Ptarg_filename);
+		    saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
+                    //saveFloatsToFile(Ptarg_filename, d_chirp, par.nr);
+		    free(Ptarg_filename);
                     checkCUDAError("exportingTargetPower kernel");
                 }
             }
@@ -959,7 +960,7 @@ int main(int argc, const char* argv[])
                         checkCUDAError("convolvePhasorChirp Refracted process");
                     
                     } else {
-                        convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
+                        convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr, par, argv, is, it);
                         checkCUDAError("convolvePhasorChirpLinear Refracted process");
                     }
                 }

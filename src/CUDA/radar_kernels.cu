@@ -552,10 +552,11 @@ void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp,
 }
 
 void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
-                               cuFloatComplex* d_sig, int nr) {
+                               cuFloatComplex* d_sig, int nr, SimulationParameters par, 
+			       const char* argv[], int is, int it) {
 
     // zero padded size for linear convolution
-    int paddedNr = 2 * nr;              
+    int paddedNr = 2 * nr;            
 
     // allocate device memory for padded complex chirp and phasor
     cuFloatComplex* d_PADchirp;
@@ -570,32 +571,66 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
     // move phasor into padded array at beginning (indices 0..nr-1)
     cudaMemcpy(d_PADphasor, d_phasorTrace, sizeof(cuFloatComplex) * nr, cudaMemcpyDeviceToDevice);
 
+    // formulate cuda stream
+    cudaStream_t s;
+    cudaStreamCreate(&s);
+    
     // convert chirp (real) -> complex directly into the padded chirp buffer.
     // Here we expect `d_chirp` to already contain the padded chirp of length
     // `paddedNr` (for the linear convolution path we generate a 2*nr chirp).
     int threads = 256;
     int blocks = (paddedNr + threads - 1) / threads;
     // convert the padded real chirp directly into the padded complex buffer
-    realToComplex<<<blocks, threads>>>(d_chirp, d_PADchirp, paddedNr);
+    realToComplex<<<blocks, threads, 0, s>>>(d_chirp, d_PADchirp, paddedNr);
+
+    cudaError_t ce = cudaGetLastError();
+    if (ce != cudaSuccess) printf("CUDA error before FFT: %s\n", cudaGetErrorString(ce));
 
     // create FFT plan for padded length
     cufftHandle plan;
-    cufftPlan1d(&plan, paddedNr, CUFFT_C2C, 1);
+    cufftResult r1 = cufftPlan1d(&plan, paddedNr, CUFFT_C2C, 1);
+    if (r1 != CUFFT_SUCCESS) printf("cufftPlan1d failed: %d\n", r1);
+
+    cufftSetStream(plan, s);
 
     // forward FFTs
-    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_FORWARD);
-    cufftExecC2C(plan, d_PADchirp,  d_PADchirp,  CUFFT_FORWARD);
+    cufftResult r2 = cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_FORWARD);
+    if (r2 != CUFFT_SUCCESS) printf("cufftExecC2C phasor forward failed: %d\n", r2);
+    
+    cufftResult r3 =  cufftExecC2C(plan, d_PADchirp,  d_PADchirp,  CUFFT_FORWARD);
+    if (r3 != CUFFT_SUCCESS) printf("cufftExecC2C chirp forward failed: %d\n", r3);
+
+    if (par.debug_surface) {
+        char* sPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(sPad_filename, d_PADphasor, paddedNr);
+        free(sPad_filename);
+
+        char* kPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(kPad_filename, "%s/kPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(kPad_filename, d_PADchirp, paddedNr);
+        free(kPad_filename);
+    }
 
     // multiply in frequency domain
     blocks = (paddedNr + threads - 1) / threads;
-    complexPointwiseMul<<<blocks, threads>>>(d_PADphasor, d_PADchirp, paddedNr);
+    complexPointwiseMul<<<blocks, threads, 0, s>>>(d_PADphasor, d_PADchirp, paddedNr);
+
+    if (par.debug_surface) {
+        char* mPad_filename = (char*)malloc(64 * sizeof(char));
+        sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
+        saveSignalToFile(mPad_filename, d_PADphasor, paddedNr);
+        free(mPad_filename);
+    }
 
     // inverse FFT
     cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_INVERSE);
 
     // normalize by padded length
     float scale = 1.0f / paddedNr;
-    scaleComplex<<<blocks, threads>>>(d_PADphasor, paddedNr, scale);
+    scaleComplex<<<blocks, threads, 0, s>>>(d_PADphasor, paddedNr, scale);
+
+    cudaStreamSynchronize(s);
 
     // linear convolution result lives in d_PADphasor[0 .. 2*nr-2].
     // to return "same"-mode (length nr) aligned with the original phasor,
@@ -608,6 +643,7 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
 
     // cleanup
     cufftDestroy(plan);
+    cudaStreamDestroy(s);
     cudaFree(d_PADchirp);
     cudaFree(d_PADphasor);
 }

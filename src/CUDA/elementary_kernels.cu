@@ -306,7 +306,7 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     // forward FFT on both signal and kernel
     cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
     cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
-
+    /*
     if (par.debug_surface) {
         char* sPad_filename = (char*)malloc(64 * sizeof(char));
         sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
@@ -318,19 +318,19 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
         saveSignalToFile(kPad_filename, d_kernelPad, nrPad);
         free(kPad_filename);
     }
-
+    */
     // pointwise multiply in frequency domain
     int blocks = (nrPad + THREADS - 1) / THREADS;
     cropSpectrum<<<blocks, THREADS>>>(d_kernelPad, nrPad, par.smpl, par.B);
     complexPointwiseMul<<<blocks, THREADS>>>(d_signalPad, d_kernelPad, nrPad);
-
+    /*
     if (par.debug_surface) {
         char* mPad_filename = (char*)malloc(64 * sizeof(char));
         sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
         saveSignalToFile(mPad_filename, d_signalPad, nrPad);
         free(mPad_filename);
     }
-
+    */
     cudaDeviceSynchronize();
 
     // inverse FFT to get the convolved signal
