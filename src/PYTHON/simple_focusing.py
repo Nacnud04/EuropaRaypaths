@@ -119,8 +119,6 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
 
     Nr, Na = rdrgrm.shape
 
-    
-
     # speed of light in subsurface
     c2 = uc.c2(par, c1=c1)
 
@@ -140,16 +138,24 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
         for i in range(rdrgrm.shape[1])
     ]).T
 
-    max_row = int(np.mean(np.argmax(rolled_matrix, axis=0)))
-    sig_row = rdrgrm[max_row, :]
+    below = 200
+    max_row = int(np.mean(np.argmax(rolled_matrix[below:,:], axis=0)))
+    sig_row = rdrgrm[max_row + below, :]
+     
+    #plt.imshow(np.angle(rdrgrm))
+    #plt.axhline(max_row + below, color="red")
+    #plt.show()
+
     #match_filter = np.conj(sig_row / np.abs(sig_row))
     #match_filter[np.isnan(match_filter)] = 0.0
-    #plt.plot(np.real(sig_row)/np.max(np.abs(sig_row)), color="red")
-    #plt.plot(np.imag(sig_row)/np.max(np.abs(sig_row)), color="blue")
+    plt.plot(np.real(sig_row)/np.max(np.abs(sig_row)), color="red")
+    plt.plot(np.imag(sig_row)/np.max(np.abs(sig_row)), color="blue")
+    #plt.plot(np.real(sig_row))
+    #plt.plot(np.imag(sig_row))
 
-    #plt.plot(np.real(match_filter), color="fuchsia", linestyle=":")
-    #plt.plot(np.imag(match_filter), color="cyan", linestyle=":")
-    #plt.show()
+    plt.plot(np.real(match_filter), color="fuchsia", linestyle=":")
+    plt.plot(np.imag(match_filter), color="cyan", linestyle=":")
+    plt.show()
     
     # fft along azimuth
     fft_len = int(2 * Na)

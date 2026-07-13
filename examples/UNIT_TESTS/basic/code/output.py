@@ -14,10 +14,12 @@ rdrgrm = oh.compile_rdrgrm("rdrgrm", params)
 focused = sf.full_focus_at_center(rdrgrm, params)
 #focused[:500] = rdrgrm[:500]
 
-rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=10)
+#rp.simple_rdrgrm(focused, params, "figures/focused.png", title="Very basic focused radargram", vmin=10)
 
 params['aspect'] = 'auto'
-rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=-40, vminfoc=-20, vmaxfoc=None)
+#rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=-40, vminfoc=-20, vmaxfoc=None)
+rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=-70, vminfoc=-45, vmaxfoc=None)
+#rp.TGRS_rdrgrm_focused(rdrgrm, focused, params, "figures/TGRS_BASIC", vminrdr=None, vminfoc=None, vmaxfoc=None)
 
 # calc focusing gain
 import numpy as np

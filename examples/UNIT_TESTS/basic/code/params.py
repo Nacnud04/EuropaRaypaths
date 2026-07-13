@@ -81,7 +81,7 @@ recpar = {
 }
 sourcepar = {
     "ns": 1000, "sdx": 10, "sx0": -5e3,
-    "sy": 0, "sz": 10e3, "aperture": 5,
+    "sy": 0, "sz": 10e3, "aperture": 10,
 }
 otherpar = {
     "lossless": True,

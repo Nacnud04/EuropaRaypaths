@@ -502,12 +502,12 @@ def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename,
     fig, ax = plt.subplots(2, 1, figsize=(3, 5), constrained_layout=True, dpi=300)
 
     # radargram panel
-    im0 = ax[0].imshow(uc.lin_to_db(np.abs(rdrgrm)), cmap="viridis",
+    im0 = ax[0].imshow(uc.lin_to_db(np.abs(rdrgrm)**2), cmap="viridis",
                     aspect=par['aspect'], extent=extent,
                     vmin=vminrdr, vmax=vmaxrdr)
 
     # focused panel
-    im1 = ax[1].imshow(uc.lin_to_db(np.abs(focused)), cmap="viridis",
+    im1 = ax[1].imshow(uc.lin_to_db(np.abs(focused)**2), cmap="viridis",
                     aspect=par['aspect'], extent=extent,
                     vmin=vminfoc, vmax=vmaxfoc)
 
