@@ -486,7 +486,7 @@ def plot_unfoc_foc(rdrgrm, focused, rx_win, OBS, geometry=None,
 
 
 def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename, 
-                        vminrdr=None, vminfoc=None, linspace=True, c1=299792458):
+                        vminrdr=None, vmaxrdr=None, vminfoc=None, vmaxfoc=None, linspace=True, c1=299792458):
 
     if linspace:
         azmin = par['sx0']
@@ -504,12 +504,12 @@ def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename,
     # radargram panel
     im0 = ax[0].imshow(uc.lin_to_db(np.abs(rdrgrm)), cmap="viridis",
                     aspect=par['aspect'], extent=extent,
-                    vmin=vminrdr)
+                    vmin=vminrdr, vmax=vmaxrdr)
 
     # focused panel
     im1 = ax[1].imshow(uc.lin_to_db(np.abs(focused)), cmap="viridis",
                     aspect=par['aspect'], extent=extent,
-                    vmin=vminfoc)
+                    vmin=vminfoc, vmax=vmaxfoc)
 
     # labels and text
     labels = ["(a)", "(b) Focused"]
@@ -534,7 +534,7 @@ def TGRS_rdrgrm_focused(rdrgrm, focused, par, filename,
         cbar.set_label("Power [dB]", fontsize=8, labelpad=2)
 
     plt.savefig(f"{filename}.png", dpi=300, bbox_inches="tight")
-    plt.savefig(f"{filename}.pgf", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{filename}.pdf", dpi=300, bbox_inches="tight")
     plt.close()
 
 

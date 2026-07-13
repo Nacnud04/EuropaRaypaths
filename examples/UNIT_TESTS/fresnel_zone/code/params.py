@@ -36,8 +36,8 @@ params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcep
 
 # --- MAKE SOURCE PATH ---
 
-maxZ = 150e3 # maximum altitude of source path [m]
-minZ = 350e3 # minimum altitude of source path [m]
+maxZ = 50e3 # maximum altitude of source path [m]
+minZ = 200e3 # minimum altitude of source path [m]
 
 sp_par = {"ns" : 100}
 szs = pg.vert_source_path(sp_par, minZ, maxZ, "source_path")

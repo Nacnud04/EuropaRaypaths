@@ -9,7 +9,7 @@ import output_handling as oh
 par = oh.load_params("inputs/params0.pkl", "inputs/targets.txt")
 
 ns = 100
-alts = np.linspace(350e3, 150e3, ns)
+alts = np.linspace(200e3, 50e3, ns)
 
 # --- FIRST DO FLAT ---
 
@@ -21,7 +21,6 @@ for i in range(ns):
     f = f"flatRDR/trc{i}/s000000.txt"
     arr = np.loadtxt(f).T
     sig = arr[0] + 1j * arr[1]
-
     P_num.append(np.max(np.abs(sig)**2))
 
 P_num = np.array(P_num)
@@ -77,7 +76,7 @@ plt.show()
 #P_num = np.array(P_num)
 
 P_num = []
-for i in range(10):
+for i in range(20):
     P_num.append(np.load(f"inco_flatRDR/Pmax{i}.npy"))
 P_num = np.array(P_num)
 

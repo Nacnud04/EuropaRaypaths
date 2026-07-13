@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 
-params = oh.load_params("inputs/params.pkl", "inputs/targets.txt")
+params = oh.load_params("inputs/co_params.pkl", "inputs/targets.txt")
 
 coRDR = oh.compile_rdrgrm("coRDR", params)
 

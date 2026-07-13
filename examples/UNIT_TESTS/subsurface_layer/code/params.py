@@ -4,14 +4,14 @@ import numpy as np
 sys.path.append("../../../src/PYTHON")
 import simple_surfaces as ss
 import param_gen       as pg
-"""
+
 domainpar = {
     "ox": -2e3,
     "oy": -2e3,
     "oz": 0,
-    "fs": 20*1.5,
-    "nx": int(200/1.5),
-    "ny": int(200/1.5),
+    "fs": 20/1.5,
+    "nx": int(200*1.5),
+    "ny": int(200*1.5),
 }
 """
 domainpar = {
@@ -22,7 +22,7 @@ domainpar = {
     "nx": 200,
     "ny": 200,
 }
-
+"""
 recpar = {
     "rx_window_m": 1.25e3,         # receive window size [m]
     "rx_sample_rate": 60e6,       # receive sample rate [Hz]
@@ -30,7 +30,7 @@ recpar = {
 }
 
 sourcepar = {
-    "ns": 80,               # source count            [.]
+    "ns": 200,               # source count            [.]
     "source_path_file": "inputs/source_path.txt",
     "aperture": 70,
 }
@@ -48,8 +48,8 @@ params = pg.gen_params("REASON_VHF", "vacuum", domainpar, recpar, sourcepar, par
 params["rx_window_position_file"] = f"inputs/rx_window_positions.txt"
 pg.export_params(params, f"params")
 
-#ss.make_surface(params, "flat", f"inputs/facets.fct")
-#ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
+ss.make_surface(params, "flat", f"inputs/facets.fct")
+ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-1*depth)
 
 # --- MAKE SOURCE PATH ---
 

@@ -1,8 +1,13 @@
 import sys
+
+sys.path.append("../../../src/PYTHON")
+import simple_surfaces as ss
+import param_gen       as pg
+
 import pickle
 import numpy as np
 import json
-
+"""
 params = {
 
     # radar parameters
@@ -63,16 +68,30 @@ with open("inputs/params.json", "w") as f:
 
 with open("inputs/params.pkl", 'wb') as hdl:
     pickle.dump(params, hdl, protocol=pickle.HIGHEST_PROTOCOL)
+"""
+
+domainpar = {
+    "ox": -5e3, "oy":-1e3, "oz":0,
+    "fs": 5, "nx":2000, "ny":400
+}
+recpar = {
+    "rx_window_m": 10e3,
+    "rx_window_offset_m": 7.5e3,
+    "rx_sample_rate": 18e6
+}
+sourcepar = {
+    "ns": 1000, "sdx": 10, "sx0": -5e3,
+    "sy": 0, "sz": 10e3, "aperture": 5,
+}
+otherpar = {
+    "lossless": True,
+    "debug_surface": False,
+    "disable_surface": False
+}
+
+params = pg.gen_params("REASON_HF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)
+pg.export_params(params, "params")
 
 # --- MAKE FACET FILE
-sys.path.append("../../../archive/src")
-from terrain import Terrain
 
-xmin, xmax = params["ox"], params["ox"]+params["nx"]*params["fs"]
-ymin, ymax = params["oy"], params["oy"]+params["ny"]*params["fs"]
-
-terrain = Terrain(xmin, xmax, ymin, ymax, params["fs"])
-terrain.gen_flat(0)
-
-# write output facet data
-terrain.export("inputs/facets.fct")
+ss.make_surface(params, "flat", f"inputs/facets.fct")

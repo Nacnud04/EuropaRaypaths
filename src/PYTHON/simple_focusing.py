@@ -76,6 +76,40 @@ def est_slant_range(sx, sz, tx, tz, c1, c2, trim=True, clutter=False):
     return sltrng_ests
 
 
+def refracted_angle(th_r, xoff, h, d, eps_2):
+
+    y = np.arcsin(np.sqrt(eps_2) * np.sin(th_r))
+
+    return h * np.tan(y) + d * np.tan(th_r) - xoff
+
+
+def get_target_phase(params, h, d, xoff, cmplx_out=False):
+
+
+    # first find the refracted angle numerically
+    th_r = np.zeros_like(xoff)
+    for i, dx in enumerate(xoff):
+        sol = root_scalar(refracted_angle,
+                        args=(np.abs(dx), h, d, params["eps_2"]), bracket=[0, np.radians(20)],
+                        method='brentq'
+                        )
+        th_r[i] = sol.root
+
+    th_i = np.arcsin(np.sqrt(params["eps_2"]) * np.sin(th_r))
+
+    r1   = h / np.cos(th_i)
+    r2   = d / np.cos(th_r)
+
+    corrected_rng = r1 + r2 * np.sqrt(params["eps_2"])
+
+    cmplx = np.exp(((-4j * np.pi) / params['lam']) * corrected_rng)
+
+    if cmplx_out:
+        return cmplx
+
+    return np.degrees(np.angle(cmplx))
+
+
 def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
 
     if sx_linspace:
@@ -84,6 +118,8 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
         raise NotImplementedError("Irregular source spacing is not yet supported.")
 
     Nr, Na = rdrgrm.shape
+
+    
 
     # speed of light in subsurface
     c2 = uc.c2(par, c1=c1)
@@ -94,7 +130,8 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
     sltrng_rb = uc.slantrange_to_rangebin(sltrng, par, c1=c1)
 
     # turn into matched filter
-    match_filter = uc.match_filter(sltrng, par, c1=c1)
+    match_filter = np.conj(get_target_phase(par, par['sz'], par['tz'], sx - par['tx'], cmplx_out=True))
+    #match_filter = np.conj(-1 * uc.match_filter(sltrng, par, c1=c1))
 
     # range cell migration correction
     shift_amounts = sltrng_rb - np.min(sltrng_rb)
@@ -103,6 +140,17 @@ def full_focus_at_center(rdrgrm, par, c1=299792458, sx_linspace=True):
         for i in range(rdrgrm.shape[1])
     ]).T
 
+    max_row = int(np.mean(np.argmax(rolled_matrix, axis=0)))
+    sig_row = rdrgrm[max_row, :]
+    #match_filter = np.conj(sig_row / np.abs(sig_row))
+    #match_filter[np.isnan(match_filter)] = 0.0
+    #plt.plot(np.real(sig_row)/np.max(np.abs(sig_row)), color="red")
+    #plt.plot(np.imag(sig_row)/np.max(np.abs(sig_row)), color="blue")
+
+    #plt.plot(np.real(match_filter), color="fuchsia", linestyle=":")
+    #plt.plot(np.imag(match_filter), color="cyan", linestyle=":")
+    #plt.show()
+    
     # fft along azimuth
     fft_len = int(2 * Na)
     pad = fft_len - Na

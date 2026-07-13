@@ -8,7 +8,7 @@ sys.path.append("../../../src/PYTHON")
 import output_handling as oh
 import unit_convs      as uc
 
-h = np.linspace(100e3, 20e3, 80)
+h = np.linspace(100e3, 20e3, 200)
 
 def get_analytic(params, h, d):
 
@@ -66,15 +66,12 @@ max_row = np.argmax(np.abs(rdrgrm)**2, axis=0)
 Emax = rdrgrm[max_row, np.arange(rdrgrm.shape[1])]
     
 P_num = np.max(np.abs(rdrgrm)**2, axis=0)
-print(P_num)
 
 err_mean = np.mean(P_num / P_r_layer)
 #err_mean = np.mean(P_num / P_r)
-print(err_mean)
 
 #error = np.abs(P_num - P_r) / P_r * 100
 error = np.abs(P_num - P_r_layer) / P_r_layer * 100
-print(np.mean(error)/100)
 
 # export as csv
 df = pd.DataFrame({"ALT":h,"NUM_POW":P_num,"ANA_POW":P_r_layer,"ERR":error})
