@@ -51,7 +51,7 @@ params = {
     # processing parameters (BOOLEAN)
     "convolution": True,         # use convolution-based processing
     "convolution_linear": True,  # use linear convolution instead of circular
-    "specular": True,            # use specular computation method
+    "specular": False,            # use specular computation method
     "lossless": False,           # simulate with loss
 
 }

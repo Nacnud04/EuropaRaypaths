@@ -16,10 +16,10 @@ params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 rdrgrm = oh.compile_rdrgrm("rdrgrm", params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
 
-rp.simple_rdrgrm(rdrgrm, params, "tmp.png", linspace=False)
+rp.simple_rdrgrm(np.abs(rdrgrm)**2, params, "tmp.png", linspace=False)
 
 np.save("output/rdrgrm.npy", rdrgrm)
-
+sys.exit()
 # TMP LOAD ORBIT
 DIRECTORY = "data/Observation"
 OBS       = "00554201"

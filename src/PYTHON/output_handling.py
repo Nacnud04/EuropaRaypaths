@@ -14,6 +14,7 @@ def compile_rdrgrm(path, par, rx_win_file=None):
     if rx_win_file:
         rx_win_adj = np.load(rx_win_file)
         rx_win_adj_rb = (rx_win_adj - np.min(rx_win_adj)) // ((1/par["rx_sample_rate"]) * 299792458)
+        rx_win_adj_rb = rx_win_adj_rb.astype(int)
 
     rdrgrm = []
     for i, f in enumerate(filenames):
@@ -96,7 +97,7 @@ def load_attenuation_geom(filepath):
 def roll_rdrgrm(rdrgrm, shifts):
 
     corrected = np.zeros_like(rdrgrm)
-    for i, shift in enumerate(shifts):
+    for i, shift in enumerate(shifts.astype(int)):
         corrected[:, i] = np.roll(rdrgrm[:, i], -1*shift)
 
     return corrected

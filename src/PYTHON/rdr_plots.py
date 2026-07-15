@@ -419,7 +419,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     #ax.set_title(f"SHARAD Obs. {plotpar['obs']}", fontsize=18, fontweight="bold")
 
     plt.savefig(f"{plotpar['savefig']}.png", dpi=300, bbox_inches="tight")
-    plt.savefig(f"{plotpar['savefig']}.pgf", dpi=300, bbox_inches="tight")
+    #plt.savefig(f"{plotpar['savefig']}.pgf", dpi=300, bbox_inches="tight")
     plt.close()
 
 
@@ -688,7 +688,7 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
 
     # export
     plt.savefig("figures/TGRS-KOR1-SYN.png")
-    plt.savefig("figures/TGRS-KOR1-SYN.pgf")
+    #plt.savefig("figures/TGRS-KOR1-SYN.pgf")
 
     if show:
         plt.show()
