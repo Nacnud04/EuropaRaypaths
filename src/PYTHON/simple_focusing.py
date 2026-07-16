@@ -346,7 +346,7 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None, return_shifts=False, return_matc
             return sltrng_rb
 
         # turn slant range into matched filter
-        mth_filt = uc.match_filter(sltrng, par)
+        mth_filt = np.conj(uc.match_filter(sltrng, par))
 
         if return_match_filter == True:
             return mth_filt

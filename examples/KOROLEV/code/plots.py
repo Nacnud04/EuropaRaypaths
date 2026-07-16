@@ -33,9 +33,22 @@ par = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 par['ns'] = 3000
 par['spacing'] = 225.758820 # spacing between sources in [m]
 
-rdrgrm = np.load("output/rdrgrm.npy")
-focused = np.load("output/focused.npy")
+rdrgrm_subsurf = np.load("output/subsurf-rdrgrm.npy")
+focused_subsurf = np.load("output/subsurf-focused.npy")
+
+# clip out bad target area
+trc_max = 1600
+rdrgrm_subsurf[:,trc_max:] = 0
+focused_subsurf[:,trc_max:] = 0
+
+rdrgrm_surf = np.load("output/rdrgrm.npy")
+focused_surf = np.load("output/focused.npy")
+
 rx_win = np.load("data/rx_window_positions.npy")
+
+# combine to make output
+rdrgrm = rdrgrm_surf + rdrgrm_subsurf
+focused = focused_surf + focused_subsurf
 
 # convert to power
 rdrgrm = np.abs(rdrgrm)**2
@@ -45,7 +58,7 @@ rdr_db = uc.lin_to_db(np.abs(rdrgrm))
 foc_db = uc.lin_to_db(np.abs(focused))
 
 # what traces in the geometry file did we successfully simulate?
-sim_st, sim_en = oh.get_simulation_range("rdrgrm")
+sim_st, sim_en = oh.get_simulation_range("rdrgrm_surf")
 sim_en += 1
 
 # what range of traces in the real data do we want to interpolate?
@@ -79,8 +92,8 @@ plotpar = {
     'ymax': ymax,
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
-    'syn_min': -100,
-    'syn_max': -70,
+    'syn_min': -80,
+    'syn_max': -60,
     "trc":trc,
     "depth":depth,
 }
@@ -92,6 +105,6 @@ rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola['TOPO'], p
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
 rp.TGRS_KOR1_SYN(rdr_db, foc_db, rx_win, OBS, mola, aeroid, plotpar, geometry=geometry,
-                    rdrmin=-120, rdrmax=-70, trc_st=trc_st, trc_en=trc_en,
+                    rdrmin=None, rdrmax=None, trc_st=trc_st, trc_en=trc_en,
                     focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
                     ymax=319, show=True)

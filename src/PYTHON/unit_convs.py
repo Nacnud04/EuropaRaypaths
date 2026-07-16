@@ -101,12 +101,12 @@ def normalize(x, y, z, nmult=1, parts=False):
 
     return n_hat
 
-def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
+def trc_depth_2_facets(trc, depth, aeroid, params, spacing=75.207, min_depth=None):
 
     tx_all, ty_all, tz_all = [], [], []
     tnx_all, tny_all, tnz_all = [], [], []
 
-    for trc_layer, depth_layer in zip(trc, depth):
+    for i, (trc_layer, depth_layer) in enumerate(zip(trc, depth)):
 
         trc_layer = np.array(trc_layer)
         depth_layer = np.array(depth_layer)
@@ -122,10 +122,27 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
             trc_layer = trc_layer[mask]
             depth_layer = depth_layer[mask]
 
+        if i != 6:
+            continue;
+
+        # first convert original path to cartesian
+        depth_interp = interp1d(trc_layer, depth_layer, kind="linear", fill_value="extrapolate")
+        depth_matched = depth_interp(aeroid['COL'])
+        radii = aeroid["SRAD"] - (depth_matched + 315.4)
+        orig_tx, orig_ty, orig_tz = planetocentric_to_cartesian(radii*1e3, aeroid['LAT'], aeroid['LON'])
+        # then get the delta between the start and end of the layers
+        layer_dx = orig_tx[trc_layer.max()] - orig_tx[trc_layer.min()]
+        layer_dy = orig_ty[trc_layer.max()] - orig_ty[trc_layer.min()]
+        layer_dz = orig_tz[trc_layer.max()] - orig_tz[trc_layer.min()]
+        # then find the total distance between the start and the end of the layer
+        layer_delta = np.sqrt(layer_dx**2 + layer_dy**2 + layer_dz**2)
+
         # create dense trace sampling
+        print(f"Layer is {layer_delta} m long")
+        nlen = int((layer_delta) / params['fs'])
         trc_dense = np.linspace(trc_layer.min(),
                                 trc_layer.max(),
-                                len(trc_layer) * upsample)
+                                nlen)
 
         # interpolate depth
         depth_interp = interp1d(trc_layer, depth_layer, kind='linear')
@@ -159,10 +176,12 @@ def trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=None):
         cx_hat, cy_hat, cz_hat = normalize(cx, cy, cz, parts=True)
 
         # get across track offsets
-        half_width = 500  # meters (example)
-        n_width = 11       # number of points across
+        half_width = 500  # meters
+        n_width = int((2 * half_width) / params["fs"])
         offsets = np.linspace(-half_width, half_width, n_width)
 
+        print(f"Layer {i} is {nlen} targets long and {n_width} wide. Therefore it has {nlen * n_width} targets total.")
+        
         # do spherical shift
         tx_w, ty_w, tz_w = [], [], []
 

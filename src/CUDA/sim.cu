@@ -614,11 +614,11 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
-        //if (is > 0) {
-        //    break;
-        //}
+       //if (is != 1150) {
+//	   continue;
+//       }
 
-        // first clear phasor buffers
+       // first clear phasor buffers
         cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
         // update par.rst
@@ -798,9 +798,9 @@ int main(int argc, const char* argv[])
 
         }
         
-        for (int it=0; it<ntargets; it++) {
+	for (int it=0; it<ntargets; it++) {
 
-            cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
+	    cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));

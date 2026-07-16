@@ -13,13 +13,14 @@ params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 3000
 params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 
-rdrgrm = oh.compile_rdrgrm("rdrgrm", params, rx_win_file="data/rx_window_positions.npy")
+directory = "rdrgrm_surf"
+#directory = "rdrgrm_subsurf"
+rdrgrm = oh.compile_rdrgrm(directory, params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
 
 rp.simple_rdrgrm(np.abs(rdrgrm)**2, params, "tmp.png", linspace=False)
 
 np.save("output/rdrgrm.npy", rdrgrm)
-sys.exit()
 # TMP LOAD ORBIT
 DIRECTORY = "data/Observation"
 OBS       = "00554201"
@@ -44,7 +45,7 @@ sat_x, sat_y, sat_z = uc.km_to_m(sat_x, sat_y, sat_z)
 params['spacing'] = uc.estimate_spacing(sat_x, sat_y, sat_z)
 print(f"Estimated spacing between sources is {params['spacing']} m")
 params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
-
+sys.exit()
 focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=750)
 
 np.save("output/focused.npy", focused)

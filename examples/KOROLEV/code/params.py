@@ -15,10 +15,9 @@ params = {
     "frequency": 20e6,        # Radar frequency [Hz]
     "bandwidth": 10e6,        # Radar bandwidth [Hz]
     "surface_gain": 23.75,       # Antenna gain [dB]
-    "subsurface_gain": 40,    # Subsurface antenna gain [dB]
+    "subsurface_gain": 23.75,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 0.5,            # aperture (from nadir->edge) [deg]
-    "gain_pattern_file": "data/source_gain.txt", # file with gain pattern [dB]
+    "aperture": 1,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  7.5e3,         # receive window length [m]
@@ -52,8 +51,8 @@ params = {
     "convolution": True,         # use convolution-based processing
     "convolution_linear": True,  # use linear convolution instead of circular
     "specular": False,            # use specular computation method
-    "lossless": False,           # simulate with loss
-
+    "lossless": True,       
+    "disable_surface":False,
 }
 
 with open("data/params.json", "w") as f:
@@ -66,7 +65,6 @@ with open("data/params.pkl", 'wb') as hdl:
 #params['rx_window_position_file'] = "data/single_trc_rx_positions.txt"
 params['specular'] = False
 params['lossless'] = True
-del params['gain_pattern_file']
 
 with open("data/single_trc_params.json", "w") as f:
     json.dump(params, f, indent=4)
@@ -143,10 +141,10 @@ korolev_interior = ku.import_korolev_interior("data/Subsurface/")
 trc, depth = ku.clean_korolev_interior(korolev_interior, aeroid, mola, eps=3.15)
 
 # convert from trace number and depth into many facets
-tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, upsample=5, min_depth=0.75)
+tx, ty, tz, tnx, tny, tnz = uc.trc_depth_2_facets(trc, depth, aeroid, params, spacing=75.207, min_depth=0.75)
 
 # export
 ku.target_norms_to_obj("data/Subsurface", "KOR_T_MAPPED",
-                       tx, ty, tz, tnx, tny, tnz, norms=False)
+                       tx, ty, tz, tnx, tny, tnz, norms=True)
 ku.target_norms_to_file("data/Subsurface", "KOR_T_MAPPED",
                       tx, ty, tz, tnx, tny, tnz)

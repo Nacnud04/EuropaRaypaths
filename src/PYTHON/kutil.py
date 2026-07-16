@@ -217,7 +217,7 @@ def target_norms_to_obj(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz, nscale=0.5e3
 
 
 # target exporting (with normals)
-def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz):
+def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz, ttype=1):
 
     i = 0
 
@@ -227,10 +227,10 @@ def target_norms_to_file(DIRECTORY, NAME, tx, ty, tz, tnx, tny, tnz):
     for x, y, z, nx, ny, nz in zip(tx, ty, tz, tnx, tny, tnz):
 
         if i != len(tx) - 1:
-            f.write(f"{x},{y},{z},{nx},{ny},{nz}\n")
+            f.write(f"{x},{y},{z},{nx},{ny},{nz},{ttype}\n")
 
         else:
-            f.write(f"{x},{y},{z},{nx},{ny},{nz}")
+            f.write(f"{x},{y},{z},{nx},{ny},{nz},{ttype}")
 
         i += 1
 
