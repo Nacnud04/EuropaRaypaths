@@ -17,7 +17,7 @@ params = {
     "surface_gain": 23.75,       # Antenna gain [dB]
     "subsurface_gain": 23.75,    # Subsurface antenna gain [dB]
     "polarization": "HH",     # polarization (HH, VV, HV, VH)
-    "aperture": 1,            # aperture (from nadir->edge) [deg]
+    "aperture": 0.5,            # aperture (from nadir->edge) [deg]
 
     # receive window parameters
     "rx_window_m":  7.5e3,         # receive window length [m]

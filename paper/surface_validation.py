@@ -67,6 +67,14 @@ for col, title in enumerate(coh_titles):
     ax[1, col].set_title("Coherent Error", fontweight="bold")
     ax[2, col].set_title("Incoherent", fontweight="bold")
 
+# subplot labels
+labels = ("(a)","(b)","(c)","(d)","(e)","(f)")
+yoffs  = (0.08, 0.25, 0.08, 0.08, 0.25, 0.08)
+for a, label, yoff in zip(ax.T.flatten(), labels, yoffs):
+    a.text(0.02, yoff, label, transform=a.transAxes,
+            fontweight="bold", va="top", ha="left", color="black",
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
+
 plt.tight_layout()
 
 plt.savefig("Figures/SurfaceValidation.pdf")

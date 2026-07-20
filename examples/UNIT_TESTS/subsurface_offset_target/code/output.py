@@ -119,7 +119,10 @@ plt.show()
 
 for d, c, cont in zip(depths, colors, contrast):
 
-    params = oh.load_params(f"inputs/params_{d:04d}.pkl", "inputs/layer.txt")
+    if d != 5000 and d != 250:
+        continue
+
+    params = oh.load_params(f"inputs/params_{d:04d}.pkl", f"inputs/target{d:04d}.txt")
 
     if d == depths[0]:
         G_T_tmp = facet_gain_wrap(19e3, 250, 500, params)
@@ -153,7 +156,8 @@ for d, c, cont in zip(depths, colors, contrast):
 
     # make sure phase error is between -180 and 180
     phase_error = (phase_error + 180) % 360 - 180
-
+    
+    print(f"Exporting to figures/nadir_{d:04d}.csv")
     df = pd.DataFrame({"ALT": h, "NUM_POW": P_num, "ANA_POW": P_r, "ERR_POW": error, "ERR_PHS": phase_error})
     df.to_csv(f"figures/nadir_{d:04d}.csv", index=False)
 

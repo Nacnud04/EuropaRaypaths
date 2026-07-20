@@ -334,7 +334,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
         synth = synth[:real.shape[0], :]
 
     # scale rdr images
-    rea_scl = uc.scale_range(real,  plotpar['rea_min'], plotpar['rea_max'])
+    rea_scl = uc.scale_range(real, plotpar['rea_min'], plotpar['rea_max'])
     syn_scl = uc.scale_range(synth, plotpar['syn_min'], plotpar['syn_max'])
 
     # RGB color scale

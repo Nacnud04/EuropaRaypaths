@@ -47,8 +47,8 @@ focused_surf = np.load("output/focused.npy")
 rx_win = np.load("data/rx_window_positions.npy")
 
 # combine to make output
-rdrgrm = rdrgrm_surf + rdrgrm_subsurf
-focused = focused_surf + focused_subsurf
+rdrgrm = rdrgrm_surf + 1e1*rdrgrm_subsurf
+focused = focused_surf + 1e1*focused_subsurf
 
 # convert to power
 rdrgrm = np.abs(rdrgrm)**2
@@ -92,8 +92,8 @@ plotpar = {
     'ymax': ymax,
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
-    'syn_min': -80,
-    'syn_max': -60,
+    'syn_min': -125,
+    'syn_max': -100,
     "trc":trc,
     "depth":depth,
 }

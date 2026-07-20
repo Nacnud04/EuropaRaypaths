@@ -64,6 +64,13 @@ headers = ("Nadir Target", "Off-Nadir Target")
 for c, head in enumerate(headers):
     ax[0, c].set_title(head, fontweight="bold")
 
+# subplot labels
+labels = ("(a)","(b)","(c)","(d)","(e)","(f)")
+for a, label in zip(ax.T.flatten(), labels):
+    a.text(0.02, 0.08, label, transform=a.transAxes,
+            fontweight="bold", va="top", ha="left", color="black",
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=2))
+
 plt.tight_layout()
 
 plt.savefig("Figures/TargetValidation.pdf")
