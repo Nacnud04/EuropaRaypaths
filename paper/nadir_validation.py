@@ -44,8 +44,9 @@ for col, directory in enumerate((nadir_dir, off_nadir_dir)):
         ax[2,col].plot(df['ALT']/1e3, df['ERR_PHS'], color=c, linewidth=1, label=f"{d} m")
         
         ax[2,col].set_xlim(np.min(df['ALT'])/1e3, np.max(df['ALT'])/1e3)
-
-    ax[2,col].axhline(0, color="black", linestyle=":")
+    
+    for r in (1,2):
+        ax[r,col].axhline(0, color="black", linestyle=":")
 
 # x axis labels
 for c in range(2): ax[2,c].set_xlabel("Altitude [km]")
