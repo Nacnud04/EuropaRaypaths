@@ -39,7 +39,7 @@ for col, directory in enumerate((nadir_dir, off_nadir_dir)):
         ax[0,col].plot(df['ALT']/1e3, dB(df['NUM_POW']), color=c, linewidth=1, label=f"Numerical: {d} m")
         ax[0,col].plot(df['ALT']/1e3, dB(df['ANA_POW']), color=h, linewidth=1, label=f"Analytic: {d} m", linestyle="--")
 
-        ax[1,col].plot(df['ALT']/1e3, df['ERR_POW'], color=c, linewidth=1, label=f"{d} m")
+        ax[1,col].plot(df['ALT']/1e3, dB(df['NUM_POW'])-dB(df['ANA_POW']), color=c, linewidth=1, label=f"{d} m")
 
         ax[2,col].plot(df['ALT']/1e3, df['ERR_PHS'], color=c, linewidth=1, label=f"{d} m")
         
@@ -51,7 +51,7 @@ for col, directory in enumerate((nadir_dir, off_nadir_dir)):
 for c in range(2): ax[2,c].set_xlabel("Altitude [km]")
 
 # y axis labels
-ylabels = ("Power [dB]", "Power Error [%]", "Phase Error [deg]")
+ylabels = ("Power [dB]", "Power Error [dB]", "Phase Error [deg]")
 for r, ylabel in enumerate(ylabels):
     ax[r,0].set_ylabel(ylabel)
 
