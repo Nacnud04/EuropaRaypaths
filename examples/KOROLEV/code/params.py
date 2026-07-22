@@ -52,7 +52,7 @@ params = {
     "convolution_linear": True,  # use linear convolution instead of circular
     "specular": False,            # use specular computation method
     "lossless": True,       
-    "disable_surface":False,
+    "disable_surface":True,
 }
 
 with open("data/params.json", "w") as f:

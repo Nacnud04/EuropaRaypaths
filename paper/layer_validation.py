@@ -32,7 +32,7 @@ ax[0].plot(df['ALT']/1e3, dB(df['NUM_POW']), color="red", linewidth=1, label="Nu
 ax[0].plot(df['ALT']/1e3, dB(df['ANA_POW']), color="black", linewidth=1, linestyle="--", label="Analytic")
 
 # plot error
-ax[1].plot(df['ALT']/1e3, df['ERR'], color="blue", linewidth=1)
+ax[1].plot(df['ALT']/1e3, dB(df['NUM_POW'])-dB(df['ANA_POW']), color="blue", linewidth=1)
 
 # limits
 ax[1].set_xlim(np.min(df['ALT'])/1e3, np.max(df['ALT'])/1e3)
@@ -41,7 +41,7 @@ ax[1].set_xlim(np.min(df['ALT'])/1e3, np.max(df['ALT'])/1e3)
 ax[0].set_title("20 km deep layer", fontweight="bold")
 
 # axis labels
-ylabels = ("Power [dB]", "Error [%]")
+ylabels = ("Power [dB]", "Error [dB]")
 for row, ylbl in enumerate(ylabels):
     ax[row].set_ylabel(ylbl)
 ax[1].set_xlabel("Altitude [km]")

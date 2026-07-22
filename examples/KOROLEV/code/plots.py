@@ -47,8 +47,8 @@ focused_surf = np.load("output/focused.npy")
 rx_win = np.load("data/rx_window_positions.npy")
 
 # combine to make output
-rdrgrm = rdrgrm_surf + 1e1*rdrgrm_subsurf
-focused = focused_surf + 1e1*focused_subsurf
+rdrgrm = rdrgrm_surf + 0.35e1*rdrgrm_subsurf
+focused = focused_surf + 0.35e1*focused_subsurf
 
 # convert to power
 rdrgrm = np.abs(rdrgrm)**2
@@ -93,7 +93,7 @@ plotpar = {
     'rea_min': np.min(NoOffset),
     'rea_max': 0.001,
     'syn_min': -125,
-    'syn_max': -100,
+    'syn_max': -105,
     "trc":trc,
     "depth":depth,
 }
@@ -105,6 +105,6 @@ rp.plot_SHARAD_comparison(NoOffset, foc_intrp, geometry, aeroid, mola['TOPO'], p
 # generate final plot
 geometry = ku.load_sharad_orbit_PKL(DIRECTORY, OBS)
 rp.TGRS_KOR1_SYN(rdr_db, foc_db, rx_win, OBS, mola, aeroid, plotpar, geometry=geometry,
-                    rdrmin=None, rdrmax=None, trc_st=trc_st, trc_en=trc_en,
+                    rdrmin=-165, rdrmax=-120, trc_st=trc_st, trc_en=trc_en,
                     focmin=plotpar['syn_min'], focmax=plotpar['syn_max'],
                     ymax=319, show=True)
