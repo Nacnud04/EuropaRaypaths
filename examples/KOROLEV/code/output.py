@@ -13,8 +13,8 @@ params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 3000
 params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 
-#directory = "rdrgrm_surf"
-directory = "rdrgrm_subsurf"
+directory = "rdrgrm_surf"
+#directory = "rdrgrm_subsurf"
 rdrgrm = oh.compile_rdrgrm(directory, params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
 
@@ -48,5 +48,5 @@ params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
 
 focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=750)
 
-#np.save("output/focused.npy", focused)
-np.save("output/subsurf-focused.npy", focused)
+np.save("output/focused.npy", focused)
+#np.save("output/subsurf-focused.npy", focused)

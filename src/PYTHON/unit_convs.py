@@ -122,9 +122,6 @@ def trc_depth_2_facets(trc, depth, aeroid, params, spacing=75.207, min_depth=Non
             trc_layer = trc_layer[mask]
             depth_layer = depth_layer[mask]
 
-        if i != 6:
-            continue;
-
         # first convert original path to cartesian
         depth_interp = interp1d(trc_layer, depth_layer, kind="linear", fill_value="extrapolate")
         depth_matched = depth_interp(aeroid['COL'])

@@ -333,6 +333,8 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     if synth.shape[0] > real.shape[0]:
         synth = synth[:real.shape[0], :]
 
+    real = 10 * np.log10(real)
+
     # scale rdr images
     rea_scl = uc.scale_range(real, plotpar['rea_min'], plotpar['rea_max'])
     syn_scl = uc.scale_range(synth, plotpar['syn_min'], plotpar['syn_max'])
@@ -399,12 +401,16 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     cbar2 = fig.colorbar(mappable_rea, cax=cax2)
     cbar2.set_label("Normalized Real Power [dB]", rotation=270, labelpad=-6)
 
+    # turn real power vals normalized
+    plotpar['rea_min'] -= plotpar['rea_max']
+    plotpar['rea_max'] = 0
+
     ticklocs = [0, 0.25, 0.75, 1.0]
     cbar1.set_ticks(ticklocs)
-    cbar1.set_ticklabels([f"{t * (plotpar['syn_max'] - plotpar['syn_min']) + plotpar['syn_min']:.1f}" for t in ticklocs], fontsize=8)
+    cbar1.set_ticklabels([f"{t * (plotpar['syn_max'] - plotpar['syn_min']) + plotpar['syn_min']:.0f}" for t in ticklocs], fontsize=8)
 
     cbar2.set_ticks(ticklocs)
-    cbar2.set_ticklabels([f"{t:.1f}" for t in ticklocs], fontsize=8)
+    cbar2.set_ticklabels([f"{t * (plotpar['rea_max'] - plotpar['rea_min']) + plotpar['rea_min']:.1f}" for t in ticklocs], fontsize=8)
 
     # if there is a subsurface plot the layers
     if "trc" in plotpar.keys() and "depth" in plotpar.keys() and layers == True:
