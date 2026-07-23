@@ -41,7 +41,7 @@ def simple_rdrgrm(rdrgrm, par, path, title=None, linspace=True, vmin=None, vmax=
     if 'rx_window_offset_m' in par.keys():
         extent = [xmin/1e3, xmax/1e3, (par["rx_window_offset_m"] + par["rx_window_m"]), par["rx_window_offset_m"]]
     else:
-        extent = (xmin/1e3, xmax/1e3, rdrgrm.shape[1],0)
+        extent = (xmin/1e3, xmax/1e3, rdrgrm.shape[0],0)
 
     plt.imshow(uc.lin_to_db(np.abs(rdrgrm)), aspect='auto', vmin=vmin, vmax=vmax,
            extent=extent)

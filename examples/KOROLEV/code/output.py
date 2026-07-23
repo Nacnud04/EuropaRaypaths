@@ -11,16 +11,18 @@ import unit_convs      as uc
 
 params = oh.load_params("data/params.pkl", "data/Subsurface/KOR_T.txt")
 params['ns'] = 3000
-params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
 
-directory = "rdrgrm_surf"
-#directory = "rdrgrm_subsurf"
+#directory = "rdrgrm_surf"
+directory = "rdrgrm_subsurf"
 rdrgrm = oh.compile_rdrgrm(directory, params, rx_win_file="data/rx_window_positions.npy")
 print(f"Radargram shape: {rdrgrm.shape}")
 
+del params['rx_window_offset_m']
 rp.simple_rdrgrm(np.abs(rdrgrm)**2, params, "tmp.png", linspace=False)
 
-np.save("output/rdrgrm.npy", rdrgrm)
+params['rx_window_offset_m'] = np.min(np.load("data/rx_window_positions.npy"))
+
+#np.save("output/rdrgrm.npy", rdrgrm)
 # TMP LOAD ORBIT
 DIRECTORY = "data/Observation"
 OBS       = "00554201"
@@ -46,7 +48,9 @@ params['spacing'] = uc.estimate_spacing(sat_x, sat_y, sat_z)
 print(f"Estimated spacing between sources is {params['spacing']} m")
 params['altitude'] = 1e3 * np.mean(geometry['SRAD']-geometry['MRAD'])
 
-focused = sf.focus_rdrgrm(rdrgrm, params, st=150, en=750)
+#st=150
+st=400
+focused = sf.focus_rdrgrm(rdrgrm, params, st=st, en=750)
 
-np.save("output/focused.npy", focused)
-#np.save("output/subsurf-focused.npy", focused)
+#np.save("output/focused.npy", focused)
+np.save("output/subsurf-focused.npy", focused)

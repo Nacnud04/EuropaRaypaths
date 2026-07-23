@@ -46,6 +46,9 @@ focused_surf = np.load("output/focused.npy")
 
 rx_win = np.load("data/rx_window_positions.npy")
 
+print(np.max(np.abs(rdrgrm_subsurf)**2))
+print(np.max(np.abs(focused_subsurf)**2))
+
 # combine to make output
 rdrgrm = rdrgrm_surf + 1e1*rdrgrm_subsurf
 focused = focused_surf + 0.35e3*focused_subsurf

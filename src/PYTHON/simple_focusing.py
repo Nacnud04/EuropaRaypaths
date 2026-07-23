@@ -85,6 +85,8 @@ def refracted_angle(th_r, xoff, h, d, eps_2):
 
 def get_target_phase(params, h, d, xoff, cmplx_out=False):
 
+    if 'lam' not in params.keys():
+        params['lam'] = 299792458 / params['frequency']
 
     # first find the refracted angle numerically
     th_r = np.zeros_like(xoff)
@@ -346,7 +348,8 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None, return_shifts=False, return_matc
             return sltrng_rb
 
         # turn slant range into matched filter
-        mth_filt = np.conj(uc.match_filter(sltrng, par))
+        mth_filt = np.conj(get_target_phase(par, sz, tz, sx - tx, cmplx_out=True))
+        #mth_filt = np.conj(uc.match_filter(sltrng, par))
 
         if return_match_filter == True:
             return mth_filt
@@ -391,6 +394,11 @@ def focus_rdrgrm(rdrgrm, par, st=None, en=None, return_shifts=False, return_matc
             # get the pixel we care about
             rdr_f[i, j] = focused_row[(j - az_st) + pad // 2]
 
-        print(f"{i}/{Nr}", end="       \r")
+        # find focusing gain
+        raw_max = np.max(np.abs(rdrgrm[i,:]))
+        foc_max = np.max(np.abs(rdr_f[i,:]))
+        foc_gain = 10 * np.log10(foc_max / raw_max)
+
+        print(f"{i}/{Nr} -> Focusing gain: {foc_gain}", end="       \n")
 
     return rdr_f
