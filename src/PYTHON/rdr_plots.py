@@ -356,6 +356,9 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
 
     # --- GENERATE FORMATTED PLOT ---
 
+    fnts = 14
+    plt.rc('font', size=fnts)
+
     fig, ax = plt.subplots(figsize=(8,9))
 
     # radar extents
@@ -384,7 +387,7 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
     cmap_syn = mcolors.LinearSegmentedColormap.from_list("syn_map", [(0,0,0), syn_clr])
 
     mappable_rea = plt.cm.ScalarMappable(
-        norm=plt.Normalize(vmin=np.min(rea_scl), vmax=np.max(rea_scl)),
+        norm=plt.Normalize(vmin=int(np.min(rea_scl)), vmax=int(np.max(rea_scl))),
         cmap=cmap_rea
     )
     mappable_rea.set_array([])
@@ -411,6 +414,9 @@ def plot_SHARAD_comparison(real, synth, geometry, aeroid,
 
     cbar2.set_ticks(ticklocs)
     cbar2.set_ticklabels([f"{t * (plotpar['rea_max'] - plotpar['rea_min']) + plotpar['rea_min']:.1f}" for t in ticklocs], fontsize=8)
+
+    for cbar in (cbar1, cbar2):
+        cbar.ax.tick_params(labelsize=11)
 
     # if there is a subsurface plot the layers
     if "trc" in plotpar.keys() and "depth" in plotpar.keys() and layers == True:
@@ -691,6 +697,11 @@ def TGRS_KOR1_SYN(rdrgrm, focused, rx_win, OBS, mola, aeroid, plotpar, geometry=
 
     # cropping
     for a in ax: a.set_ylim((ymax*1e3)/c, (ymin*1e3)/c)
+
+    # rectangle
+    for i in (1, 2):
+        rect = Rectangle((72.23,1055), 0.1, 1.5, edgecolor="r", facecolor="none", linewidth=0.5)
+        ax[i].add_patch(rect)
 
     # export
     plt.savefig("figures/TGRS-KOR1-SYN.png")
