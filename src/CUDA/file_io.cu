@@ -244,6 +244,12 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     // debug parameters
     params.debug_surface = j.value("debug_surface", false);
+
+    // report on depricated/removed parameters
+    if (params.specular) {
+        std::cout << "WARNING: Specular processing has been removed. Setting specular to false." << std::endl;
+        params.specular = false;
+    }
     
     return params;
 }

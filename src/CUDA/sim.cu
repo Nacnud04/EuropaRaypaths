@@ -739,38 +739,27 @@ int main(int argc, const char* argv[])
         
         if (par.specular) {
             // reflected signal construction using original method
-            if (!par.convolution ) {
 
-                // --- CONSTRUCT REFLECTED SIGNAL SLOWLY ---
-                // launch with shared memory for per-block accumulation (real+imag floats)
-                reflRadarSignal<<<numBlocks, blockSize, 2 * REFL_TILE_NR * sizeof(float)>>>(d_Itd, d_fReflE, d_refl_sig,
-                                        par.rst, par.dr, par.nr,
-                                        par.rng_res, par.lam, valid_facets);
-                checkCUDAError("constructRadarSignal kernel1");
+            // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
+            // generate reflected phasor
+            genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
+                                                    d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
+                                                    par.rst, par.dr, par.nr);
+            checkCUDAError("genReflPhasor kernel");
 
+            // generate phasor trace
+            genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Reflected process");
+            
+            // par.convolution with chirp to get reflected signal
+            if (!par.convolution_linear) {
+                //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
+                checkCUDAError("convolvePhasorChirp Reflected process");
             } else {
-
-                // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
-                // generate reflected phasor
-                genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
-                                                        d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
-                                                        par.rst, par.dr, par.nr);
-                checkCUDAError("genReflPhasor kernel");
-
-                // generate phasor trace
-                genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
-                checkCUDAError("genPhasorTrace Reflected process");
-                
-                // par.convolution with chirp to get reflected signal
-                if (!par.convolution_linear) {
-                    //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
-                    checkCUDAError("convolvePhasorChirp Reflected process");
-                } else {
-                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
-                    checkCUDAError("convolvePhasorChirpLinear Reflected process");
-                }
-                
+                convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
+                checkCUDAError("convolvePhasorChirpLinear Reflected process");
             }
+                
         } else {
 
             // Generate chirp
@@ -920,67 +909,50 @@ int main(int argc, const char* argv[])
                     checkCUDAError("exportingPhasorTrace kernel");
                 }
             }
-            
-            // create refracted signal and total signal using original method
-            if (!par.convolution) {
 
-                // --- CONSTRUCT REFRACTED SIGNAL ---
-                // NOTE: THIS METHOD DOESN'T SUPPORT NON-(0,0,1) TARGET NORMALS
-                // launch with shared memory for per-block accumulation (real+imag floats)
-                refrRadarSignal<<<numBlocks, blockSize, 2 * REFR_TILE_NR * sizeof(float)>>>(d_fRfrSR, d_Ttd, 
-                                d_Tth, d_fRefrEI, d_fRefrEO,
-                                d_refr_sig, 
-                                par.rst, par.dr, par.nr, par.c, par.c_2, par.rerad_funct,
-                                par.rng_res, par.P, par.Grefr_lin, par.fs, par.lam, valid_facets);
-                checkCUDAError("refrRadarSignal kernel");
+            // REMOVE THE BELOW CODE AT SOME POINT
+            // for specular targets
+            if (h_ttype[it] == 0) {
+                // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
+                
+                // generate refracted phasor
+                genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
+                                                        d_fRfrSR, d_fRefrEI, d_fRefrEO, 
+                                                        d_TargetTh, d_Ttd, par.rerad_funct,
+                                                        par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
+                                                        par.rst, par.dr, par.nr, par.c_1, par.c_2);
+                checkCUDAError("genRefrPhasor kernel");
 
-            } else {
+                // generate phasor trace
+                genPhasorTrace(d_phasorTrace, d_refr_rbs, d_refr_phasor, valid_facets, par.nr);
+                checkCUDAError("genPhasorTrace Refracted process");
 
-                // for specular targets
-                if (h_ttype[it] == 0) {
-                    // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
-                    
-                    // generate refracted phasor
-                    genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
-                                                            d_fRfrSR, d_fRefrEI, d_fRefrEO, 
-                                                            d_TargetTh, d_Ttd, par.rerad_funct,
-                                                            par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
-                                                            par.rst, par.dr, par.nr, par.c_1, par.c_2);
-                    checkCUDAError("genRefrPhasor kernel");
-
-                    // generate phasor trace
-                    genPhasorTrace(d_phasorTrace, d_refr_rbs, d_refr_phasor, valid_facets, par.nr);
-                    checkCUDAError("genPhasorTrace Refracted process");
-
-                    // For convolution path write per-target convolution into a
-                    // temporary buffer, then add it into the cumulative
-                    // d_refr_sig so multiple point targets accumulate.
-                    if (!par.convolution_linear) {
-                        convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
-                        checkCUDAError("convolvePhasorChirp Refracted process");
-                    
-                    } else {
-                        convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr, par, argv, is, it);
-                        checkCUDAError("convolvePhasorChirpLinear Refracted process");
-                    }
+                // For convolution path write per-target convolution into a
+                // temporary buffer, then add it into the cumulative
+                // d_refr_sig so multiple point targets accumulate.
+                if (!par.convolution_linear) {
+                    convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
+                    checkCUDAError("convolvePhasorChirp Refracted process");
+                
+                } else {
+                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr, par, argv, is, it);
+                    checkCUDAError("convolvePhasorChirpLinear Refracted process");
                 }
-
-                // for all other targets
-                else {
-                    //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
-                    // TEMPORARY: DO NOT FORGET I CHANGED TO THE BELOW LINE
-                    //evaluateSubsurface<<<numBlocks, blockSize>>>(d_refr_temp, d_Ith, d_Iph, d_Itd,
-                    //                                             d_Tth, d_Tph, d_Ttd, d_Rth,
-                    //                                             d_TargetTh, d_fRefrEO, d_fRfrSR,
-                    //                                             par, valid_facets);
-                    checkCUDAError("refracted convolve kernel");
-                }
-
-                // accumulate this target's contribution into the running sum
-                addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
-                checkCUDAError("addComplexArrays accumulate refracted target");
-            
             }
+
+            // for all other targets
+            else {
+                //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
+                //evaluateSubsurface<<<numBlocks, blockSize>>>(d_refr_temp, d_Ith, d_Iph, d_Itd,
+                //                                             d_Tth, d_Tph, d_Ttd, d_Rth,
+                //                                             d_TargetTh, d_fRefrEO, d_fRfrSR,
+                //                                             par, valid_facets);
+                checkCUDAError("refracted convolve kernel");
+            }
+
+            // accumulate this target's contribution into the running sum
+            addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
+            checkCUDAError("addComplexArrays accumulate refracted target");
             
 
         }
