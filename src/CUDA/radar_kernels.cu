@@ -498,7 +498,7 @@ __device__ cuFloatComplex randomPhasor(int seed) {
 }
 
 // function to generate surface phasor trace
-__global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph, float* d_Itd,
+__global__ void surfacePT(cuFloatComplex* d_refl_P, short* d_refl_rbs, float* d_Ith, float* d_Iph, float* d_Itd,
                           float* d_fReflE, SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -538,11 +538,15 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor_val, make_cuFloatComplex(sqrtf(Psrc), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refl_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refl_rbs[2 * id] = bin;
+            //atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            //atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_Psurface[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_Psurface[bin+1].y), contrib.y * bin_float); // add imag components together
+            d_refl_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refl_rbs[(2 * id) + 1] = bin + 1;
+            //atomicAdd(&(d_Psurface[bin+1].x), contrib.x * bin_float); // add real components together
+            //atomicAdd(&(d_Psurface[bin+1].y), contrib.y * bin_float); // add imag components together
 
         }
 

@@ -417,11 +417,11 @@ int main(int argc, const char* argv[])
         cudaMalloc((void**)&d_refr_rbs, nfacets * sizeof(short));
         cudaMemsetAsync(d_refr_rbs, 0, nfacets * sizeof(short));
         
-        cudaMalloc((void**)&d_refl_phasor, nfacets * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_refl_phasor, 0, nfacets * sizeof(cuFloatComplex));
+        cudaMalloc((void**)&d_refl_phasor, 2 * nfacets * sizeof(cuFloatComplex));
+        cudaMemsetAsync(d_refl_phasor, 0, 2 * nfacets * sizeof(cuFloatComplex));
 
-        cudaMalloc((void**)&d_refl_rbs, nfacets * sizeof(short));
-        cudaMemsetAsync(d_refl_rbs, 0, nfacets * sizeof(short));
+        cudaMalloc((void**)&d_refl_rbs, 2 * nfacets * sizeof(short));
+        cudaMemsetAsync(d_refl_rbs, 0, 2 * nfacets * sizeof(short));
 
         // phasor trace
         cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
@@ -614,10 +614,6 @@ int main(int argc, const char* argv[])
 
     for (int is=0; is<par.ns; is++) {
 
-       //if (is != 1150) {
-//	   continue;
-//       }
-
        // first clear phasor buffers
         cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
 
@@ -731,10 +727,12 @@ int main(int argc, const char* argv[])
         checkCUDAError("compReflectedEnergy kernel");
 
         if (!par.specular) {
-            surfacePT<<<numBlocks, blockSize>>>(d_PSurf, d_Ith, d_Iph, d_Itd,
+            surfacePT<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, d_Ith, d_Iph, d_Itd,
                                                 d_fReflE, par, valid_facets);
             cudaDeviceSynchronize();
             checkCUDAError("surfacePT kernel");
+            genPhasorTrace(d_PSurf, d_refl_rbs, d_refl_phasor, 2 * valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Reflected process");
         }
         
         if (par.specular) {
@@ -863,9 +861,9 @@ int main(int argc, const char* argv[])
                 if (par.debug_surface) {
                     char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
                     sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
-		    saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
+		            saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
                     //saveFloatsToFile(Ptarg_filename, d_chirp, par.nr);
-		    free(Ptarg_filename);
+		            free(Ptarg_filename);
                     checkCUDAError("exportingTargetPower kernel");
                 }
             }
