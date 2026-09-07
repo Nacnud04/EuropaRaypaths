@@ -98,43 +98,6 @@ __global__ void combineRadarSignals(cuFloatComplex* refl_sig, cuFloatComplex* re
 }
 
 
-__global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs, 
-                              float* d_fReflE, float* d_SltRng, 
-                              float lam, float range_res, int nfacets,
-                              float rst, float dr, int nr) {
-
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (id < nfacets) {
-
-        // evaluate the phasor exponent
-        float phase = (4.0f * 3.14159265f / lam) * d_SltRng[id];
-        
-        // exponentiate
-        float c, s;
-        sincosf(phase, &s, &c);
-        cuFloatComplex phasor = make_cuFloatComplex(c, s);
-
-        // scale by the coefficient
-        refl_phasor[id] = cuCmulf(phasor, make_cuFloatComplex(d_fReflE[id], 0.0f));
-
-        // compute the best range bin based on slant range
-        short bin = (short)((d_SltRng[id] - rst) / dr);
-
-        // if bin is out of range, set to bin 0, and zero the phasor
-        if ((bin < 0) || (bin >= nr)) {
-            bin = 0;
-            refl_phasor[id] = make_cuFloatComplex(0.0f, 0.0f);
-        }
-
-        // move bin into array
-        refl_rbs[id] = bin;
-
-    }
-
-}
-
-
 __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
                               float* d_fRfrSR, float* d_fRefrEI, float* d_fRefrEO, 
                               float* d_Targetth, float* d_Ttd, int target_fun,
@@ -540,14 +503,9 @@ __global__ void surfacePT(cuFloatComplex* d_refl_P, short* d_refl_rbs, float* d_
             // add contribution into starting range bin
             d_refl_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
             d_refl_rbs[2 * id] = bin;
-            //atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            //atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
             // add remaining contribution into adjcacent range bin
             d_refl_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
             d_refl_rbs[(2 * id) + 1] = bin + 1;
-            //atomicAdd(&(d_Psurface[bin+1].x), contrib.x * bin_float); // add real components together
-            //atomicAdd(&(d_Psurface[bin+1].y), contrib.y * bin_float); // add imag components together
-
         }
 
     }

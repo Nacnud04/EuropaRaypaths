@@ -20,8 +20,8 @@ P_r = (P_t * G**2 * lam**2) / ((4 * np.pi)**2 * (2*h)**2)
 P_num = np.zeros_like(h)
 
 for i, alt in enumerate(h):
-    #f = f"coRDR/rdr20m/s{i:06d}.txt"
-    f = f"coRDR/rdr0/s{i:06d}.txt"
+    f = f"coRDR/rdr20m/s{i:06d}.txt"
+    #f = f"coRDR/rdr1/s{i:06d}.txt"
     arr = np.loadtxt(f).T
     sig = arr[0] + 1j * arr[1]
     P_num[i] = np.max(np.abs(sig)**2)
@@ -47,6 +47,7 @@ ax[0].legend()
 ax[0].set_title("Coherent Surface with Infinite Area")
 
 # plot error
+print(np.mean(error))
 ax[1].plot(h/1e3, error, color="blue", label="Error (%)", linewidth=1)
 ax[1].set_xlabel("Altitude [km]")
 ax[1].set_ylabel("Error (%)")

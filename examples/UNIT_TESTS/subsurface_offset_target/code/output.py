@@ -178,8 +178,8 @@ for d, c, cont in zip(depths, colors, contrast):
 
     plt.xlim(h[-1]/1e3, h[0]/1e3)
     plt.savefig(f"figures/SubsurfaceFacet{d:04d}.png", dpi=300)
-
-    plt.close()
+    plt.show()
+    #plt.close()
 
 #fig, ax = plt.subplots(figsize=(8, 5))
 fig, ax = plt.subplots(figsize=(10, 8))

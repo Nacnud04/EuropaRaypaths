@@ -726,68 +726,39 @@ int main(int argc, const char* argv[])
                                                     par, valid_facets);
         checkCUDAError("compReflectedEnergy kernel");
 
-        if (!par.specular) {
-            surfacePT<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, d_Ith, d_Iph, d_Itd,
-                                                d_fReflE, par, valid_facets);
-            cudaDeviceSynchronize();
-            checkCUDAError("surfacePT kernel");
-            genPhasorTrace(d_PSurf, d_refl_rbs, d_refl_phasor, 2 * valid_facets, par.nr);
-            checkCUDAError("genPhasorTrace Reflected process");
+        surfacePT<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, d_Ith, d_Iph, d_Itd,
+                                            d_fReflE, par, valid_facets);
+        cudaDeviceSynchronize();
+        checkCUDAError("surfacePT kernel");
+        genPhasorTrace(d_PSurf, d_refl_rbs, d_refl_phasor, 2 * valid_facets, par.nr);
+        checkCUDAError("genPhasorTrace Reflected process");
+
+        // Generate chirp
+        int paddedNr = 2 * par.nr;
+        genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
+        checkCUDAError("genCenteredChirpPadded kernel");
+
+        // if debug, write out surface phasor
+        if (par.debug_surface) {
+            char* Psurf_filename = (char*)malloc(64 * sizeof(char));
+            sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
+            saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
+            free(Psurf_filename);
+            checkCUDAError("exportingSurfacePhasor kernel");
         }
-        
-        if (par.specular) {
-            // reflected signal construction using original method
 
-            // --- CONSTRUCT REFLECTED SIGNAL QUICKLY ---
-            // generate reflected phasor
-            genReflPhasor<<<numBlocks, blockSize>>>(d_refl_phasor, d_refl_rbs, 
-                                                    d_fReflE, d_Itd, par.lam, par.rng_res, valid_facets,
-                                                    par.rst, par.dr, par.nr);
-            checkCUDAError("genReflPhasor kernel");
+        if (par.disable_surface) {
+            cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
+        }
+        checkCUDAError("reflected signal squareComplex Kernel");
 
-            // generate phasor trace
-            genPhasorTrace(d_phasorTrace, d_refl_rbs, d_refl_phasor, valid_facets, par.nr);
-            checkCUDAError("genPhasorTrace Reflected process");
+        // convolve with range compressed chirp
+        convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
+        checkCUDAError("convolvePhasorChirpLinear Reflected process");
             
-            // par.convolution with chirp to get reflected signal
-            if (!par.convolution_linear) {
-                //convolvePhasorChirp(d_phasorTrace, d_chirp, d_refl_sig, par.nr);
-                checkCUDAError("convolvePhasorChirp Reflected process");
-            } else {
-                convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
-                checkCUDAError("convolvePhasorChirpLinear Reflected process");
-            }
-                
-        } else {
+        for (int it=0; it<ntargets; it++) {
 
-            // Generate chirp
-            int paddedNr = 2 * par.nr;
-            genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
-            checkCUDAError("genCenteredChirpPadded kernel");
-
-            // if debug, write out surface phasor
-            if (par.debug_surface) {
-                char* Psurf_filename = (char*)malloc(64 * sizeof(char));
-                sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
-                saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
-                free(Psurf_filename);
-                checkCUDAError("exportingSurfacePhasor kernel");
-            }
-
-            // square d_PSurf to turn into power from E-field
-            //launchSquare(d_PSurf, d_PSurf, par.nr);
-            if (par.disable_surface) {
-                cudaMemsetAsync(d_PSurf, 0, par.nr * sizeof(cuFloatComplex));
-            }
-            checkCUDAError("reflected signal squareComplex Kernel");
-            convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
-            checkCUDAError("convolvePhasorChirpLinear Reflected process");
-
-        }
-        
-	for (int it=0; it<ntargets; it++) {
-
-	    cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
+            cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
