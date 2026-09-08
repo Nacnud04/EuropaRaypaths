@@ -513,7 +513,7 @@ __global__ void surfacePT(cuFloatComplex* d_refl_P, short* d_refl_rbs, float* d_
 }
 
 // this function sums input ray weights to get current the target
-__global__ void accumulateTarget(cuFloatComplex* d_PTarget, 
+__global__ void accumulateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs, 
                                  float* d_Ith, float* d_Iph, float* d_Itd,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
                                  float* d_Rth,
@@ -552,14 +552,6 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         short bin = (short)((rngt - par.rst) / par.dr);
         float bin_float = ((rngt - par.rst) / par.dr) - (int)bin;
 
-        // print phasor info
-        //if (abs(d_Tth[id] - d_Ith[id]) < 0.000001f) {
-        //if (abs(d_Tth[id] - 0.0208303) < 0.00001f) {
-        //if (abs(d_fx[id] - 103.333f) < 0.1f && d_fy[id] == 0) {
-        //if (Pray > 4.6057e-14) {
-        //    printf("Facet %d: f_loc=(%.3f, %.3f, %.3f), Itd=%.2f, Ttd=%.2f, G_T=%.6f, G_Fin=%.6f, G_Fout=%.6f, rngt=%.2f, pray=%.6e\n", id, d_fx[id], d_fy[id], d_fz[id], d_Itd[id], d_Ttd[id], G_dipole, G_fin, G_fout, rngt, Pray);
-        //}
-
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
@@ -567,11 +559,11 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_PTarget[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_PTarget[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refr_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refr_rbs[2 * id] = bin;
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_PTarget[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_PTarget[bin+1].y), contrib.y * bin_float); // add imag components together
+            d_refr_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refr_rbs[(2 * id) + 1] = bin + 1;
         }
 
     }
@@ -580,7 +572,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
 
 
 // radiate target outward and compute power received at source
-__global__ void radiateTarget(cuFloatComplex* d_Psource, 
+__global__ void radiateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs, 
                               float* d_Ith, float* d_Iph, float* d_Itd,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_Rth,
@@ -627,13 +619,16 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         } else {
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(rngt - (par.lam / 2.0f), par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
-            //cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refr_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refr_rbs[2 * id] = bin;
+            //atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            //atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
+            d_refr_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refr_rbs[(2 * id) + 1] = bin + 1;
+            //atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
+            //atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
         }
 
     }
