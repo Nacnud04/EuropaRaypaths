@@ -188,7 +188,7 @@ int main(int argc, const char* argv[])
     std::cout << "Using target file: " << argv[3] << std::endl;
     checkFileExists(target_filename);
     FILE *targetFile = fopen(target_filename, "r");
-    const int ntargets = count_lines(targetFile);
+    const int ntargets = count_lines(targetFile) - 1;
     // report number of targets
     std::cout << "Found " << ntargets << " targets in " << target_filename << std::endl;
     
@@ -814,33 +814,28 @@ int main(int argc, const char* argv[])
                 genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
                 checkCUDAError("genCenteredChirpPadded kernel");
             }
-
-            // loop for all non-specular target types
-            if (h_ttype[it] != 0) {
-
-                // --- CALCULATE POWER AT TARGET ---
-                // this is the inward phasor trace
-                accumulateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
-                                                           d_Ith, d_Iph, d_Itd,
-                                                           d_Tth, d_Tph, d_Ttd, d_Rth,
-                                                           d_TargetTh, d_fRefrEI, d_fRfrSR,
-                                                           d_fx, d_fy, d_fz,
-                                                           par, valid_facets);
-                cudaDeviceSynchronize();
-                checkCUDAError("accumulateTarget kernel");
-                genPhasorTrace(d_PTtarg, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
-                checkCUDAError("genPhasorTrace Refracted process 1");
-                convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr, par, argv, is, it);
-                
-                // write out d_Ptarg to file for debugging
-                if (par.debug_surface) {
-                    char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
-                    sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
-		            saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
-		            free(Ptarg_filename);
-                    checkCUDAError("exportingTargetPower kernel");
-                }
-
+            
+            // --- CALCULATE POWER AT TARGET ---
+            // this is the inward phasor trace
+            accumulateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
+                                                        d_Ith, d_Iph, d_Itd,
+                                                        d_Tth, d_Tph, d_Ttd, d_Rth,
+                                                        d_TargetTh, d_fRefrEI, d_fRfrSR,
+                                                        d_fx, d_fy, d_fz,
+                                                        par, valid_facets);
+            cudaDeviceSynchronize();
+            checkCUDAError("accumulateTarget kernel");
+            genPhasorTrace(d_PTtarg, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Refracted process 1");
+            convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr, par, argv, is, it);
+            
+            // write out d_Ptarg to file for debugging
+            if (par.debug_surface) {
+                char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
+                sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
+                saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
+                free(Ptarg_filename);
+                checkCUDAError("exportingTargetPower kernel");
             }
 
             // --- COMPUTE UPWARD TRANSMITTED RAYS ---
@@ -849,88 +844,44 @@ int main(int argc, const char* argv[])
                                                         d_fRefrEO, d_fRfrC, 
                                                         par, valid_facets);
             checkCUDAError("compRefrEnergyOut kernel");
-
-            // loop for all non-specular target types
-            if (h_ttype[it] != 0) {
-
-                // --- CALCULATE OUTWARD PHASOR TRACE ---
-                radiateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs,
-                                                        d_Ith, d_Iph, d_Itd,
-                                                        d_Tth, d_Tph, d_Ttd, d_Rth,
-                                                        d_TargetTh, d_fRefrEO, d_fRfrSR,
-                                                        par, valid_facets);
-                cudaDeviceSynchronize();
-                checkCUDAError("radiateTarget kernel");
-                genPhasorTrace(d_Psour, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
-                checkCUDAError("genPhasorTrace Refracted process 2");
-                // write out d_Psour to file for debugging
-                if (par.debug_surface) {
-                    char* Psour_filename = (char*)malloc(64 * sizeof(char));
-                    sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
-                    saveSignalToFile(Psour_filename, d_Psour, par.nr);
-                    free(Psour_filename);
-                    checkCUDAError("exportingSourcePower kernel");
-                }
-                
-                // --- CONVOLVE INTO FULL PHASOR TRACE ---
-                //convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
-                convolveComplex(d_Psour, d_Ptarg, d_refr_temp, par, argv, is, it);
-                checkCUDAError("convolveComplexSquare kernel");
-                // write out d_PTTmp to file for debugging
-                if (par.debug_surface) {
-                    char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
-                    sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
-                    saveSignalToFile(PTTmp_filename, d_refr_temp, par.nr);
-                    free(PTTmp_filename);
-                    checkCUDAError("exportingPhasorTrace kernel");
-                }
+            
+            // --- CALCULATE OUTWARD PHASOR TRACE ---
+            radiateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs,
+                                                    d_Ith, d_Iph, d_Itd,
+                                                    d_Tth, d_Tph, d_Ttd, d_Rth,
+                                                    d_TargetTh, d_fRefrEO, d_fRfrSR,
+                                                    par, valid_facets);
+            cudaDeviceSynchronize();
+            checkCUDAError("radiateTarget kernel");
+            genPhasorTrace(d_Psour, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
+            checkCUDAError("genPhasorTrace Refracted process 2");
+            // write out d_Psour to file for debugging
+            if (par.debug_surface) {
+                char* Psour_filename = (char*)malloc(64 * sizeof(char));
+                sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
+                saveSignalToFile(Psour_filename, d_Psour, par.nr);
+                free(Psour_filename);
+                checkCUDAError("exportingSourcePower kernel");
             }
-
-            // REMOVE THE BELOW CODE AT SOME POINT
-            // for specular targets
-            if (h_ttype[it] == 0) {
-                // --- CONSTRUCT REFRACTED SIGNAL QUICKLY ---
-                
-                // generate refracted phasor
-                genRefrPhasor<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
-                                                        d_fRfrSR, d_fRefrEI, d_fRefrEO, 
-                                                        d_TargetTh, d_Ttd, par.rerad_funct,
-                                                        par.P, par.Grefr_lin, par.lam, par.fs, valid_facets,
-                                                        par.rst, par.dr, par.nr, par.c_1, par.c_2);
-                checkCUDAError("genRefrPhasor kernel");
-
-                // generate phasor trace
-                genPhasorTrace(d_phasorTrace, d_refr_rbs, d_refr_phasor, valid_facets, par.nr);
-                checkCUDAError("genPhasorTrace Refracted process");
-
-                // For convolution path write per-target convolution into a
-                // temporary buffer, then add it into the cumulative
-                // d_refr_sig so multiple point targets accumulate.
-                if (!par.convolution_linear) {
-                    convolvePhasorChirp(d_phasorTrace, d_chirp, d_refr_temp, par.nr);
-                    checkCUDAError("convolvePhasorChirp Refracted process");
-                
-                } else {
-                    convolvePhasorChirpLinear(d_phasorTrace, d_chirp, d_refr_temp, par.nr, par, argv, is, it);
-                    checkCUDAError("convolvePhasorChirpLinear Refracted process");
-                }
-            }
-
-            // for all other targets
-            else {
-                //convolvePhasorChirpLinear(d_PTTmp, d_chirp, d_refr_temp, par.nr);
-                //evaluateSubsurface<<<numBlocks, blockSize>>>(d_refr_temp, d_Ith, d_Iph, d_Itd,
-                //                                             d_Tth, d_Tph, d_Ttd, d_Rth,
-                //                                             d_TargetTh, d_fRefrEO, d_fRfrSR,
-                //                                             par, valid_facets);
-                checkCUDAError("refracted convolve kernel");
+            
+            // --- CONVOLVE INTO FULL PHASOR TRACE ---
+            //convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
+            convolveComplex(d_Psour, d_Ptarg, d_refr_temp, par, argv, is, it);
+            checkCUDAError("convolveComplexSquare kernel");
+            cudaDeviceSynchronize();
+            // write out d_PTTmp to file for debugging
+            if (par.debug_surface) {
+                char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
+                sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
+                saveSignalToFile(PTTmp_filename, d_refr_temp, par.nr);
+                free(PTTmp_filename);
+                checkCUDAError("exportingPhasorTrace kernel");
             }
 
             // accumulate this target's contribution into the running sum
             addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
             checkCUDAError("addComplexArrays accumulate refracted target");
             
-
         }
         
         // --- COMBINE INTO OUTPUT SIGNAL AND EXPORT ---

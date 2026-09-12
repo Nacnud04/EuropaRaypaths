@@ -188,6 +188,9 @@ ax.set_xlim(h[-1]/1e3, h[0]/1e3)
 
 for d, c, cont in zip(depths, colors, contrast):
 
+    if d != 5000 and d != 250:
+        continue
+
     ana_phse = get_target_phase(params, h, d, xoff)
 
     # load radargram
