@@ -209,7 +209,23 @@ int main(int argc, const char* argv[])
     loadTargetFile(targetFile, ntargets, 
                     h_tx, h_ty, h_tz, h_tnx, h_tny, h_tnz, h_ttype);
 
+    // create GPU target vars
+    float* d_tx; float* d_ty; float* d_tz;
+    bool* d_tInApt;
 
+    // copy target positions over to GPU
+    cudaMalloc((void**)&d_tx, ntargets * sizeof(float));
+    cudaMemcpy(d_tx, h_tx, ntargets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&d_ty, ntargets * sizeof(float));
+    cudaMemcpy(d_ty, h_ty, ntargets * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&d_tz, ntargets * sizeof(float));
+    cudaMemcpy(d_tz, h_tz, ntargets * sizeof(float), cudaMemcpyHostToDevice);
+
+    // make mask for targets within aperture
+    bool* h_tInApt = (bool*)malloc(ntargets * sizeof(bool));
+    memset(h_tInApt, 0, ntargets * sizeof(bool));
+    cudaMalloc((void**)&d_tInApt, ntargets * sizeof(bool));
+    cudaMemcpy(d_tInApt, h_tInApt, ntargets * sizeof(bool), cudaMemcpyHostToDevice);
                     
     // --- LOAD FACETS ---
 
@@ -723,8 +739,24 @@ int main(int argc, const char* argv[])
         // convolve with range compressed chirp
         convolvePhasorChirpLinear(d_PSurf, d_refl_chirp, d_refl_sig, par.nr, par, argv, is, 0);
         checkCUDAError("convolvePhasorChirpLinear Reflected process");
+
+        // limit targets to just within aperture
+        int tarBlocks = (ntargets + blockSize - 1) / blockSize;
+        findTargetsInAperture<<<tarBlocks, blockSize>>>(d_tx, d_ty, d_tz,
+                                                        sx, sy, sz,
+                                                        snx, sny, snz,
+                                                        d_tInApt, par.aperture, ntargets);
+        checkCUDAError("findTargetsInAperture kernel");
+
+        // copy target mask to host
+        cudaMemcpy(h_tInApt, d_tInApt, ntargets * sizeof(bool), cudaMemcpyDeviceToHost);
             
         for (int it=0; it<ntargets; it++) {
+
+            // check if target is within aperture
+            if (!h_tInApt[it]) {
+                continue;
+            }
 
             cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
@@ -733,6 +765,7 @@ int main(int argc, const char* argv[])
 
             // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
             // should probably be offloaded to GPU at some point
+            /*
             tvc_x = h_tx[it] - sx;
             tvc_y = h_ty[it] - sy;
             tvc_z = h_tz[it] - sz;
@@ -749,7 +782,7 @@ int main(int argc, const char* argv[])
 
             if (th_target > (par.aperture*(pi/180.0f))) {
                 continue;
-            }
+            }*/
 
             // --- FORCED RAY TO TARGET COMP ---
             // this is also when we compute the attenuation

@@ -159,14 +159,24 @@ __device__ void dotProductNegateBulk(float* x1, float* y1, float* z1,
 }
 
 // magnitude of 3D vector
+__device__ float vectorMagnitude(float x, float y, float z) {
+    return sqrtf(x * x + y * y + z * z);
+}
 __host__ float vectorMagnitudeHost(float x, float y, float z) {
     return sqrtf(x * x + y * y + z * z);
 }
 
 // find angle between normalized source and target vectors
+// NOTE: These functions require a normalized target position vector
+__device__ float angleSourceNormTargetPos(float snx, float sny, float snz,
+                                          float  tx, float  ty, float  tz) {
+    
+    float dp = dotProduct(snx, sny, snz, tx, ty, tz);
+    float theta = acosf(dp);
+    return theta;
+}
 __host__ float angleSourceNormTargetPosHost(float snx, float sny, float snz,
                                             float  tx, float  ty, float  tz) {
-    // NOTE: This function requires normalized target position vector
     float dp = dotProductHost(snx, sny, snz, tx, ty, tz);
     float theta = acosf(dp);
     return theta;
@@ -306,31 +316,12 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     // forward FFT on both signal and kernel
     cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
     cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
-    /*
-    if (par.debug_surface) {
-        char* sPad_filename = (char*)malloc(64 * sizeof(char));
-        sprintf(sPad_filename, "%s/sPad_s%06d_t%02d.txt", argv[4], is, it);
-        saveSignalToFile(sPad_filename, d_signalPad, nrPad);
-        free(sPad_filename);
 
-        char* kPad_filename = (char*)malloc(64 * sizeof(char));
-        sprintf(kPad_filename, "%s/kPad_s%06d_t%02d.txt", argv[4], is, it);
-        saveSignalToFile(kPad_filename, d_kernelPad, nrPad);
-        free(kPad_filename);
-    }
-    */
     // pointwise multiply in frequency domain
     int blocks = (nrPad + THREADS - 1) / THREADS;
     cropSpectrum<<<blocks, THREADS>>>(d_kernelPad, nrPad, par.smpl, par.B);
     complexPointwiseMul<<<blocks, THREADS>>>(d_signalPad, d_kernelPad, nrPad);
-    /*
-    if (par.debug_surface) {
-        char* mPad_filename = (char*)malloc(64 * sizeof(char));
-        sprintf(mPad_filename, "%s/mPad_s%06d_t%02d.txt", argv[4], is, it);
-        saveSignalToFile(mPad_filename, d_signalPad, nrPad);
-        free(mPad_filename);
-    }
-    */
+
     cudaDeviceSynchronize();
 
     // inverse FFT to get the convolved signal
@@ -351,23 +342,4 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
     cufftDestroy(plan);
 
 }
-/*
-// square and then convolve complex signals
-void convolveComplexSquare(cuFloatComplex* d_sig1E, cuFloatComplex* d_sig2E,
-                     cuFloatComplex* d_output, int nr) {
 
-    // temporarily allocate memory for squared output
-    cuFloatComplex* d_sig1P;
-    cuFloatComplex* d_sig2P;
-    cudaMalloc(&d_sig1P, nr * sizeof(cuFloatComplex));
-    cudaMalloc(&d_sig2P, nr * sizeof(cuFloatComplex));
-
-    // square both values
-    launchSquare(d_sig1E, d_sig1P, nr);
-    launchSquare(d_sig2E, d_sig2P, nr);
-
-    // then convolve into output array
-    convolveComplex(d_sig1P, d_sig2P, d_output, nr);
-
-}
-*/
