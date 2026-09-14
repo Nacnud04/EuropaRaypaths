@@ -570,9 +570,10 @@ int main(int argc, const char* argv[])
     cuFloatComplex* d_chirpComplex;
     cudaMalloc(&d_chirpComplex, sizeof(cuFloatComplex) * par.nr);
 
-    // --- GENERATE CHIRP IF FAST METHOD ENABLED ---
+    // --- GENERATE CHIRP ---
     // We need a chirp for both the surface and the subsurface. As the surface requires a full 
     // bandwidth chirp, where as the subsurface requires a half bandwidth chirp.
+
     int paddedNr = 2 * par.nr;
     cudaMalloc((void**)&d_refl_chirp, paddedNr * sizeof(float));
     cudaMemsetAsync(d_refl_chirp, 0, paddedNr * sizeof(float));
@@ -592,6 +593,8 @@ int main(int argc, const char* argv[])
     // the main simulation begins not all data is lost
     remove_s_txt_files(argv[4]);
     std::cout << "Number of range bins: " << par.nr << std::endl;
+
+    // --- MAIN LOOP OVER SOURCES ---
 
     for (int is=0; is<par.ns; is++) {
 
@@ -630,7 +633,7 @@ int main(int argc, const char* argv[])
         cudaMemset(d_refl_sig, 0, par.nr * sizeof(cuFloatComplex));
         cudaMemset(d_refr_sig, 0, par.nr * sizeof(cuFloatComplex));
         // d_sig is fully overwritten by combineRadarSignals, so clearing it is
-        // optional; left out for slightly better performance.
+        // optional; this is left out for slightly better performance.
 
         
         // --- GET INCLINATION OF EACH RAY RELATIVE TO SOURCE ---
@@ -662,7 +665,6 @@ int main(int argc, const char* argv[])
         // If no facets are illuminated, skip per-facet kernels to avoid
         // operating on uninitialised memory which can produce NaNs.
         if (valid_facets == 0) {
-            //std::cout << "No illuminated facets for source " << is << ", skipping." << std::endl;
             printf("\rNo illuminated facets for source %d, skipping.", is);
 	    continue;
         }
@@ -710,11 +712,7 @@ int main(int argc, const char* argv[])
 
         // if debug, write out surface phasor
         if (par.debug_surface) {
-            char* Psurf_filename = (char*)malloc(64 * sizeof(char));
-            sprintf(Psurf_filename, "%s/Psurf_s%06d.txt", argv[4], is);
-            saveSignalToFile(Psurf_filename, d_PSurf, par.nr);
-            free(Psurf_filename);
-            checkCUDAError("exportingSurfacePhasor kernel");
+            debugSaveSignal(argv[4], "Psurf", is, 0, d_PSurf, par.nr, 0);
         }
 
         if (par.disable_surface) {
@@ -791,15 +789,6 @@ int main(int argc, const char* argv[])
             genPhasorTrace(d_PTtarg, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Refracted process 1");
             convolvePhasorChirpLinear(d_PTtarg, d_refr_chirp, d_Ptarg, par.nr, par, argv, is, it);
-            
-            // write out d_Ptarg to file for debugging
-            if (par.debug_surface) {
-                char* Ptarg_filename = (char*)malloc(64 * sizeof(char));
-                sprintf(Ptarg_filename, "%s/Ptarg_s%06d_t%02d.txt", argv[4], is, it);
-                saveSignalToFile(Ptarg_filename, d_Ptarg, par.nr);
-                free(Ptarg_filename);
-                checkCUDAError("exportingTargetPower kernel");
-            }
 
             // --- COMPUTE UPWARD TRANSMITTED RAYS ---
             compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
@@ -818,32 +807,24 @@ int main(int argc, const char* argv[])
             checkCUDAError("radiateTarget kernel");
             genPhasorTrace(d_Psour, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Refracted process 2");
-            // write out d_Psour to file for debugging
-            if (par.debug_surface) {
-                char* Psour_filename = (char*)malloc(64 * sizeof(char));
-                sprintf(Psour_filename, "%s/Psour_s%06d_t%02d.txt", argv[4], is, it);
-                saveSignalToFile(Psour_filename, d_Psour, par.nr);
-                free(Psour_filename);
-                checkCUDAError("exportingSourcePower kernel");
-            }
+
             
             // --- CONVOLVE INTO FULL PHASOR TRACE ---
             //convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
             convolveComplex(d_Psour, d_Ptarg, d_refr_temp, par, argv, is, it);
             checkCUDAError("convolveComplexSquare kernel");
             cudaDeviceSynchronize();
-            // write out d_PTTmp to file for debugging
-            if (par.debug_surface) {
-                char* PTTmp_filename = (char*)malloc(64 * sizeof(char));
-                sprintf(PTTmp_filename, "%s/PTTmp_s%06d_t%02d.txt", argv[4], is, it);
-                saveSignalToFile(PTTmp_filename, d_refr_temp, par.nr);
-                free(PTTmp_filename);
-                checkCUDAError("exportingPhasorTrace kernel");
-            }
+
 
             // accumulate this target's contribution into the running sum
             addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
             checkCUDAError("addComplexArrays accumulate refracted target");
+
+            if (par.debug_surface) {
+                debugSaveSignal(argv[4], "Ptarg", is, it, d_Ptarg, par.nr, 1);
+                debugSaveSignal(argv[4], "Psour", is, it, d_Psour, par.nr, 1);
+                debugSaveSignal(argv[4], "PTTmp", is, it, d_refr_temp, par.nr, 1);
+            }
             
         }
         

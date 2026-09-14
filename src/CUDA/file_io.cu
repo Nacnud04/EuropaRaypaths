@@ -628,3 +628,23 @@ __host__ void loadGainFile(FILE* file, const int ns,
     std::cout << "Gain file loaded successfully with " << i << " entries." << std::endl;
 
 }
+
+
+void debugSaveSignal(const char* outdir,
+                     const char* name,
+                     int is, int it,
+                     cuFloatComplex* data,
+                     int nr,
+                     int include_t){
+
+    char filename[256];
+
+    if (include_t)
+        snprintf(filename, sizeof(filename), "%s/%s_s%06d_t%02d.txt", outdir, name, is, it);
+    else
+        snprintf(filename, sizeof(filename), "%s/%s_s%06d.txt", outdir, name, is);
+
+    saveSignalToFile(filename, data, nr);
+
+}
+
