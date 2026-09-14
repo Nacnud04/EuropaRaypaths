@@ -406,43 +406,31 @@ int main(int argc, const char* argv[])
     cuFloatComplex* d_refl_phasor;
     cuFloatComplex* d_phasorTrace;
     short* d_refr_rbs; short* d_refl_rbs;
-    float* d_chirp;
+    float* d_refl_chirp; float* d_refr_chirp;
     cuFloatComplex* d_refr_temp = NULL; // temporary buffer to hold per-target convolution result
-    if (par.convolution) {
 
-        // reflected and refracted phasors & range bins
-        cudaMalloc((void**)&d_refr_phasor, 2 * nfacets * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_refr_phasor, 0, 2 * nfacets * sizeof(cuFloatComplex));
-        
-        cudaMalloc((void**)&d_refr_rbs, 2 * nfacets * sizeof(short));
-        cudaMemsetAsync(d_refr_rbs, 0, 2 * nfacets * sizeof(short));
-        
-        cudaMalloc((void**)&d_refl_phasor, 2 * nfacets * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_refl_phasor, 0, 2 * nfacets * sizeof(cuFloatComplex));
+    // reflected and refracted phasors & range bins
+    cudaMalloc((void**)&d_refr_phasor, 2 * nfacets * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_refr_phasor, 0, 2 * nfacets * sizeof(cuFloatComplex));
+    
+    cudaMalloc((void**)&d_refr_rbs, 2 * nfacets * sizeof(short));
+    cudaMemsetAsync(d_refr_rbs, 0, 2 * nfacets * sizeof(short));
+    
+    cudaMalloc((void**)&d_refl_phasor, 2 * nfacets * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_refl_phasor, 0, 2 * nfacets * sizeof(cuFloatComplex));
 
-        cudaMalloc((void**)&d_refl_rbs, 2 * nfacets * sizeof(short));
-        cudaMemsetAsync(d_refl_rbs, 0, 2 * nfacets * sizeof(short));
+    cudaMalloc((void**)&d_refl_rbs, 2 * nfacets * sizeof(short));
+    cudaMemsetAsync(d_refl_rbs, 0, 2 * nfacets * sizeof(short));
 
-        // phasor trace
-        cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
+    // phasor trace
+    cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
 
-        // chirp
-        if (!par.convolution_linear) {
-            cudaMalloc((void**)&d_chirp, par.nr * sizeof(float));
-            cudaMemsetAsync(d_chirp, 0, par.nr * sizeof(float));
-        } else {
-            // for linear convolution we generate a padded chirp of length 2*nr
-            int paddedNr = 2 * par.nr;
-            cudaMalloc((void**)&d_chirp, paddedNr * sizeof(float));
-            cudaMemsetAsync(d_chirp, 0, paddedNr * sizeof(float));
-        }
-        // allocate temporary buffer for per-target convolution output so we
-        // can accumulate multiple point-target contributions into
-        // d_refr_sig instead of overwriting it each time
-        cudaMalloc((void**)&d_refr_temp, par.nr * sizeof(cuFloatComplex));
-        cudaMemsetAsync(d_refr_temp, 0, par.nr * sizeof(cuFloatComplex));
-    }
+    // allocate temporary buffer for per-target convolution output so we
+    // can accumulate multiple point-target contributions into
+    // d_refr_sig instead of overwriting it each time
+    cudaMalloc((void**)&d_refr_temp, par.nr * sizeof(cuFloatComplex));
+    cudaMemsetAsync(d_refr_temp, 0, par.nr * sizeof(cuFloatComplex));
     
     // array for power function at target
     cuFloatComplex* d_PTtarg;
@@ -583,28 +571,21 @@ int main(int argc, const char* argv[])
     cudaMalloc(&d_chirpComplex, sizeof(cuFloatComplex) * par.nr);
 
     // --- GENERATE CHIRP IF FAST METHOD ENABLED ---
-    // we can only pre-generate the chirp for the linear convolution (not circular)
-    if (par.convolution) {
+    // We need a chirp for both the surface and the subsurface. As the surface requires a full 
+    // bandwidth chirp, where as the subsurface requires a half bandwidth chirp.
+    int paddedNr = 2 * par.nr;
+    cudaMalloc((void**)&d_refl_chirp, paddedNr * sizeof(float));
+    cudaMemsetAsync(d_refl_chirp, 0, paddedNr * sizeof(float));
 
-        // for circular convolution we can pregenerate the chirp when not varying the rx window
-        if (!par.convolution_linear && !rxWindowPositionFileProvided) {
-            genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
-            checkCUDAError("genChirp kernel");
-        } 
-        // for linear convolution we always pregenerate the chirp
-        else {
-            int paddedNr = 2 * par.nr;
-            genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
-            checkCUDAError("genCenteredChirpPadded kernel");
-        }
+    genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refl_chirp, par.dr, par.nr, paddedNr, par.rng_res);
+    checkCUDAError("genCenteredChirpPadded kernel");
 
-        // Convert real chirp to complex
-        int threads = 256;
-        int blocks = (par.nr + threads - 1) / threads;
-        realToComplex<<<blocks, threads>>>(d_chirp, d_chirpComplex, par.nr);
-        checkCUDAError("realToComplex kernel");
+    cudaMalloc((void**)&d_refr_chirp, paddedNr * sizeof(float));
+    cudaMemsetAsync(d_refr_chirp, 0, paddedNr * sizeof(float));
 
-    }
+    genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refr_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
+    checkCUDAError("genCenteredChirpPadded kernel");
+
 
     // Wipe write direcory
     // this happens at the last minute as in case we cancel a process before
@@ -626,12 +607,6 @@ int main(int argc, const char* argv[])
         if (gainPatternProvided) {
             par.Grefl_lin = powf(10.0f, h_gRefl[is]/10.0f);
             par.Grefr_lin = powf(10.0f, h_gRefr[is]/10.0f);
-        }
-
-        // generate the chirp if using circular convolution and variable rx opening windows
-        if (par.convolution && !par.convolution_linear && rxWindowPositionFileProvided) {
-            genChirp<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.rst, par.dr, par.nr, par.rng_res);
-            checkCUDAError("genChirp kernel");
         }
 
         // if the source file is not provided, use linear solution
@@ -733,11 +708,6 @@ int main(int argc, const char* argv[])
         genPhasorTrace(d_PSurf, d_refl_rbs, d_refl_phasor, 2 * valid_facets, par.nr);
         checkCUDAError("genPhasorTrace Reflected process");
 
-        // Generate chirp
-        int paddedNr = 2 * par.nr;
-        genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, par.rng_res);
-        checkCUDAError("genCenteredChirpPadded kernel");
-
         // if debug, write out surface phasor
         if (par.debug_surface) {
             char* Psurf_filename = (char*)malloc(64 * sizeof(char));
@@ -753,7 +723,7 @@ int main(int argc, const char* argv[])
         checkCUDAError("reflected signal squareComplex Kernel");
 
         // convolve with range compressed chirp
-        convolvePhasorChirpLinear(d_PSurf, d_chirp, d_refl_sig, par.nr, par, argv, is, 0);
+        convolvePhasorChirpLinear(d_PSurf, d_refl_chirp, d_refl_sig, par.nr, par, argv, is, 0);
         checkCUDAError("convolvePhasorChirpLinear Reflected process");
             
         for (int it=0; it<ntargets; it++) {
@@ -807,13 +777,6 @@ int main(int argc, const char* argv[])
                                                     d_fRefrEI, d_fRfrSR,
                                                     par, valid_facets);
             checkCUDAError("compRefrEnergyIn kernel");
-
-            if (!par.specular) {
-                // Generate chirp with half bandwidth
-                int paddedNr = 2 * par.nr;
-                genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
-                checkCUDAError("genCenteredChirpPadded kernel");
-            }
             
             // --- CALCULATE POWER AT TARGET ---
             // this is the inward phasor trace
@@ -827,7 +790,7 @@ int main(int argc, const char* argv[])
             checkCUDAError("accumulateTarget kernel");
             genPhasorTrace(d_PTtarg, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
             checkCUDAError("genPhasorTrace Refracted process 1");
-            convolvePhasorChirpLinear(d_PTtarg, d_chirp, d_Ptarg, par.nr, par, argv, is, it);
+            convolvePhasorChirpLinear(d_PTtarg, d_refr_chirp, d_Ptarg, par.nr, par, argv, is, it);
             
             // write out d_Ptarg to file for debugging
             if (par.debug_surface) {
@@ -944,7 +907,6 @@ int main(int argc, const char* argv[])
     cudaFree(d_fRefrEO);
     cudaFree(d_refr_sig);
     cudaFree(d_sig);
-    // temporary buffer used to accumulate per-target convolution outputs
     cudaFree(d_refr_temp);
 
     return 0;

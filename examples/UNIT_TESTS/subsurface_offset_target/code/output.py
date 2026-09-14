@@ -113,9 +113,9 @@ z = np.linspace(0, np.radians(20), 500)
 
 f = refracted_angle(z, xoff, h[0], 250, 3.15)
 
-plt.plot(np.degrees(z), f)
-plt.axhline(0, color='k')
-plt.show()
+#plt.plot(np.degrees(z), f)
+#plt.axhline(0, color='k')
+#plt.show()
 
 for d, c, cont in zip(depths, colors, contrast):
 
