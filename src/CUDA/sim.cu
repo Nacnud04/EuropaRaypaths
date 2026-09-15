@@ -423,7 +423,6 @@ int main(int argc, const char* argv[])
     cuFloatComplex* d_phasorTrace;
     short* d_refr_rbs; short* d_refl_rbs;
     float* d_refl_chirp; float* d_refr_chirp;
-    cuFloatComplex* d_refr_temp = NULL; // temporary buffer to hold per-target convolution result
 
     // reflected and refracted phasors & range bins
     cudaMalloc((void**)&d_refr_phasor, 2 * nfacets * sizeof(cuFloatComplex));
@@ -442,21 +441,40 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_phasorTrace, par.nr * sizeof(cuFloatComplex));
     cudaMemsetAsync(d_phasorTrace, 0, par.nr * sizeof(cuFloatComplex));
 
-    // allocate temporary buffer for per-target convolution output so we
-    // can accumulate multiple point-target contributions into
-    // d_refr_sig instead of overwriting it each time
-    cudaMalloc((void**)&d_refr_temp, par.nr * sizeof(cuFloatComplex));
-    cudaMemsetAsync(d_refr_temp, 0, par.nr * sizeof(cuFloatComplex));
-    
-    // array for power function at target
-    cuFloatComplex* d_PTtarg;
-    cudaMalloc((void**)&d_PTtarg, par.nr * sizeof(cuFloatComplex));
-    cuFloatComplex* d_Ptarg;
-    cudaMalloc((void**)&d_Ptarg, par.nr * sizeof(cuFloatComplex));
+    // create streams for target parallelization
+    const int Nstreams = 8;
+    cudaStream_t streams[Nstreams];
 
-    // array for power function at source
-    cuFloatComplex* d_Psour;
-    cudaMalloc((void**)&d_Psour, par.nr * sizeof(cuFloatComplex));
+    cuFloatComplex* d_PTtarg[Nstreams];
+    cuFloatComplex* d_Ptarg[Nstreams];
+    cuFloatComplex* d_Psour[Nstreams];
+    cuFloatComplex* d_refr_temp[Nstreams];
+
+    cuFloatComplex* d_signalPad[Nstreams];
+    cuFloatComplex* d_kernelPad[Nstreams];
+
+    cufftHandle plans[Nstreams];
+
+    int nrPad = 2 * par.nr - 1;
+
+    for (int s = 0; s < Nstreams; s++) {
+        cudaStreamCreate(&streams[s]);
+
+        cudaMalloc(&d_PTtarg[s],    par.nr * sizeof(cuFloatComplex));
+        cudaMalloc(&d_Ptarg[s],      par.nr * sizeof(cuFloatComplex));
+        cudaMalloc(&d_Psour[s],      par.nr * sizeof(cuFloatComplex));
+        cudaMalloc(&d_refr_temp[s],  par.nr * sizeof(cuFloatComplex));
+
+        cudaMalloc(&d_signalPad[s], nrPad * sizeof(cuFloatComplex));
+        cudaMalloc(&d_kernelPad[s], nrPad * sizeof(cuFloatComplex));
+
+        cufftPlan1d(&plans[s], nrPad, CUFFT_C2C, 1);
+        cufftSetStream(plans[s], streams[s]);
+    }
+
+
+
+    //cudaMemsetAsync(d_refr_temp, 0, par.nr * sizeof(cuFloatComplex));
 
     // tmp for phasor trace
     cuFloatComplex* d_PTTmp;
@@ -750,7 +768,7 @@ int main(int argc, const char* argv[])
 
         // copy target mask to host
         cudaMemcpy(h_tInApt, d_tInApt, ntargets * sizeof(bool), cudaMemcpyDeviceToHost);
-            
+        /*
         for (int it=0; it<ntargets; it++) {
 
             // check if target is within aperture
@@ -762,27 +780,6 @@ int main(int argc, const char* argv[])
             cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
             cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
-
-            // --- CHECK TO MAKE SURE TARGETS IS WITHIN APERTURE ---
-            // should probably be offloaded to GPU at some point
-            /*
-            tvc_x = h_tx[it] - sx;
-            tvc_y = h_ty[it] - sy;
-            tvc_z = h_tz[it] - sz;
-            tvc_mag = vectorMagnitudeHost(tvc_x, tvc_y, tvc_z);
-
-            tvc_x /= tvc_mag;
-            tvc_y /= tvc_mag;
-            tvc_z /= tvc_mag;
-            // NOTE: we need to reverse the direction of the source normal as the 
-            //       normal points "up" while the target is "down" relative to the
-            //       spacecraft
-            th_target = angleSourceNormTargetPosHost(-1*snx, -1*sny, -1*snz,
-                                                     tvc_x,  tvc_y,  tvc_z);
-
-            if (th_target > (par.aperture*(pi/180.0f))) {
-                continue;
-            }*/
 
             // --- FORCED RAY TO TARGET COMP ---
             // this is also when we compute the attenuation
@@ -859,7 +856,79 @@ int main(int argc, const char* argv[])
                 debugSaveSignal(argv[4], "PTTmp", is, it, d_refr_temp, par.nr, 1);
             }
             
+        }*/
+
+        for (int it = 0; it < ntargets; it++) {
+            if (!h_tInApt[it]) continue;
+
+            int s = it % Nstreams;
+            cudaStream_t st = streams[s];
+
+            cudaMemsetAsync(d_PTtarg[s],   0, par.nr * sizeof(cuFloatComplex), st);
+            cudaMemsetAsync(d_Ptarg[s],    0, par.nr * sizeof(cuFloatComplex), st);
+            cudaMemsetAsync(d_Psour[s],    0, par.nr * sizeof(cuFloatComplex), st);
+            cudaMemsetAsync(d_refr_temp[s],0, par.nr * sizeof(cuFloatComplex), st);
+
+            compTargetRays<<<numBlocks, blockSize, 0, st>>>(h_tx[it], h_ty[it], h_tz[it],
+                                                            h_tnx[it], h_tny[it], h_tnz[it],
+                                                            d_fx, d_fy, d_fz,
+                                                            d_fnx, d_fny, d_fnz,
+                                                            d_fux, d_fuy, d_fuz,
+                                                            d_fvx, d_fvy, d_fvz,
+                                                            d_Ttd, d_Tph, d_Tth,
+                                                            d_TargetTh,
+                                                            valid_facets,
+                                                            d_attXmin, d_attXmax,
+                                                            d_attYmin, d_attYmax,
+                                                            d_attZmin, d_attZmax,
+                                                            d_alphas, par.alpha2, nAttenPrisms,
+                                                            d_fRefrEI, d_fRefrEO);
+
+            compRefrEnergyIn<<<numBlocks, blockSize, 0, st>>>(d_Rth, d_Itd, d_Iph,
+                                                            d_Ttd, d_Tth, d_Tph, d_fRfrC,
+                                                            d_fRefrEI, d_fRfrSR,
+                                                            par, valid_facets);
+
+            accumulateTarget<<<numBlocks, blockSize, 0, st>>>(d_refr_phasor, d_refr_rbs,
+                                                            d_Ith, d_Iph, d_Itd,
+                                                            d_Tth, d_Tph, d_Ttd, d_Rth,
+                                                            d_TargetTh, d_fRefrEI, d_fRfrSR,
+                                                            d_fx, d_fy, d_fz,
+                                                            par, valid_facets);
+
+            genPhasorTraceAsync(d_PTtarg[s], d_refr_rbs, d_refr_phasor,
+                                2 * valid_facets, par.nr, st);
+
+            convolvePhasorChirpLinearAsync(d_PTtarg[s], d_refr_chirp, d_Ptarg[s],
+                                        par.nr, par, argv, is, it, st);
+
+            compRefrEnergyOut<<<numBlocks, blockSize, 0, st>>>(d_Itd, d_Iph,
+                                                            d_Ttd, d_Tth, d_Tph,
+                                                            d_fRefrEO, d_fRfrC,
+                                                            par, valid_facets);
+
+            radiateTarget<<<numBlocks, blockSize, 0, st>>>(d_refr_phasor, d_refr_rbs,
+                                                        d_Ith, d_Iph, d_Itd,
+                                                        d_Tth, d_Tph, d_Ttd, d_Rth,
+                                                        d_TargetTh, d_fRefrEO, d_fRfrSR,
+                                                        par, valid_facets);
+
+            genPhasorTraceAsync(d_Psour[s], d_refr_rbs, d_refr_phasor,
+                                2 * valid_facets, par.nr, st);
+
+            convolveComplexAsync(d_Psour[s], d_Ptarg[s], d_refr_temp[s],
+                                d_signalPad[s], d_kernelPad[s],
+                                plans[s], par, st);
+
+            addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize, 0, st>>>(
+                d_refr_sig, d_refr_temp[s], par.nr);
         }
+
+        for (int s = 0; s < Nstreams; s++) {
+            cudaStreamSynchronize(streams[s]);
+        }
+
+
         
         // --- COMBINE INTO OUTPUT SIGNAL AND EXPORT ---
         combineRadarSignals<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refl_sig, d_refr_sig, d_sig, par.nr);

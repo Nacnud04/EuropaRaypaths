@@ -197,6 +197,53 @@ void genPhasorTrace(cuFloatComplex* d_phasorTrace,
 
 }
 
+
+void genPhasorTraceAsync(cuFloatComplex* d_phasorTrace,
+                         short* d_rbs,
+                         cuFloatComplex* d_phasors,
+                         int nfacets, int nr,
+                         cudaStream_t st)
+{
+    thrust::device_ptr<short> keys_begin(d_rbs);
+    thrust::device_ptr<short> keys_end(d_rbs + nfacets);
+    thrust::device_ptr<cuFloatComplex> vals_begin(d_phasors);
+
+    thrust::device_vector<short> sorted_keys(nfacets);
+    thrust::device_vector<cuFloatComplex> sorted_vals(nfacets);
+
+    thrust::copy(thrust::cuda::par.on(st), keys_begin, keys_end, sorted_keys.begin());
+    thrust::copy(thrust::cuda::par.on(st), vals_begin, vals_begin + nfacets, sorted_vals.begin());
+
+    thrust::sort_by_key(thrust::cuda::par.on(st),
+                        sorted_keys.begin(), sorted_keys.end(),
+                        sorted_vals.begin());
+
+    thrust::device_vector<short> unique_keys(nfacets);
+    thrust::device_vector<cuFloatComplex> reduced_vals(nfacets);
+
+    auto new_end = thrust::reduce_by_key(thrust::cuda::par.on(st),
+                                         sorted_keys.begin(), sorted_keys.end(),
+                                         sorted_vals.begin(),
+                                         unique_keys.begin(),
+                                         reduced_vals.begin(),
+                                         thrust::equal_to<short>(),
+                                         cuComplexAdd());
+
+    size_t num_unique = new_end.first - unique_keys.begin();
+
+    thrust::fill(thrust::cuda::par.on(st),
+                 thrust::device_pointer_cast(d_phasorTrace),
+                 thrust::device_pointer_cast(d_phasorTrace) + nr,
+                 make_cuFloatComplex(0.0f, 0.0f));
+
+    thrust::scatter(thrust::cuda::par.on(st),
+                    reduced_vals.begin(), reduced_vals.begin() + num_unique,
+                    unique_keys.begin(),
+                    thrust::device_pointer_cast(d_phasorTrace));
+}
+
+
+
 __device__ float chirp(float cen, float offset, float rng_res) {
     return sinc((cen + offset) / rng_res);
 }
@@ -254,13 +301,22 @@ __global__ void genCenteredChirpPadded(float* d_chirp, float dr, int nr, int pad
 
 
 // Elementwise add: dest += src  (both length N)
+/*
 __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
         dest[i].x += src[i].x;
         dest[i].y += src[i].y;
     }
+}*/
+__global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        atomicAdd(&dest[i].x, src[i].x);
+        atomicAdd(&dest[i].y, src[i].y);
+    }
 }
+
 
 
 void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp, 
@@ -397,6 +453,59 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
     cudaFree(d_PADchirp);
     cudaFree(d_PADphasor);
 }
+
+
+void convolvePhasorChirpLinearAsync(cuFloatComplex* d_phasorTrace, float* d_chirp,
+                                    cuFloatComplex* d_sig, int nr, SimulationParameters par,
+                                    const char* argv[], int is, int it,
+                                    cudaStream_t s)
+{
+    int paddedNr = 2 * nr;
+
+    cuFloatComplex* d_PADchirp;
+    cuFloatComplex* d_PADphasor;
+
+    cudaMallocAsync(&d_PADchirp,  sizeof(cuFloatComplex) * paddedNr, s);
+    cudaMallocAsync(&d_PADphasor,  sizeof(cuFloatComplex) * paddedNr, s);
+
+    cudaMemsetAsync(d_PADchirp, 0, sizeof(cuFloatComplex) * paddedNr, s);
+    cudaMemsetAsync(d_PADphasor, 0, sizeof(cuFloatComplex) * paddedNr, s);
+
+    cudaMemcpyAsync(d_PADphasor, d_phasorTrace,
+                    sizeof(cuFloatComplex) * nr,
+                    cudaMemcpyDeviceToDevice, s);
+
+    int threads = 256;
+    int blocks = (paddedNr + threads - 1) / threads;
+
+    realToComplex<<<blocks, threads, 0, s>>>(d_chirp, d_PADchirp, paddedNr);
+
+    cufftHandle plan;
+    cufftPlan1d(&plan, paddedNr, CUFFT_C2C, 1);
+    cufftSetStream(plan, s);
+
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_PADchirp,  d_PADchirp,  CUFFT_FORWARD);
+
+    complexPointwiseMul<<<blocks, threads, 0, s>>>(d_PADphasor, d_PADchirp, paddedNr);
+
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_INVERSE);
+
+    float scale = 1.0f / paddedNr;
+    scaleComplex<<<blocks, threads, 0, s>>>(d_PADphasor, paddedNr, scale);
+
+    int kernel_center = nr / 2;
+    cudaMemcpyAsync(d_sig, d_PADphasor + kernel_center,
+                    sizeof(cuFloatComplex) * nr,
+                    cudaMemcpyDeviceToDevice, s);
+
+    cufftDestroy(plan);
+    cudaFreeAsync(d_PADchirp, s);
+    cudaFreeAsync(d_PADphasor, s);
+}
+
+
+
 
 
 // reradiation pattern for hertzian dipole

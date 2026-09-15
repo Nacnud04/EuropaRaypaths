@@ -343,3 +343,42 @@ void convolveComplex(cuFloatComplex* d_signal, cuFloatComplex* d_kernel,
 
 }
 
+
+void convolveComplexAsync(cuFloatComplex* d_signal,
+                          cuFloatComplex* d_kernel,
+                          cuFloatComplex* d_output,
+                          cuFloatComplex* d_signalPad,
+                          cuFloatComplex* d_kernelPad,
+                          cufftHandle plan,
+                          SimulationParameters par,
+                          cudaStream_t st)
+{
+    int nrPad = 2 * par.nr - 1;
+    int blocks = (nrPad + THREADS - 1) / THREADS;
+
+    cudaMemsetAsync(d_signalPad, 0, nrPad * sizeof(cuFloatComplex), st);
+    cudaMemsetAsync(d_kernelPad, 0, nrPad * sizeof(cuFloatComplex), st);
+
+    cudaMemcpyAsync(d_signalPad, d_signal,
+                    par.nr * sizeof(cuFloatComplex),
+                    cudaMemcpyDeviceToDevice, st);
+
+    cudaMemcpyAsync(d_kernelPad, d_kernel,
+                    par.nr * sizeof(cuFloatComplex),
+                    cudaMemcpyDeviceToDevice, st);
+
+    cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_kernelPad, d_kernelPad, CUFFT_FORWARD);
+
+    cropSpectrum<<<blocks, THREADS, 0, st>>>(d_kernelPad, nrPad, par.smpl, par.B);
+    complexPointwiseMul<<<blocks, THREADS, 0, st>>>(d_signalPad, d_kernelPad, nrPad);
+
+    cufftExecC2C(plan, d_signalPad, d_signalPad, CUFFT_INVERSE);
+
+    float scale = 1.0f / nrPad;
+    scaleComplex<<<blocks, THREADS, 0, st>>>(d_signalPad, nrPad, scale);
+
+    takeEveryOtherComplex<<<blocks, THREADS, 0, st>>>(d_signalPad, d_output, par.nr);
+}
+
+
