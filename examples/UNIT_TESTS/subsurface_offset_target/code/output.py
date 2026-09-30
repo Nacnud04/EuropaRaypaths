@@ -113,9 +113,9 @@ z = np.linspace(0, np.radians(20), 500)
 
 f = refracted_angle(z, xoff, h[0], 250, 3.15)
 
-plt.plot(np.degrees(z), f)
-plt.axhline(0, color='k')
-plt.show()
+#plt.plot(np.degrees(z), f)
+#plt.axhline(0, color='k')
+#plt.show()
 
 for d, c, cont in zip(depths, colors, contrast):
 
@@ -178,8 +178,8 @@ for d, c, cont in zip(depths, colors, contrast):
 
     plt.xlim(h[-1]/1e3, h[0]/1e3)
     plt.savefig(f"figures/SubsurfaceFacet{d:04d}.png", dpi=300)
-
-    plt.close()
+    plt.show()
+    #plt.close()
 
 #fig, ax = plt.subplots(figsize=(8, 5))
 fig, ax = plt.subplots(figsize=(10, 8))
@@ -187,6 +187,9 @@ fig, ax = plt.subplots(figsize=(10, 8))
 ax.set_xlim(h[-1]/1e3, h[0]/1e3)
 
 for d, c, cont in zip(depths, colors, contrast):
+
+    if d != 5000 and d != 250:
+        continue
 
     ana_phse = get_target_phase(params, h, d, xoff)
 

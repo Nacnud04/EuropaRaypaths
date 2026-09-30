@@ -582,3 +582,40 @@ __global__ void compRefrEnergyOut(float* d_Itd, float* d_Iph,
     }
 
 }
+
+
+__global__ void findTargetsInAperture(float* d_tx, float* d_ty, float* d_tz,
+                                      float sx, float sy, float sz,
+                                      float snx, float sny, float snz,
+                                      bool* tInApt,
+                                      float aperture, int nTargets) {
+    
+    int it = blockIdx.x * blockDim.x + threadIdx.x;
+    if (it < nTargets) {
+
+        // get source target distance
+        float tvc_x = d_tx[it] - sx;
+        float tvc_y = d_ty[it] - sy;
+        float tvc_z = d_tz[it] - sz;
+        float tvc_mag = vectorMagnitude(tvc_x, tvc_y, tvc_z);
+
+        // normalize components
+        tvc_x /= tvc_mag;
+        tvc_y /= tvc_mag;
+        tvc_z /= tvc_mag;
+
+        // get the angle between the source normal and target vector
+        float th_target = angleSourceNormTargetPos(
+                            -1*snx, -1*sny, -1*snz,
+                            tvc_x, tvc_y, tvc_z
+                          );
+
+        // update mask
+        if (th_target <= (pi / 180) * aperture) {
+            tInApt[it] = true;
+        } else {
+            tInApt[it] = false;
+        }
+
+    }
+}

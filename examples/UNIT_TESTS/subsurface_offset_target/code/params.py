@@ -51,7 +51,6 @@ for depth in tdepths:
     pg.export_params(params, f"params_{abs(int(depth)):04d}")
 
 ss.make_surface(params, "flat", f"inputs/facets.fct")
-#ss.make_target_array(params, "flat", f"inputs/layer.txt", zoffset=-0.5e3)
 
 # --- MAKE SOURCE PATH ---
 

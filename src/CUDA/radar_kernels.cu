@@ -10,11 +10,9 @@
  *    File providing CUDA functions relevant to radar signal generation
  *
  * Contents:
- *    - reflRdrSignal: Kernel to compute reflected radar signal
- *    - refrRdrSignal: Kernel to compute refracted radar signal
+
  *    - rerad_funct:   Device function for target reradiation behavior
- *    - reradiate_index: Device function for target reradiation index mapping
- *    - combineRadarSignals: Kernel to sum reflected and refracted signals
+ *    - reradiate_index: Device function for target reradiatiacted signals
  *    - genReflPhasor: Kernel to generate reflection phasors
  *    - genRefrPhasor: Kernel to generate refraction phasors
  *    - genPhasorTrace: Function to bin phasors into range bins
@@ -50,113 +48,6 @@
 // FFT for chirp convolution
 #include <cufft.h>
 
-
-// Tile size for range bins processed per-block in shared memory
-#define REFL_TILE_NR 128
-#define sqrt2pi 2.506628275f
-
-__global__ void reflRadarSignal(float* d_SltRng, float* d_fRe,
-                                cuFloatComplex* refl_sig, float r0, float dr, int nr,
-                                float range_res, float lam, int nfacets) {
-
-
-    // Each block processes a contiguous tile of range bins. For each bin we
-    // perform a block-level reduction: each thread computes a partial sum over
-    // its assigned facets, then we reduce within warps using shuffles and
-    // across warps using a small shared-memory array. Finally thread 0 in the
-    // block does one atomicAdd into global memory per bin. This removes the
-    // many atomic operations per-facet and drastically reduces contention.
-
-    extern __shared__ float s_mem[]; // sized by launcher; we use it for warp partials
-    // layout: s_mem[0..maxWarps-1] = real partials per-warp
-    //         s_mem[REFL_TILE_NR .. REFL_TILE_NR+maxWarps-1] = imag partials
-    float* s_warp_real = s_mem;
-    float* s_warp_imag = s_mem + REFL_TILE_NR; // safe because launcher provides >= REFL_TILE_NR
-
-    int tid = threadIdx.x;
-    int id = blockIdx.x * blockDim.x + tid;
-    int stride = blockDim.x * gridDim.x;
-
-    const unsigned warpMask = 0xffffffffu;
-    int lane = tid & 31;
-    int warpId = tid >> 5;
-    int numWarps = (blockDim.x + 31) / 32;
-
-    for (int tileStart = 0; tileStart < nr; tileStart += REFL_TILE_NR) {
-
-        int tileSize = min(REFL_TILE_NR, nr - tileStart);
-
-        for (int ti = 0; ti < tileSize; ++ti) {
-
-            int ir = tileStart + ti;
-
-            // each thread computes partial sum for this bin across its facets
-            float acc_re = 0.0f;
-            float acc_im = 0.0f;
-
-            // iterate facets assigned to this thread
-            for (int fid = id; fid < nfacets; fid += stride) {
-                float sRng = d_SltRng[fid];
-                float fRe = d_fRe[fid];
-
-                float r = r0 + ir * dr;
-                float delta_r = (r - sRng) / range_res;
-
-                float phase = (4.0f * 3.14159265f / lam) * sRng;
-                float c, s;
-                sincosf(phase, &s, &c);
-                cuFloatComplex phase_exp = make_cuFloatComplex(c, s);
-
-                float scale_val = sinc(delta_r);
-                cuFloatComplex contrib = cuCmulf(phase_exp, make_cuFloatComplex(scale_val * fRe, 0.0f));
-                acc_re += cuCrealf(contrib);
-                acc_im += cuCimagf(contrib);
-            }
-
-            // warp-level reduction using shuffle
-            for (int offset = 16; offset > 0; offset >>= 1) {
-                float cre = __shfl_down_sync(warpMask, acc_re, offset);
-                float cim = __shfl_down_sync(warpMask, acc_im, offset);
-                acc_re += cre;
-                acc_im += cim;
-            }
-
-            // lane 0 of each warp writes its partial to shared memory
-            if (lane == 0) {
-                s_warp_real[warpId] = acc_re;
-                s_warp_imag[warpId] = acc_im;
-            }
-            __syncthreads();
-
-            // reduce the warp partials using first warp
-            float block_re = 0.0f;
-            float block_im = 0.0f;
-            if (warpId == 0) {
-                // each thread in warp 0 loads one warp partial (if within numWarps)
-                int idx = lane;
-                if (idx < numWarps) {
-                    block_re = s_warp_real[idx];
-                    block_im = s_warp_imag[idx];
-                }
-
-                // reduce across lanes of warp 0
-                for (int offset = 16; offset > 0; offset >>= 1) {
-                    float cre = __shfl_down_sync(warpMask, block_re, offset);
-                    float cim = __shfl_down_sync(warpMask, block_im, offset);
-                    block_re += cre;
-                    block_im += cim;
-                }
-
-                // lane 0 now has the block's total for this bin
-                if (lane == 0) {
-                    atomicAdd(&(refl_sig[ir].x), block_re);
-                    atomicAdd(&(refl_sig[ir].y), block_im);
-                }
-            }
-            __syncthreads();
-        }
-    }
-}
 
 // -- TARGET RERADIATION FUNCTIONS ---
 // 0 = return all energy (corner reflector)
@@ -195,110 +86,6 @@ __device__ int reradiate_index(int id0)
  }
 
 
-// Tile size reuse for refracted signal
-#define REFR_TILE_NR 128
-
-__global__ void refrRadarSignal(float* d_SltRng, float* d_Ttd, float* d_Tth, 
-                                float* d_fReflEI, float* d_fReflEO,
-                                cuFloatComplex* refr_sig, 
-                                float r0, float dr, int nr, float c, float c2, int target_fun,
-                                float range_res, float P, float G, float fs, float lam, int nfacets) {
-
-    // Similar block-level reduction as in reflRadarSignal. Each block will
-    // compute a partial sum per range-bin and perform a single atomicAdd per
-    // bin when flushing to global memory.
-
-    extern __shared__ float s_mem2[]; // provided by launcher; reused for warp partials
-    float* s_warp_real = s_mem2;
-    float* s_warp_imag = s_mem2 + REFR_TILE_NR;
-
-    int tid = threadIdx.x;
-    int id0 = blockIdx.x * blockDim.x + tid;
-    int stride = blockDim.x * gridDim.x;
-
-    const unsigned warpMask = 0xffffffffu;
-    int lane = tid & 31;
-    int warpId = tid >> 5;
-    int numWarps = (blockDim.x + 31) / 32;
-
-    for (int tileStart = 0; tileStart < nr; tileStart += REFR_TILE_NR) {
-
-        int tileSize = min(REFR_TILE_NR, nr - tileStart);
-
-        for (int ti = 0; ti < tileSize; ++ti) {
-
-            int ir = tileStart + ti;
-
-            float acc_re = 0.0f;
-            float acc_im = 0.0f;
-
-            // accumulate over facets assigned to this thread
-            for (int fid = id0; fid < nfacets; fid += stride) {
-                int fid1 = reradiate_index(fid);
-
-                float sltrng = (d_SltRng[fid] + d_SltRng[fid1]) * 0.5f;
-                
-                float reradConst = rerad_funct(target_fun, d_Tth[fid], d_Tth[fid1]) * d_fReflEI[fid] * d_fReflEO[fid1];
-                reradConst = reradConst * radarEq(P, G, fs, lam, sltrng, nfacets);
-
-                // slantrange equivalent time
-                float rngt = (sltrng - d_Ttd[fid]) + d_Ttd[fid] * (c / c2); 
-
-                float r = r0 + ir * dr;
-                float delta_r = (r - (rngt)) / range_res;
-
-                float phase = (4.0f * 3.14159265f / lam) * rngt;
-                float c, s;
-                sincosf(phase, &s, &c);
-                cuFloatComplex phase_exp = make_cuFloatComplex(c, s);
-
-                float scale_val = sinc(delta_r);
-                cuFloatComplex contrib = cuCmulf(phase_exp, make_cuFloatComplex(scale_val * reradConst, 0.0f));
-                acc_re += cuCrealf(contrib);
-                acc_im += cuCimagf(contrib);
-            }
-
-            // warp-level reduction
-            for (int offset = 16; offset > 0; offset >>= 1) {
-                float cre = __shfl_down_sync(warpMask, acc_re, offset);
-                float cim = __shfl_down_sync(warpMask, acc_im, offset);
-                acc_re += cre;
-                acc_im += cim;
-            }
-
-            if (lane == 0) {
-                s_warp_real[warpId] = acc_re;
-                s_warp_imag[warpId] = acc_im;
-            }
-            __syncthreads();
-
-            // reduce across warps in warp 0
-            float block_re = 0.0f;
-            float block_im = 0.0f;
-            if (warpId == 0) {
-                int idx = lane;
-                if (idx < numWarps) {
-                    block_re = s_warp_real[idx];
-                    block_im = s_warp_imag[idx];
-                }
-                for (int offset = 16; offset > 0; offset >>= 1) {
-                    float cre = __shfl_down_sync(warpMask, block_re, offset);
-                    float cim = __shfl_down_sync(warpMask, block_im, offset);
-                    block_re += cre;
-                    block_im += cim;
-                }
-                if (lane == 0) {
-                    atomicAdd(&(refr_sig[ir].x), block_re);
-                    atomicAdd(&(refr_sig[ir].y), block_im);
-                }
-            }
-            __syncthreads();
-        }
-    }
-
-}
-
-
 __global__ void combineRadarSignals(cuFloatComplex* refl_sig, cuFloatComplex* refr_sig,
                                     cuFloatComplex* total_sig, int nr) {
 
@@ -308,43 +95,6 @@ __global__ void combineRadarSignals(cuFloatComplex* refl_sig, cuFloatComplex* re
         total_sig[ir] = cuCaddf(refl_sig[ir], refr_sig[ir]);
 
     }
-}
-
-
-__global__ void genReflPhasor(cuFloatComplex* refl_phasor, short* refl_rbs, 
-                              float* d_fReflE, float* d_SltRng, 
-                              float lam, float range_res, int nfacets,
-                              float rst, float dr, int nr) {
-
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (id < nfacets) {
-
-        // evaluate the phasor exponent
-        float phase = (4.0f * 3.14159265f / lam) * d_SltRng[id];
-        
-        // exponentiate
-        float c, s;
-        sincosf(phase, &s, &c);
-        cuFloatComplex phasor = make_cuFloatComplex(c, s);
-
-        // scale by the coefficient
-        refl_phasor[id] = cuCmulf(phasor, make_cuFloatComplex(d_fReflE[id], 0.0f));
-
-        // compute the best range bin based on slant range
-        short bin = (short)((d_SltRng[id] - rst) / dr);
-
-        // if bin is out of range, set to bin 0, and zero the phasor
-        if ((bin < 0) || (bin >= nr)) {
-            bin = 0;
-            refl_phasor[id] = make_cuFloatComplex(0.0f, 0.0f);
-        }
-
-        // move bin into array
-        refl_rbs[id] = bin;
-
-    }
-
 }
 
 
@@ -447,6 +197,53 @@ void genPhasorTrace(cuFloatComplex* d_phasorTrace,
 
 }
 
+
+void genPhasorTraceAsync(cuFloatComplex* d_phasorTrace,
+                         short* d_rbs,
+                         cuFloatComplex* d_phasors,
+                         int nfacets, int nr,
+                         cudaStream_t st)
+{
+    thrust::device_ptr<short> keys_begin(d_rbs);
+    thrust::device_ptr<short> keys_end(d_rbs + nfacets);
+    thrust::device_ptr<cuFloatComplex> vals_begin(d_phasors);
+
+    thrust::device_vector<short> sorted_keys(nfacets);
+    thrust::device_vector<cuFloatComplex> sorted_vals(nfacets);
+
+    thrust::copy(thrust::cuda::par.on(st), keys_begin, keys_end, sorted_keys.begin());
+    thrust::copy(thrust::cuda::par.on(st), vals_begin, vals_begin + nfacets, sorted_vals.begin());
+
+    thrust::sort_by_key(thrust::cuda::par.on(st),
+                        sorted_keys.begin(), sorted_keys.end(),
+                        sorted_vals.begin());
+
+    thrust::device_vector<short> unique_keys(nfacets);
+    thrust::device_vector<cuFloatComplex> reduced_vals(nfacets);
+
+    auto new_end = thrust::reduce_by_key(thrust::cuda::par.on(st),
+                                         sorted_keys.begin(), sorted_keys.end(),
+                                         sorted_vals.begin(),
+                                         unique_keys.begin(),
+                                         reduced_vals.begin(),
+                                         thrust::equal_to<short>(),
+                                         cuComplexAdd());
+
+    size_t num_unique = new_end.first - unique_keys.begin();
+
+    thrust::fill(thrust::cuda::par.on(st),
+                 thrust::device_pointer_cast(d_phasorTrace),
+                 thrust::device_pointer_cast(d_phasorTrace) + nr,
+                 make_cuFloatComplex(0.0f, 0.0f));
+
+    thrust::scatter(thrust::cuda::par.on(st),
+                    reduced_vals.begin(), reduced_vals.begin() + num_unique,
+                    unique_keys.begin(),
+                    thrust::device_pointer_cast(d_phasorTrace));
+}
+
+
+
 __device__ float chirp(float cen, float offset, float rng_res) {
     return sinc((cen + offset) / rng_res);
 }
@@ -504,13 +301,22 @@ __global__ void genCenteredChirpPadded(float* d_chirp, float dr, int nr, int pad
 
 
 // Elementwise add: dest += src  (both length N)
+/*
 __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
         dest[i].x += src[i].x;
         dest[i].y += src[i].y;
     }
+}*/
+__global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
+        atomicAdd(&dest[i].x, src[i].x);
+        atomicAdd(&dest[i].y, src[i].y);
+    }
 }
+
 
 
 void convolvePhasorChirp(cuFloatComplex* d_phasorTrace, float* d_chirp, 
@@ -649,6 +455,59 @@ void convolvePhasorChirpLinear(cuFloatComplex* d_phasorTrace, float* d_chirp,
 }
 
 
+void convolvePhasorChirpLinearAsync(cuFloatComplex* d_phasorTrace, float* d_chirp,
+                                    cuFloatComplex* d_sig, int nr, SimulationParameters par,
+                                    const char* argv[], int is, int it,
+                                    cudaStream_t s)
+{
+    int paddedNr = 2 * nr;
+
+    cuFloatComplex* d_PADchirp;
+    cuFloatComplex* d_PADphasor;
+
+    cudaMallocAsync(&d_PADchirp,  sizeof(cuFloatComplex) * paddedNr, s);
+    cudaMallocAsync(&d_PADphasor,  sizeof(cuFloatComplex) * paddedNr, s);
+
+    cudaMemsetAsync(d_PADchirp, 0, sizeof(cuFloatComplex) * paddedNr, s);
+    cudaMemsetAsync(d_PADphasor, 0, sizeof(cuFloatComplex) * paddedNr, s);
+
+    cudaMemcpyAsync(d_PADphasor, d_phasorTrace,
+                    sizeof(cuFloatComplex) * nr,
+                    cudaMemcpyDeviceToDevice, s);
+
+    int threads = 256;
+    int blocks = (paddedNr + threads - 1) / threads;
+
+    realToComplex<<<blocks, threads, 0, s>>>(d_chirp, d_PADchirp, paddedNr);
+
+    cufftHandle plan;
+    cufftPlan1d(&plan, paddedNr, CUFFT_C2C, 1);
+    cufftSetStream(plan, s);
+
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_FORWARD);
+    cufftExecC2C(plan, d_PADchirp,  d_PADchirp,  CUFFT_FORWARD);
+
+    complexPointwiseMul<<<blocks, threads, 0, s>>>(d_PADphasor, d_PADchirp, paddedNr);
+
+    cufftExecC2C(plan, d_PADphasor, d_PADphasor, CUFFT_INVERSE);
+
+    float scale = 1.0f / paddedNr;
+    scaleComplex<<<blocks, threads, 0, s>>>(d_PADphasor, paddedNr, scale);
+
+    int kernel_center = nr / 2;
+    cudaMemcpyAsync(d_sig, d_PADphasor + kernel_center,
+                    sizeof(cuFloatComplex) * nr,
+                    cudaMemcpyDeviceToDevice, s);
+
+    cufftDestroy(plan);
+    cudaFreeAsync(d_PADchirp, s);
+    cudaFreeAsync(d_PADphasor, s);
+}
+
+
+
+
+
 // reradiation pattern for hertzian dipole
 __device__ float hertz_dipole(float th) {
     return 1.5 * powf(sinf(th), 2);
@@ -711,7 +570,7 @@ __device__ cuFloatComplex randomPhasor(int seed) {
 }
 
 // function to generate surface phasor trace
-__global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph, float* d_Itd,
+__global__ void surfacePT(cuFloatComplex* d_refl_P, short* d_refl_rbs, float* d_Ith, float* d_Iph, float* d_Itd,
                           float* d_fReflE, SimulationParameters par, int nfacets) {
 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -751,12 +610,11 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor_val, make_cuFloatComplex(sqrtf(Psrc), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_Psurface[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_Psurface[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refl_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refl_rbs[2 * id] = bin;
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_Psurface[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_Psurface[bin+1].y), contrib.y * bin_float); // add imag components together
-
+            d_refl_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refl_rbs[(2 * id) + 1] = bin + 1;
         }
 
     }
@@ -764,7 +622,7 @@ __global__ void surfacePT(cuFloatComplex* d_Psurface, float* d_Ith, float* d_Iph
 }
 
 // this function sums input ray weights to get current the target
-__global__ void accumulateTarget(cuFloatComplex* d_PTarget, 
+__global__ void accumulateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs, 
                                  float* d_Ith, float* d_Iph, float* d_Itd,
                                  float* d_Tth, float* d_Tph, float* d_Ttd, 
                                  float* d_Rth,
@@ -777,8 +635,8 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
     if (id < nfacets) {
         
         // find the gain in the inbound ray direction
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
-	//float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
+	    float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
 
         float n = sqrtf(par.eps_2);
 
@@ -803,14 +661,6 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
         short bin = (short)((rngt - par.rst) / par.dr);
         float bin_float = ((rngt - par.rst) / par.dr) - (int)bin;
 
-        // print phasor info
-        //if (abs(d_Tth[id] - d_Ith[id]) < 0.000001f) {
-        //if (abs(d_Tth[id] - 0.0208303) < 0.00001f) {
-        //if (abs(d_fx[id] - 103.333f) < 0.1f && d_fy[id] == 0) {
-        //if (Pray > 4.6057e-14) {
-        //    printf("Facet %d: f_loc=(%.3f, %.3f, %.3f), Itd=%.2f, Ttd=%.2f, G_T=%.6f, G_Fin=%.6f, G_Fout=%.6f, rngt=%.2f, pray=%.6e\n", id, d_fx[id], d_fy[id], d_fz[id], d_Itd[id], d_Ttd[id], G_dipole, G_fin, G_fout, rngt, Pray);
-        //}
-
         // atomic add into range bin
         if ((bin < 0) || (bin >= par.nr)) {
             // out of range, do nothing
@@ -818,11 +668,11 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_PTarget[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_PTarget[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refr_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refr_rbs[2 * id] = bin;
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_PTarget[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_PTarget[bin+1].y), contrib.y * bin_float); // add imag components together
+            d_refr_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refr_rbs[(2 * id) + 1] = bin + 1;
         }
 
     }
@@ -831,7 +681,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_PTarget,
 
 
 // radiate target outward and compute power received at source
-__global__ void radiateTarget(cuFloatComplex* d_Psource, 
+__global__ void radiateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs, 
                               float* d_Ith, float* d_Iph, float* d_Itd,
                               float* d_Tth, float* d_Tph, float* d_Ttd,
                               float* d_Rth,
@@ -848,8 +698,8 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
 
         // --- TARGET -> FACET ---
         
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
-	//float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
+	    float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
 
         float n = sqrtf(par.eps_2);
 
@@ -878,13 +728,16 @@ __global__ void radiateTarget(cuFloatComplex* d_Psource,
         } else {
             // if within range take phasor and multiply by power contribution
             cuFloatComplex contrib = cuCmulf(phasor(rngt - (par.lam / 2.0f), par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
-            //cuFloatComplex contrib = cuCmulf(phasor(rngt, par.lam), make_cuFloatComplex(sqrtf(Pray * n), 0.0f));
             // add contribution into starting range bin
-            atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
+            d_refr_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
+            d_refr_rbs[2 * id] = bin;
+            //atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
+            //atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
             // add remaining contribution into adjcacent range bin
-            atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
-            atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
+            d_refr_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
+            d_refr_rbs[(2 * id) + 1] = bin + 1;
+            //atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
+            //atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
         }
 
     }
