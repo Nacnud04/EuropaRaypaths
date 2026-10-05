@@ -423,6 +423,10 @@ __device__ float effectiveArea(float G, float lam) {
     return G * ((lam * lam) / (4 * 3.14159));
 }
 
+__host__   float fresnelAngle(float lam, float h) {
+    return atanf(sqrtf(lam/(2*h)));
+}
+
 __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
                                     float* d_fRe, float* d_Rth, float* d_fRfrC,
                                     SimulationParameters par, int nfacets){

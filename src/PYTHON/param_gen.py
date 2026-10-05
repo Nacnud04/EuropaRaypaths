@@ -128,9 +128,12 @@ def gen_params(platform, media, domainpar, recpar, sourcepar, par=None):
 
     return pars
 
-def vert_source_path(params, minZ, maxZ, filename, direct="inputs", xoff=0, yoff=0):
+def vert_source_path(params, minZ, maxZ, filename, direct="inputs", xoff=0, yoff=0, log=False):
 
-    sz = np.linspace(minZ, maxZ, params['ns'])
+    if log:
+        sz = np.logspace(np.log10(minZ), np.log10(maxZ), params['ns'])
+    else:
+        sz = np.linspace(minZ, maxZ, params['ns'])
     sy = np.zeros_like(sz) + yoff
     sx = np.zeros_like(sz) + xoff
 

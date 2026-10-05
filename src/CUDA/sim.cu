@@ -640,6 +640,13 @@ int main(int argc, const char* argv[])
             par.rst = rx_window_pos[is];
         }
 
+        // update aperture if restricting to fresnel zone
+        // set fresnel zone based on the center of the range window
+        if (par.fresnel) {
+            par.aperture = (180/3.141596238) * fresnelAngle(par.lam, par.rst + 0.5 * par.nr * par.dr);
+	    //std::cout << "Modifying aperture to: " << par.aperture << std::endl;
+	}
+
         // update gains
         if (gainPatternProvided) {
             par.Grefl_lin = powf(10.0f, h_gRefl[is]/10.0f);
@@ -768,95 +775,6 @@ int main(int argc, const char* argv[])
 
         // copy target mask to host
         cudaMemcpy(h_tInApt, d_tInApt, ntargets * sizeof(bool), cudaMemcpyDeviceToHost);
-        /*
-        for (int it=0; it<ntargets; it++) {
-
-            // check if target is within aperture
-            if (!h_tInApt[it]) {
-                continue;
-            }
-
-            cudaMemsetAsync(d_PTtarg, 0, par.nr * sizeof(cuFloatComplex));
-            cudaMemsetAsync(d_Ptarg, 0, par.nr * sizeof(cuFloatComplex));
-            cudaMemsetAsync(d_Psour, 0, par.nr * sizeof(cuFloatComplex));
-            cudaMemsetAsync(d_PTTmp, 0, par.nr * sizeof(cuFloatComplex));
-
-            // --- FORCED RAY TO TARGET COMP ---
-            // this is also when we compute the attenuation
-            compTargetRays<<<numBlocks, blockSize>>>(h_tx[it], h_ty[it], h_tz[it],
-                                                    h_tnx[it], h_tny[it], h_tnz[it],
-                                                    d_fx,  d_fy,  d_fz,
-                                                    d_fnx, d_fny, d_fnz,
-                                                    d_fux, d_fuy, d_fuz,
-                                                    d_fvx, d_fvy, d_fvz,
-                                                    d_Ttd, d_Tph, d_Tth,
-                                                    d_TargetTh,
-                                                    valid_facets, 
-                                                    d_attXmin, d_attXmax,
-                                                    d_attYmin, d_attYmax,
-                                                    d_attZmin, d_attZmax,
-                                                    d_alphas, par.alpha2, nAttenPrisms,
-                                                    d_fRefrEI, d_fRefrEO);
-            checkCUDAError("compTargetRays kernel");
-
-            // --- CONSTRUCT REFRACTED WEIGHTS INWARDS ---
-            compRefrEnergyIn<<<numBlocks, blockSize>>>(d_Rth, d_Itd, d_Iph,
-                                                    d_Ttd, d_Tth, d_Tph, d_fRfrC,
-                                                    d_fRefrEI, d_fRfrSR,
-                                                    par, valid_facets);
-            checkCUDAError("compRefrEnergyIn kernel");
-            
-            // --- CALCULATE POWER AT TARGET ---
-            // this is the inward phasor trace
-            accumulateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs, 
-                                                        d_Ith, d_Iph, d_Itd,
-                                                        d_Tth, d_Tph, d_Ttd, d_Rth,
-                                                        d_TargetTh, d_fRefrEI, d_fRfrSR,
-                                                        d_fx, d_fy, d_fz,
-                                                        par, valid_facets);
-            cudaDeviceSynchronize();
-            checkCUDAError("accumulateTarget kernel");
-            genPhasorTrace(d_PTtarg, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
-            checkCUDAError("genPhasorTrace Refracted process 1");
-            convolvePhasorChirpLinear(d_PTtarg, d_refr_chirp, d_Ptarg, par.nr, par, argv, is, it);
-
-            // --- COMPUTE UPWARD TRANSMITTED RAYS ---
-            compRefrEnergyOut<<<numBlocks, blockSize>>>(d_Itd, d_Iph,
-                                                        d_Ttd, d_Tth, d_Tph, 
-                                                        d_fRefrEO, d_fRfrC, 
-                                                        par, valid_facets);
-            checkCUDAError("compRefrEnergyOut kernel");
-            
-            // --- CALCULATE OUTWARD PHASOR TRACE ---
-            radiateTarget<<<numBlocks, blockSize>>>(d_refr_phasor, d_refr_rbs,
-                                                    d_Ith, d_Iph, d_Itd,
-                                                    d_Tth, d_Tph, d_Ttd, d_Rth,
-                                                    d_TargetTh, d_fRefrEO, d_fRfrSR,
-                                                    par, valid_facets);
-            cudaDeviceSynchronize();
-            checkCUDAError("radiateTarget kernel");
-            genPhasorTrace(d_Psour, d_refr_rbs, d_refr_phasor, 2 * valid_facets, par.nr);
-            checkCUDAError("genPhasorTrace Refracted process 2");
-
-            
-            // --- CONVOLVE INTO FULL PHASOR TRACE ---
-            //convolveComplex(d_Psour, d_Ptarg, d_PTTmp, par.nr);
-            convolveComplex(d_Psour, d_Ptarg, d_refr_temp, par, argv, is, it);
-            checkCUDAError("convolveComplexSquare kernel");
-            cudaDeviceSynchronize();
-
-
-            // accumulate this target's contribution into the running sum
-            addComplexArrays<<<(par.nr + blockSize - 1) / blockSize, blockSize>>>(d_refr_sig, d_refr_temp, par.nr);
-            checkCUDAError("addComplexArrays accumulate refracted target");
-
-            if (par.debug_surface) {
-                debugSaveSignal(argv[4], "Ptarg", is, it, d_Ptarg, par.nr, 1);
-                debugSaveSignal(argv[4], "Psour", is, it, d_Psour, par.nr, 1);
-                debugSaveSignal(argv[4], "PTTmp", is, it, d_refr_temp, par.nr, 1);
-            }
-            
-        }*/
 
         for (int it = 0; it < ntargets; it++) {
             if (!h_tInApt[it]) continue;
