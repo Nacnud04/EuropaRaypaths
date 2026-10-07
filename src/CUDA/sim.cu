@@ -644,7 +644,6 @@ int main(int argc, const char* argv[])
         // set fresnel zone based on the center of the range window
         if (par.fresnel) {
             par.aperture = (180/3.141596238) * fresnelAngle(par.lam, par.rst + 0.5 * par.nr * par.dr);
-	    //std::cout << "Modifying aperture to: " << par.aperture << std::endl;
 	}
 
         // update gains

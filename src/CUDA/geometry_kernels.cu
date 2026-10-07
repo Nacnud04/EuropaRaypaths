@@ -434,25 +434,9 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nfacets) {
 
-        if (par.specular) {
+        d_fRe[idx] = 1;
 
-            // first get facet reradiation
-            // we double inclination angle to as the center of the beam pattern is in the
-            // exact opposite direction as the incident ray. 
-            d_fRe[idx] = facetReradiation(d_Itd[idx], 2*d_Ith[idx], -1*d_Iph[idx], par.lam, par.fs);
-
-            // losses from radar equation
-            // since we are working with coherent energy we need to square the number of
-            // illuminated facets. We can do this by multiplying the radar equation by
-            // nfacets
-            d_fRe[idx] = d_fRe[idx] * radarEq(par.P, par.Grefl_lin, par.fs, par.lam, d_Itd[idx], nfacets);
-
-        } else {
-            // ignores facet reradiation and radar equation
-            // these are included later in the "surfacePT" kernel
-            d_fRe[idx] = 1;
-        }
-
+    /*
         // reflection coefficient
         // horizontal pol.
         float rho;
@@ -481,7 +465,7 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRe[idx] = d_fRe[idx] * atm_atten;
         // account for atmospheric attenuation for the subsurface ray weights
         d_fRfrC[idx] = d_fRfrC[idx] * atm_atten;
-
+	*/
         // surface roughness losses
         float rough_loss = expf(-4*((par.ks*cosGPU(d_Ith[idx]))*(par.ks*cosGPU(d_Ith[idx]))));
         d_fRe[idx] = d_fRe[idx] * rough_loss;
