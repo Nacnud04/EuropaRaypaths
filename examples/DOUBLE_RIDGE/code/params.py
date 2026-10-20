@@ -53,8 +53,8 @@ domainpar = {
 }
 
 recpar = {
-    "rx_window_m": 3e3,         # receive window size [m]
-    "rx_sample_rate": 30e6,       # receive sample rate [Hz]
+    "rx_window_m": 7e3,         # receive window size [m]
+    "rx_sample_rate": 20e6,       # receive sample rate [Hz]
     "rx_window_offset_m": 24e3,
 }
 
@@ -69,6 +69,7 @@ sourcepar = {
 
 otherpar = {
     "lossless": True,
+    "disable_surface": True
 }
 
 params = pg.gen_params("REASON_VHF", "planetary_ice", domainpar, recpar, sourcepar, par=otherpar)

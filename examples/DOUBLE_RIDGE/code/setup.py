@@ -65,7 +65,7 @@ ZZ               = np.zeros_like(XX)
 
 # --- GENERATE FRACTAL ROUGHNESS ---
 
-noise = TPLStable(dim=2, hurst=hurst, len_scale=length_scl, var=chaos_variance)
+noise = TPLStable(dim=2, hurst=hurst, len_scale=length_scl, var=chaos_variance/100)
 
 nSml = SRF(noise, mean=0.0, seed=rough_seed)
 surface_rough = nSml((ys, xs), mesh_type="structured")
@@ -74,7 +74,7 @@ surface_rough = nSml((ys, xs), mesh_type="structured")
 # --- TURN INTO HEIGHT FIELD ---
 
 # first start with matrix
-ZZ = height_mean + surface_rough
+ZZ = height_mean + surface_rough * 0
 
 
 # --- ADD DOUBLE RIDGE ---
@@ -105,20 +105,104 @@ ZZ = ZZ + ridge_profile
 
 # --- MAKE SUBSURFACE FISSURE ---
 
+target_size = 200
+
 frac_TPL = TPLStable(dim=1, hurst=0.5, len_scale=4000, var=50000)
 nSml = SRF(frac_TPL, mean=0.0, seed=rough_seed+1)
 
-frac_depths = np.arange(-4000, 0, facet_size)
-fracture_path = nSml(frac_depths, mesh_type="structured")
-# move start to center of double ridge
-fracture_path -= fracture_path[-1]
 
-plt.plot(xs, ZZ[Nfct_y//2, :], color="black", label="Surface profile")
-plt.plot(fracture_path, frac_depths, color="blue", label="Subsurface fracture")
-plt.xlabel("X [m]")
-plt.ylabel("Height [m]")
-plt.legend()
+frac_depths = np.arange(0, -4000, -1 * target_size)
+fracture_path = nSml(frac_depths, mesh_type="structured")
+
+# move start to center of double ridge
+fracture_path -= fracture_path[0]
+
+# x(z) profile
+dx_dz = np.diff(fracture_path) / np.diff(frac_depths)
+
+# 3D normals for a y-invariant fracture surface:
+# tangent in x-z is (dx/dz, 1), so a normal is (1, 0, -dx/dz)
+norms = np.sqrt(1 + dx_dz**2)
+
+n_hat = np.zeros((len(dx_dz), 3))
+n_hat[:, 0] = 1.0 / norms      # x
+n_hat[:, 1] = 0.0              # y
+n_hat[:, 2] = -dx_dz / norms   # z
+
+# midpoint locations of each facet
+x_mid = 0.5 * (fracture_path[:-1] + fracture_path[1:])
+z_mid = 0.5 * (frac_depths[:-1] + frac_depths[1:])
+
+# draw short normal "hairs" in x-z projection
+hair_len = 200.0  # meters
+
+fig, ax = plt.subplots()
+
+ax.plot(xs, ZZ[Nfct_y//2, :], color="black", label="Surface profile")
+ax.plot(fracture_path, frac_depths, color="blue", label="Subsurface fracture")
+
+for xm, zm, nx, nz in zip(x_mid, z_mid, n_hat[:, 0], n_hat[:, 2]):
+    ax.plot(
+        [xm - 0.5 * hair_len * nx, xm + 0.5 * hair_len * nx],
+        [zm - 0.5 * hair_len * nz, zm + 0.5 * hair_len * nz],
+        color="red", linewidth=0.8
+    )
+
+ax.set_xlabel("X [m]")
+ax.set_ylabel("Height [m]")
+ax.set_aspect("equal", adjustable="box")
+ax.legend()
 plt.show()
+
+# export fracture info
+def export_fracture_plane(
+    fracture_path,
+    frac_depths,
+    n_hat,
+    y_values,
+    filename="fracture_plane.txt",
+):
+    # Facet midpoints in x-z
+    x_mid = 0.5 * (fracture_path[:-1] + fracture_path[1:])
+    z_mid = 0.5 * (frac_depths[:-1] + frac_depths[1:])
+
+    # Repeat along y
+    x_rep = np.tile(x_mid, len(y_values))
+    z_rep = np.tile(z_mid, len(y_values))
+    y_rep = np.repeat(y_values, len(x_mid))
+
+    nx_rep = np.tile(n_hat[:, 0], len(y_values))
+    ny_rep = np.tile(n_hat[:, 1], len(y_values))
+    nz_rep = np.tile(n_hat[:, 2], len(y_values))
+
+    out = np.column_stack([
+        x_rep,
+        y_rep,
+        z_rep,
+        nx_rep,
+        ny_rep,
+        nz_rep,
+        np.ones(len(x_rep), dtype=int),
+    ])
+
+    np.savetxt(
+        filename,
+        out,
+        fmt="%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%d",
+        comments="",
+    )
+
+
+#y_values = np.arange(-10e3, 10e3, target_size)
+y_values = np.arange(-1e3, 1e3, target_size)
+export_fracture_plane(
+    fracture_path=fracture_path,
+    frac_depths=frac_depths,
+    n_hat=n_hat,
+    y_values=y_values,
+    filename="inputs/fracture_plane.txt",
+)
+
 
 
 # --- COMPUTE ORTHONORMAL BASIS ---

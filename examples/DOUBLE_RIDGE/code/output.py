@@ -12,6 +12,7 @@ print(f"Radargram shape: {rdrgrm.shape}")
 
 rdrgrm_dB = 20 * np.log10(np.abs(rdrgrm))
 plt.imshow(rdrgrm_dB, aspect="auto")
+plt.colorbar(label="Power [dB]")
 plt.show()
 #rp.simple_rdrgrm(rdrgrm, params, "figures/radargram.png", linspace=True, figsize=(9, 4))
 

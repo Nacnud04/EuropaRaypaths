@@ -635,8 +635,8 @@ __global__ void accumulateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs,
     if (id < nfacets) {
         
         // find the gain in the inbound ray direction
-        //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
-	    float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 200);//hertz_dipole(d_Tarth[id]);
+	    //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
 
         float n = sqrtf(par.eps_2);
 
@@ -698,8 +698,8 @@ __global__ void radiateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs,
 
         // --- TARGET -> FACET ---
         
-        //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs*1e5);//hertz_dipole(d_Tarth[id]);
-	    float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 200);//hertz_dipole(d_Tarth[id]);
+	    //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
 
         float n = sqrtf(par.eps_2);
 
