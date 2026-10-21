@@ -19,3 +19,9 @@ tmp*
 *.tif
 *.tab
 CUDA/*.png
+src/CUDA/sim
+src/CUDA/.vs
+examples/UNIT_TESTS/*/figures/*.png
+*BAK*.py
+*.blend*
+*/scrap
