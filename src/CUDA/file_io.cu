@@ -100,6 +100,7 @@ struct SimulationParameters {
 
     // target parameters
     int rerad_funct;
+    float target_size;  // Size of facet-like targets
     float tx, ty, tz;   // Target position
 
     // range window params
@@ -241,6 +242,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
     std::cout << "Facet size: " << params.fs << std::endl;
 
     // target reradiation function
+    params.target_size = j.value("target_size", params.fs);
     params.rerad_funct = j["rerad_funct"];
 
     // attenuation geometry file
