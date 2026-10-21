@@ -1,6 +1,6 @@
 printf "\n===============================================\n"
 printf "Generate terrain\n"
-#python code/setup.py
+python code/setup.py
 
 printf "\n===============================================\n"
 printf "Generate params.json\n"

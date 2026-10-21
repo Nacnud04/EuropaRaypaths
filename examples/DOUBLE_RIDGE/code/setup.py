@@ -42,16 +42,16 @@ rough_seed       = 2002
 
 # simulation domain size [m]
 domain_size_x    = 20e3
-domain_size_y    = 20e3
+domain_size_y    = 2e3
 domain           = (domain_size_x, domain_size_y)
 
 # simulation origin [m]
-origin_x         = -10e3
-origin_y         = -10e3
+origin_x         = -1 * domain_size_x / 2
+origin_y         = -1 * domain_size_y / 2
 origin           = (origin_x, origin_y)
 
 # facet size [m]
-facet_size       = 50.0
+facet_size       = 5.0
 Nfct_x           = int(domain_size_x / facet_size)
 Nfct_y           = int(domain_size_y / facet_size)
 Nfct             = Nfct_x * Nfct_y
@@ -96,7 +96,7 @@ ridge_profile = (
     ridge_height * np.exp(-0.5 * ((XX - x2) / sigma)**2)
 )
 
-ZZ = ZZ + ridge_profile
+ZZ = ZZ + ridge_profile * 0
 
 #plt.imshow(ZZ, extent=(origin_x, origin_x + domain_size_x, origin_y, origin_y + domain_size_y), origin="lower", cmap="terrain")
 #plt.colorbar(label="Height [m]")
@@ -132,7 +132,7 @@ n_hat[:, 2] = -dx_dz / norms   # z
 # midpoint locations of each facet
 x_mid = 0.5 * (fracture_path[:-1] + fracture_path[1:])
 z_mid = 0.5 * (frac_depths[:-1] + frac_depths[1:])
-
+"""
 # draw short normal "hairs" in x-z projection
 hair_len = 200.0  # meters
 
@@ -153,6 +153,11 @@ ax.set_ylabel("Height [m]")
 ax.set_aspect("equal", adjustable="box")
 ax.legend()
 plt.show()
+"""
+
+# export surface profile
+profile_to_save = np.stack([xs, ZZ[Nfct_y//2, :]])
+np.save("inputs/profile.npy", profile_to_save)
 
 # export fracture info
 def export_fracture_plane(
