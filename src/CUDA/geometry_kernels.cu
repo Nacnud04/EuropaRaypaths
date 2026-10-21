@@ -41,8 +41,7 @@
 #include <thrust/functional.h>
 
 #include "elementary_kernels.cu"
-
-const float pi = 3.14159265f;
+#include "scattering.cu"
 
 // function which approximates the amount of illuminated facets within the aperture
 // assuming the facets are arranged in a grid
@@ -467,10 +466,9 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRfrC[idx] = d_fRfrC[idx] * atm_atten;
 	*/
         // surface roughness losses
-        float rough_loss = expf(-4*((par.ks*cosGPU(d_Ith[idx]))*(par.ks*cosGPU(d_Ith[idx]))));
-	//float g = (4 * pi * par.rms_h) / par.lam;
-        //float rough_loss = expf(-1.0 * g * g) * powf(cyl_bessel_i0f(0.5 * g * g), 2.0f);	
-	d_fRe[idx] = d_fRe[idx] * rough_loss;
+        float rough_loss = roughnessWrapper(par.roughness_model, 
+                                            par.ks, par.rms_h, par.lam, d_Ith[idx]);
+        d_fRe[idx] = d_fRe[idx] * rough_loss;
 
     }
 

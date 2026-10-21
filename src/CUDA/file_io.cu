@@ -37,6 +37,14 @@
 
 using json = nlohmann::json;
 
+// roughness models
+enum RoughnessModel {
+    SPECULAR = 0,
+    COHERENT_SPECULAR = 1,
+    SIMPLE_BACKSCATTER = 2
+};
+
+
 struct SimulationParameters {
 
     float c = 299792458.0f; // speed of light in m/s
@@ -102,6 +110,9 @@ struct SimulationParameters {
 
     // facet parameters
     float fs;
+
+    // roughness model
+    RoughnessModel roughness_model;
 
     // subsurface attenuation geometry file
     std::string atten_geom_path;
@@ -234,6 +245,19 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     // attenuation geometry file
     params.atten_geom_path = j.value("attenuation_geometry_file", std::string("NONE"));
+
+    // parse roughness model
+    std::string model = j.value("roughness_model", std::string("simple_backscatter"));
+
+    if (model == "specular") {
+        params.roughness_model = SPECULAR;
+    } else if (model == "coherent_specular") {
+        params.roughness_model = COHERENT_SPECULAR;
+    } else if (model == "simple_backscatter") {
+        params.roughness_model = SIMPLE_BACKSCATTER;
+    } else {
+        throw std::runtime_error("Unknown roughness_model: " + model);
+    }
 
     // processing parameters
     params.convolution = j["convolution"];
