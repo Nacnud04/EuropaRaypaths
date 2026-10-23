@@ -14,16 +14,6 @@ domainpar = {
     "ny": 800,
 }
 
-"""
-domainpar = {
-    "ox": 80,
-    "oy": -20,
-    "oz": 0,
-    "fs": 1,
-    "nx": 40,
-    "ny": 40,
-}
-"""
 recpar = {
     "rx_window_m": 1.25e3,         # receive window size [m]
     "rx_sample_rate": 60e6,       # receive sample rate [Hz]
