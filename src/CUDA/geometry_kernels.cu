@@ -30,19 +30,8 @@
  *
  ******************************************************************************/
 
-#include <cuComplex.h>
-#include <math.h>
-#include <limits>
+#include "geometry_kernels.cuh"
 
-// thrust includes for aperture cropping
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/functional.h>
-
-#include "elementary_kernels.cu"
-
-const float pi = 3.14159265f;
 
 // function which approximates the amount of illuminated facets within the aperture
 // assuming the facets are arranged in a grid
@@ -139,18 +128,6 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
 
 }
 
-
-struct is_below_threshold
-{
-    const float thresh;
-    __host__ __device__
-    is_below_threshold(float t) : thresh(t) {}
-
-    __host__ __device__
-    bool operator()(const float x) const {
-        return x < thresh;
-    }
-};
 
 int cropByAperture(int totfacets, int nfacets, float aperture, float* d_FSth,
                     float* d_Ffx,  float* d_Ffy,  float* d_Ffz,
@@ -467,7 +444,8 @@ __global__ void compReflectedEnergy(float* d_Itd, float* d_Ith, float* d_Iph,
         d_fRfrC[idx] = d_fRfrC[idx] * atm_atten;
 	*/
         // surface roughness losses
-        float rough_loss = expf(-4*((par.ks*cosGPU(d_Ith[idx]))*(par.ks*cosGPU(d_Ith[idx]))));
+        float rough_loss = roughnessWrapper(par.roughness_model, 
+                                            par.ks, par.rms_h, par.lam, d_Ith[idx]);
         d_fRe[idx] = d_fRe[idx] * rough_loss;
 
     }

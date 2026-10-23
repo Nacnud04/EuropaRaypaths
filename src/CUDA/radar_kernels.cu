@@ -33,21 +33,7 @@
  *
  ******************************************************************************/
 
-#include <cuComplex.h>
-#include <math.h>
-
-// thrust includes for phasor computation
-#include <thrust/device_ptr.h>
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/reduce.h>
-#include <thrust/scatter.h>
-#include <thrust/complex.h>
-
-
-// FFT for chirp convolution
-#include <cufft.h>
-
+#include "radar_kernels.cuh"
 
 // -- TARGET RERADIATION FUNCTIONS ---
 // 0 = return all energy (corner reflector)
@@ -146,13 +132,6 @@ __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
     }
 
 }
-
-struct cuComplexAdd {
-    __host__ __device__
-    cuFloatComplex operator()(const cuFloatComplex& a, const cuFloatComplex& b) const {
-        return make_cuFloatComplex(a.x + b.x, a.y + b.y);
-    }
-};
 
 void genPhasorTrace(cuFloatComplex* d_phasorTrace,
                     short* d_rbs, cuFloatComplex* d_phasors,
@@ -301,14 +280,6 @@ __global__ void genCenteredChirpPadded(float* d_chirp, float dr, int nr, int pad
 
 
 // Elementwise add: dest += src  (both length N)
-/*
-__global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < N) {
-        dest[i].x += src[i].x;
-        dest[i].y += src[i].y;
-    }
-}*/
 __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {
@@ -635,8 +606,7 @@ __global__ void accumulateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs,
     if (id < nfacets) {
         
         // find the gain in the inbound ray direction
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 200);//hertz_dipole(d_Tarth[id]);
-	    //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.target_size);
 
         float n = sqrtf(par.eps_2);
 
@@ -698,8 +668,7 @@ __global__ void radiateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs,
 
         // --- TARGET -> FACET ---
         
-        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, 200);//hertz_dipole(d_Tarth[id]);
-	    //float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.fs);
+        float G_dipole = facet_G(d_Tarth[id], d_Tph[id], par.lam, par.target_size);
 
         float n = sqrtf(par.eps_2);
 
@@ -731,13 +700,9 @@ __global__ void radiateTarget(cuFloatComplex* d_refr_P, short* d_refr_rbs,
             // add contribution into starting range bin
             d_refr_P[2 * id]   = make_cuFloatComplex(contrib.x * (1.0f - bin_float), contrib.y * (1.0f - bin_float));
             d_refr_rbs[2 * id] = bin;
-            //atomicAdd(&(d_Psource[bin].x), contrib.x * (1.0f - bin_float)); // add real components together
-            //atomicAdd(&(d_Psource[bin].y), contrib.y * (1.0f - bin_float)); // add imag components together
             // add remaining contribution into adjcacent range bin
             d_refr_P[(2 * id) + 1]   = make_cuFloatComplex(contrib.x * bin_float, contrib.y * bin_float);
             d_refr_rbs[(2 * id) + 1] = bin + 1;
-            //atomicAdd(&(d_Psource[bin+1].x), contrib.x * bin_float); // add real components together
-            //atomicAdd(&(d_Psource[bin+1].y), contrib.y * bin_float); // add imag components together
         }
 
     }

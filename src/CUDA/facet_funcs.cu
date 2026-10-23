@@ -1,3 +1,5 @@
+#include "facet_funcs.cuh"
+
 #define IDX_FCT(i, j, nxfacets) ((i) + (j) * (nxfacets))
 
 __host__ void generateFacetNormals(float* h_fx, float* h_fy, float* h_fz,
