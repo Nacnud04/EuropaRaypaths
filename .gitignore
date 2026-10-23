@@ -21,7 +21,15 @@ tmp*
 CUDA/*.png
 src/CUDA/sim
 src/CUDA/.vs
+src/CUDA/build
 examples/UNIT_TESTS/*/figures/*.png
 *BAK*.py
 *.blend*
 */scrap
+
+paper/phasor_convolution_figure.py
+paper/Figures/Phasor*
+
+examples/KOROLEV/code/scrap
+examples/KOROLEV/data/Observation
+examples/KOROLEV/figures/Backup
