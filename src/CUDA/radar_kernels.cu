@@ -33,21 +33,7 @@
  *
  ******************************************************************************/
 
-#include <cuComplex.h>
-#include <math.h>
-
-// thrust includes for phasor computation
-#include <thrust/device_ptr.h>
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/reduce.h>
-#include <thrust/scatter.h>
-#include <thrust/complex.h>
-
-
-// FFT for chirp convolution
-#include <cufft.h>
-
+#include "radar_kernels.cuh"
 
 // -- TARGET RERADIATION FUNCTIONS ---
 // 0 = return all energy (corner reflector)
@@ -146,13 +132,6 @@ __global__ void genRefrPhasor(cuFloatComplex* refr_phasor, short* refr_rbs,
     }
 
 }
-
-struct cuComplexAdd {
-    __host__ __device__
-    cuFloatComplex operator()(const cuFloatComplex& a, const cuFloatComplex& b) const {
-        return make_cuFloatComplex(a.x + b.x, a.y + b.y);
-    }
-};
 
 void genPhasorTrace(cuFloatComplex* d_phasorTrace,
                     short* d_rbs, cuFloatComplex* d_phasors,
@@ -301,14 +280,6 @@ __global__ void genCenteredChirpPadded(float* d_chirp, float dr, int nr, int pad
 
 
 // Elementwise add: dest += src  (both length N)
-/*
-__global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < N) {
-        dest[i].x += src[i].x;
-        dest[i].y += src[i].y;
-    }
-}*/
 __global__ void addComplexArrays(cuFloatComplex* dest, const cuFloatComplex* src, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) {

@@ -30,18 +30,8 @@
  *
  ******************************************************************************/
 
-#include <cuComplex.h>
-#include <math.h>
-#include <limits>
+#include "geometry_kernels.cuh"
 
-// thrust includes for aperture cropping
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/functional.h>
-
-#include "elementary_kernels.cu"
-#include "scattering.cu"
 
 // function which approximates the amount of illuminated facets within the aperture
 // assuming the facets are arranged in a grid
@@ -138,18 +128,6 @@ __global__ void compIncidentRays(float sx, float sy, float sz,
 
 }
 
-
-struct is_below_threshold
-{
-    const float thresh;
-    __host__ __device__
-    is_below_threshold(float t) : thresh(t) {}
-
-    __host__ __device__
-    bool operator()(const float x) const {
-        return x < thresh;
-    }
-};
 
 int cropByAperture(int totfacets, int nfacets, float aperture, float* d_FSth,
                     float* d_Ffx,  float* d_Ffy,  float* d_Ffz,

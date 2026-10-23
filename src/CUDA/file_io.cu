@@ -24,113 +24,9 @@
  *
  ******************************************************************************/
 
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <iostream>
-#include <sys/stat.h>
-#include <stdexcept>
-#include <string>
-#include <dirent.h>
-#include <unistd.h>
-
-#define uChar unsigned char
+#include "file_io.cuh"
 
 using json = nlohmann::json;
-
-// roughness models
-enum RoughnessModel {
-    SPECULAR = 0,
-    COHERENT_SPECULAR = 1,
-    SIMPLE_BACKSCATTER = 2
-};
-
-
-struct SimulationParameters {
-
-    float c = 299792458.0f; // speed of light in m/s
-    float nu0 = 376.7f;
-    float eps_0 = 8.85e-12;
-    float pi = 3.14159265f;
-
-    // source geometry
-    std::string source_path_file; // source path file
-    float source_normal_multiplier = 1.0f; // multiplier to source normal vector
-    float altitude;
-    
-    // there can also be evenly spaced sources over X 
-    float sy, sz;   // Source position
-    float sx0, sdx;
-    int ns;
-
-    // source params
-    float f0;           // Radar centerfrequency
-    float B;            // Bandwidth
-    float P;            // Transmitted power
-    float Grefr;        // Subsurface gain
-    float Grefl;        // Surface gain
-    float rng_res;      // Range resolution
-    float aperture;     // Source aperture
-    std::string gainFile; // file containing gain pattern (if exists)
-
-    // computed params
-    float lam;
-    float k;
-    int pol = 0;
-    float Grefr_lin;    // Subsurface gain (linear)
-    float Grefl_lin;    // Surface gain (linear)
-    
-    // surface parameters
-    float rms_h;        // surface rms height
-    float ks;
-    float buff;         // buffer for estimated facet count
-
-    // material parameters
-    float eps_1;        // Permittivity of medium 1 
-    float eps_2;        // Permittivity of medium 2 
-    float sig_1;        // Conductivity in medium 1 
-    float sig_2;        // Conductivity in medium 2
-
-    // computed params
-    float c_1; // speed in medium 1
-    float c_2; // speed in medium 2
-    float nu_1; // impedance in medium 1
-    float nu_2; // impedance in medium
-    float alpha1;
-    float alpha2;
-
-    // target parameters
-    int rerad_funct;
-    float target_size;  // Size of facet-like targets
-    float tx, ty, tz;   // Target position
-
-    // range window params
-    float rst, dr;
-    int nr;
-    float smpl;         // Sampling rate (Hz)
-    std::string rxWindowPositionFile;
-
-    // facet parameters
-    float fs;
-
-    // roughness model
-    RoughnessModel roughness_model;
-
-    // subsurface attenuation geometry file
-    std::string atten_geom_path;
-
-    // processing parameters
-    bool convolution;
-    bool convolution_linear;
-    bool specular;
-    bool lossless;
-    bool incoherent = false;
-    bool disable_surface = false;
-    bool fresnel = false;
-
-    // debug parameters
-    bool debug_surface = false;
-
-};
 
 __host__ SimulationParameters parseSimulationParameters(const std::string& filename) {
     std::ifstream file(filename);
@@ -345,7 +241,7 @@ __host__ void saveFloatsToFile(const char* filename, float* d_sig, int nr) {
 
 #define BUF_SIZE 65536
 
-int count_lines(FILE* file, int counter_start = 1)
+int count_lines(FILE* file, int counter_start)
 {
     char buf[BUF_SIZE];
     int counter = counter_start;

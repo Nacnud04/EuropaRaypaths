@@ -21,10 +21,7 @@
  *
  ******************************************************************************/
 
-#include <cuComplex.h>
-#include <math.h>
-
-const float pi = 3.14159265f;
+#include "scattering.cuh"
 
 // MODEL: Specular Scattering
 // if it is purely specular, returned power depends on radiation pattern

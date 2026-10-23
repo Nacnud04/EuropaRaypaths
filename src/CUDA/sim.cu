@@ -20,28 +20,12 @@
  *
  ******************************************************************************/
 
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-
-#include <stdio.h>
-#include <iostream>
-#include <sys/time.h>
-#include <cuComplex.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/extrema.h>
-
-// custom kernels
-#include "file_io.cu"
-#include "geometry_kernels.cu"
-#include "facet_funcs.cu"
-#include "radar_kernels.cu"
+#include "sim.cuh"
 
 // some macros 
 #define uChar unsigned char
 
 // timing
-struct timeval t1, t2;
 void startTimer() { gettimeofday(&t1, 0); }
 void reportTime(const char* msg) {
     gettimeofday(&t2, 0);
@@ -55,18 +39,6 @@ float reportTimeNum(){
     // report the amount of time in ms
     float dt = (t2.tv_sec - t1.tv_sec) * 1e3 + (t2.tv_usec - t1.tv_usec) * 1e-3;
     return dt;
-}
-
-void checkCUDAError(const char* msg)
-{
-    // Catch launch errors
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        std::cerr << "CUDA LAUNCH ERROR in " << msg
-                  << " : " << cudaGetErrorString(err) << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
 }
 
 void reportNewAlloc(int bytes, const char* varName) {
@@ -612,14 +584,18 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_refl_chirp, paddedNr * sizeof(float));
     cudaMemsetAsync(d_refl_chirp, 0, paddedNr * sizeof(float));
 
-    genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refl_chirp, par.dr, par.nr, paddedNr, par.rng_res);
-    checkCUDAError("genCenteredChirpPadded kernel");
+    genTransmitSignal(d_refl_chirp, par.dr, par.nr, par.rng_res, 0);
+
+    //genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refl_chirp, par.dr, par.nr, paddedNr, par.rng_res);
+    //checkCUDAError("genCenteredChirpPadded kernel");
 
     cudaMalloc((void**)&d_refr_chirp, paddedNr * sizeof(float));
     cudaMemsetAsync(d_refr_chirp, 0, paddedNr * sizeof(float));
 
-    genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refr_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
-    checkCUDAError("genCenteredChirpPadded kernel");
+    genTransmitSignal(d_refr_chirp, par.dr, par.nr, 2 * par.rng_res, 0);
+
+    //genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refr_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
+    //checkCUDAError("genCenteredChirpPadded kernel");
 
 
     // Wipe write direcory

@@ -14,17 +14,36 @@
  *    - Vector operations such as distance and dot product
  *
  * Usage:
- *    #include "elementary_kernels.cu"
+ *    #include "elementary_kernels.cuh"
  * 
  * Notes:
  *
  ******************************************************************************/
 
-// FFT for chirp convolution
+#include "elementary_kernels.cuh"
+
+#include <iostream>
+
+#include <stdio.h>
 #include <cufft.h>
 
 #define THREADS 256 // threads per block
 #define uChar   unsigned char
+
+
+// --- CUDA ERROR CHECKING ---
+void checkCUDAError(const char* msg)
+{
+    // Catch launch errors
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA LAUNCH ERROR in " << msg
+                  << " : " << cudaGetErrorString(err) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+}
+
 
 // --- TRIG FUNCTIONS ---
 
