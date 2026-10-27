@@ -120,6 +120,7 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     params.nr  = (float(j["rx_window_m"]) / 299792480.0f) * params.smpl;
     params.dr  = float(j["rx_window_m"]) / float(params.nr);
+    params.dt  = params.dr / 299792458.0f;
 
     if (params.rxWindowPositionFile == "NONE") {
         std::cout << "No Rx window position file found, using static offset." << std::endl;
@@ -146,7 +147,6 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
 
     // parse roughness model
     std::string model = j.value("roughness_model", std::string("simple_backscatter"));
-
     if (model == "specular") {
         params.roughness_model = SPECULAR;
     } else if (model == "coherent_specular") {
@@ -155,6 +155,22 @@ __host__ SimulationParameters parseSimulationParameters(const std::string& filen
         params.roughness_model = SIMPLE_BACKSCATTER;
     } else {
         throw std::runtime_error("Unknown roughness_model: " + model);
+    }
+
+    // parse windowing types
+    std::string window = j.value("chirp_window", std::string("none"));
+    if (window == "none") {
+        params.window = NO_WINDOW;
+    } else if (window == "blackman") {
+        params.window = BLACKMAN_WINDOW;
+    } else if (window == "blackman_exact") {
+        params.window = BLACKMAN_EXACT_WINDOW;
+    } else if (window == "nuttall") {
+        params.window = NUTTALL_WINDOW;
+    } else if (window == "blackman_nuttall") {
+        params.window = BLACKMAN_NUTTALL_WINDOW;
+    } else {
+        throw std::runtime_error("Unknown chirp windowing type: " + window);
     }
 
     // processing parameters

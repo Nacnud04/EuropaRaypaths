@@ -240,6 +240,18 @@ __global__ void scaleComplex(cuFloatComplex* data, int N, float scale) {
     }
 }
 
+__global__ void normalizeAndExtractReal(
+    const cufftComplex* d_input, float* d_output,
+    int N) {
+    
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < N) {
+        d_output[i] = d_input[i].x / (float)N;
+    }
+
+}
+
 
 // --- COMPLEX POINTWISE MULTIPLICATION ---
 

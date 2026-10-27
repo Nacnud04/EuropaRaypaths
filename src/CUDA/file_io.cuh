@@ -22,6 +22,16 @@ enum RoughnessModel {
 };
 
 
+// window types
+enum WindowTypes {
+    NO_WINDOW = 0,
+    BLACKMAN_WINDOW = 1,
+    BLACKMAN_EXACT_WINDOW = 2,
+    NUTTALL_WINDOW = 3,
+    BLACKMAN_NUTTALL_WINDOW = 4
+};
+
+
 struct SimulationParameters {
 
     float c = 299792458.0f; // speed of light in m/s
@@ -81,7 +91,7 @@ struct SimulationParameters {
     float tx, ty, tz;   // Target position
 
     // range window params
-    float rst, dr;
+    float rst, dr, dt;
     int nr;
     float smpl;         // Sampling rate (Hz)
     std::string rxWindowPositionFile;
@@ -91,6 +101,9 @@ struct SimulationParameters {
 
     // roughness model
     RoughnessModel roughness_model;
+
+    // window types
+    WindowTypes window;
 
     // subsurface attenuation geometry file
     std::string atten_geom_path;

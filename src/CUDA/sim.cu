@@ -584,18 +584,12 @@ int main(int argc, const char* argv[])
     cudaMalloc((void**)&d_refl_chirp, paddedNr * sizeof(float));
     cudaMemsetAsync(d_refl_chirp, 0, paddedNr * sizeof(float));
 
-    genTransmitSignal(d_refl_chirp, par.dr, par.nr, par.rng_res, 0);
-
-    //genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refl_chirp, par.dr, par.nr, paddedNr, par.rng_res);
-    //checkCUDAError("genCenteredChirpPadded kernel");
+    genTransmitSignal(d_refl_chirp, par, 0, 1);
 
     cudaMalloc((void**)&d_refr_chirp, paddedNr * sizeof(float));
     cudaMemsetAsync(d_refr_chirp, 0, paddedNr * sizeof(float));
 
-    genTransmitSignal(d_refr_chirp, par.dr, par.nr, 2 * par.rng_res, 0);
-
-    //genCenteredChirpPadded<<<(paddedNr + blockSize - 1) / blockSize, blockSize>>>(d_refr_chirp, par.dr, par.nr, paddedNr, 2 * par.rng_res);
-    //checkCUDAError("genCenteredChirpPadded kernel");
+    genTransmitSignal(d_refr_chirp, par, 0, 2);
 
 
     // Wipe write direcory
@@ -740,16 +734,20 @@ int main(int argc, const char* argv[])
         convolvePhasorChirpLinear(d_PSurf, d_refl_chirp, d_refl_sig, par.nr, par, argv, is, 0);
         checkCUDAError("convolvePhasorChirpLinear Reflected process");
 
-        // limit targets to just within aperture
-        int tarBlocks = (ntargets + blockSize - 1) / blockSize;
-        findTargetsInAperture<<<tarBlocks, blockSize>>>(d_tx, d_ty, d_tz,
-                                                        sx, sy, sz,
-                                                        snx, sny, snz,
-                                                        d_tInApt, par.aperture, ntargets);
-        checkCUDAError("findTargetsInAperture kernel");
+        if (ntargets > 0) {
 
-        // copy target mask to host
-        cudaMemcpy(h_tInApt, d_tInApt, ntargets * sizeof(bool), cudaMemcpyDeviceToHost);
+            // limit targets to just within aperture
+            int tarBlocks = (ntargets + blockSize - 1) / blockSize;
+            findTargetsInAperture<<<tarBlocks, blockSize>>>(d_tx, d_ty, d_tz,
+                                                            sx, sy, sz,
+                                                            snx, sny, snz,
+                                                            d_tInApt, par.aperture, ntargets);
+            checkCUDAError("findTargetsInAperture kernel");
+
+            // copy target mask to host
+            cudaMemcpy(h_tInApt, d_tInApt, ntargets * sizeof(bool), cudaMemcpyDeviceToHost);
+
+        }
 
         for (int it = 0; it < ntargets; it++) {
             if (!h_tInApt[it]) continue;
