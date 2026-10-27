@@ -104,6 +104,9 @@ __global__ void realToComplex(const float* realSignal, cuFloatComplex* complexSi
 
 // --- SCALING ---
 
+__global__ void normalizeAndExtractReal(
+    const cufftComplex* d_input, float* d_output,
+    int N);
 __global__ void scaleComplex(cuFloatComplex* data, int N, float scale);
 
 

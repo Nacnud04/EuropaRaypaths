@@ -12,5 +12,6 @@ __global__ void genericChirpPadded(
     int paddedNr,
     float range_res);
 
-void genTransmitSignal(float* d_chirp, float dr, int nr, 
-                      float range_res, int window);
+void genTransmitSignal(float* d_chirp, 
+                       SimulationParameters par,
+                       int window, float res_scale);
