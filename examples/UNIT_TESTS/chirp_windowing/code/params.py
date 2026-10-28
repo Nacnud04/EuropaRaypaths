@@ -7,15 +7,15 @@ domainpar = {
     "ox": -10e3,
     "oy": -10e3,
     "oz": 0,
-    "fs": 20,
+    "fs": 5,
     "nx": 1000,
     "ny": 1000,
 }
 
 recpar = {
-    "rx_window_m":           1e3,    # receive window size [m]
+    "rx_window_m":           2e3,    # receive window size [m]
     "rx_sample_rate":      120e6,    # receive sample rate [Hz]
-    "rx_window_offset_m": 99.5e3,
+    "rx_window_offset_m":   99e3,
 }
 
 sourcepar = {
